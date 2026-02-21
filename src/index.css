@@ -1,0 +1,170 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Sunset Forest Escape Theme */
+    --background: 210 20% 98%;
+    --foreground: 210 50% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 210 50% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 50% 15%;
+
+    /* Deep Ocean Blue */
+    --primary: 210 65% 17%;
+    --primary-foreground: 40 30% 96%;
+
+    /* Forest Green */
+    --secondary: 155 42% 21%;
+    --secondary-foreground: 40 30% 96%;
+
+    /* Muted sand tones */
+    --muted: 35 25% 93%;
+    --muted-foreground: 210 15% 45%;
+
+    /* Sunset Orange accent */
+    --accent: 24 95% 53%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 35 20% 88%;
+    --input: 35 20% 88%;
+    --ring: 24 95% 53%;
+
+    --radius: 0.75rem;
+
+    /* Sunset pink glow */
+    --glow: 10 100% 70%;
+    --glow-foreground: 0 0% 100%;
+
+    /* Warm sand */
+    --sand: 38 40% 95%;
+    --sand-foreground: 210 50% 15%;
+
+    /* Gradients */
+    --gradient-sunset: linear-gradient(135deg, hsl(24, 95%, 53%), hsl(10, 100%, 70%));
+    --gradient-ocean: linear-gradient(135deg, hsl(210, 65%, 17%), hsl(210, 50%, 30%));
+    --gradient-forest: linear-gradient(135deg, hsl(155, 42%, 21%), hsl(155, 35%, 35%));
+    --gradient-hero: linear-gradient(135deg, hsl(210, 65%, 12%), hsl(155, 42%, 18%), hsl(24, 60%, 30%));
+
+    /* Shadows */
+    --shadow-soft: 0 4px 24px -4px hsl(210, 50%, 15%, 0.08);
+    --shadow-medium: 0 8px 32px -8px hsl(210, 50%, 15%, 0.12);
+    --shadow-accent: 0 8px 24px -4px hsl(24, 95%, 53%, 0.3);
+
+    --sidebar-background: 210 65% 17%;
+    --sidebar-foreground: 40 30% 96%;
+    --sidebar-primary: 24 95% 53%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 155 42% 21%;
+    --sidebar-accent-foreground: 40 30% 96%;
+    --sidebar-border: 210 40% 25%;
+    --sidebar-ring: 24 95% 53%;
+
+    --font-display: 'Playfair Display', Georgia, serif;
+    --font-body: 'Inter', system-ui, sans-serif;
+  }
+
+  .dark {
+    --background: 210 50% 7%;
+    --foreground: 40 20% 92%;
+
+    --card: 210 45% 10%;
+    --card-foreground: 40 20% 92%;
+
+    --popover: 210 45% 10%;
+    --popover-foreground: 40 20% 92%;
+
+    --primary: 40 30% 92%;
+    --primary-foreground: 210 65% 17%;
+
+    --secondary: 155 30% 18%;
+    --secondary-foreground: 40 30% 92%;
+
+    --muted: 210 30% 15%;
+    --muted-foreground: 210 15% 60%;
+
+    --accent: 24 95% 53%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 30% 18%;
+    --input: 210 30% 18%;
+    --ring: 24 95% 53%;
+
+    --glow: 10 100% 70%;
+    --glow-foreground: 0 0% 100%;
+
+    --sand: 210 30% 12%;
+    --sand-foreground: 40 20% 92%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+  }
+}
+
+@layer utilities {
+  .text-gradient-sunset {
+    background: var(--gradient-sunset);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .text-gradient-ocean {
+    background: var(--gradient-ocean);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .bg-gradient-sunset {
+    background: var(--gradient-sunset);
+  }
+
+  .bg-gradient-ocean {
+    background: var(--gradient-ocean);
+  }
+
+  .bg-gradient-forest {
+    background: var(--gradient-forest);
+  }
+
+  .bg-gradient-hero {
+    background: var(--gradient-hero);
+  }
+
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+
+  .shadow-medium {
+    box-shadow: var(--shadow-medium);
+  }
+
+  .shadow-accent {
+    box-shadow: var(--shadow-accent);
+  }
+}
