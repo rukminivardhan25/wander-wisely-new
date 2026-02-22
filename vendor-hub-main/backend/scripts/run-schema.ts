@@ -17,12 +17,25 @@ const pool = new pg.Pool({
   ssl: DATABASE_URL.includes("localhost") ? false : { rejectUnauthorized: false },
 });
 
+const schemaFiles = [
+  "001_vendors.sql",
+  "002_listings.sql",
+  "003_vendor_bookings.sql",
+  "004_buses.sql",
+  "005_routes.sql",
+  "006_route_schedules.sql",
+  "007_listing_availability.sql",
+  "008_listing_driver_info.sql",
+  "009_drivers.sql",
+  "010_drop_listing_driver_columns.sql",
+  "011_vendor_listings.sql",
+];
+
 async function run() {
   const schemaDir = join(__dirname, "..", "schema");
-  const files = ["001_users.sql", "002_trips_itineraries.sql", "003_active_trip.sql", "004_expenses.sql", "005_trip_start_date.sql", "006_trip_budget_amount.sql"];
 
   try {
-    for (const file of files) {
+    for (const file of schemaFiles) {
       const sql = readFileSync(join(schemaDir, file), "utf-8");
       await pool.query(sql);
       console.log("Schema applied:", file);

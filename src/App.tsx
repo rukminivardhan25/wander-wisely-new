@@ -7,6 +7,10 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import Index from "./pages/Index";
 import Explore from "./pages/Explore";
 import PlanTrip from "./pages/PlanTrip";
+import MyTrip from "./pages/MyTrip";
+import BookingMarketplace from "./pages/BookingMarketplace";
+import ActivityDetail from "./pages/ActivityDetail";
+import TransportBook from "./pages/TransportBook";
 import Community from "./pages/Community";
 import About from "./pages/About";
 import SignIn from "./pages/SignIn";
@@ -26,6 +30,10 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/explore" element={<Explore />} />
             <Route path="/plan-trip" element={<PlanTrip />} />
+            <Route path="/plan-trip/activity" element={<ActivityDetail />} />
+            <Route path="/my-trip" element={<MyTrip />} />
+            <Route path="/my-trip/book" element={<BookingMarketplace />} />
+            <Route path="/book/transport" element={<TransportBook />} />
             <Route path="/community" element={<Community />} />
             <Route path="/about" element={<About />} />
             <Route path="/signin" element={<SignIn />} />

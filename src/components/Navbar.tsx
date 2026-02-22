@@ -1,11 +1,12 @@
 import { Link, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Compass, Users, MapPin, LogOut } from "lucide-react";
+import { Menu, X, Compass, Users, MapPin, LogOut, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
+  { path: "/my-trip", label: "My Trip", icon: Calendar },
   { path: "/explore", label: "Explore", icon: Compass },
   { path: "/plan-trip", label: "Plan Trip", icon: MapPin },
   { path: "/community", label: "Community", icon: Users },

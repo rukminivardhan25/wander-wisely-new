@@ -3,6 +3,18 @@
  * Get API key at https://console.groq.com
  */
 
+/** Activity type for Smart Blocks (expandable by type). */
+export type ActivityType =
+  | "transport"
+  | "stay"
+  | "food"
+  | "experience"
+  | "shopping"
+  | "events"
+  | "hidden_gem"
+  | "local_service"
+  | "emergency";
+
 export type Activity = {
   time: string;
   title: string;
@@ -10,6 +22,7 @@ export type Activity = {
   place?: string;
   duration?: string;
   costEstimate?: string;
+  activityType?: ActivityType;
 };
 
 export type DayPlan = {
@@ -24,35 +37,28 @@ export type ItineraryPlan = { days: DayPlan[] };
 const GROQ_API = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL = "llama-3.1-8b-instant";
 
-function getSystemPrompt(): string {
-  return `You are a travel planner. You must respond with ONLY a single valid JSON object. No markdown, no code fences, no explanation before or after.
-Format:
+const SINGLE_DAY_SYSTEM = `You are a travel planner. Respond with ONLY one valid JSON object. No markdown, no code fences.
+Format (exactly this structure, one day only):
 {
-  "days": [
+  "day": 1,
+  "summary": "One sentence summary of this day",
+  "mainPlace": "Main location name for photo search (e.g. Manali, Rohtang Pass)",
+  "activities": [
     {
-      "day": 1,
-      "summary": "One sentence summary of the day",
-      "mainPlace": "Main location name for photo search (e.g. Rohtang Pass, Manali)",
-      "activities": [
-        {
-          "time": "09:00",
-          "title": "Activity name",
-          "description": "Short description",
-          "place": "Place name if different",
-          "duration": "e.g. 2 hours",
-          "costEstimate": "e.g. ₹500 or Free or $20"
-        }
-      ]
+      "time": "09:00",
+      "title": "Activity name",
+      "description": "Short description",
+      "duration": "e.g. 2 hours",
+      "costEstimate": "e.g. ₹500 or Free",
+      "activityType": "transport"
     }
   ]
 }
 Rules:
-- Include exactly one object per day. Each day should have 4-8 activities from morning to evening.
-- Every activity MUST have "time" (e.g. 09:00, 14:30), "title", "description".
-- Add "duration" (e.g. "1 hour", "2 hours") and "costEstimate" (e.g. "₹300", "Free", "$15") for each activity when relevant.
-- Use destination currency/tone (e.g. ₹ for India, $ for US). Keep cost estimates realistic for the budget level.
-- Order activities by time. Use the destination and interests to suggest realistic activities, meals, and sights.`;
-}
+- 4-8 activities per day. Every activity needs "time", "title", "description", "duration", "costEstimate".
+- Add "activityType" to each activity. Use exactly one of: transport, stay, food, experience, shopping, events, hidden_gem, local_service, emergency.
+- Use: transport (flights, trains, bus, taxi, rental); stay (hotels, check-in); food (meals, cafes, restaurants); experience (tours, adventure, culture); shopping (markets, malls); events (festivals, shows); hidden_gem (local secrets); local_service (SIM, storage, guides); emergency (only if relevant).
+- Order by time. Use ₹ for India, $ for US.`;
 
 export async function generateItinerary(params: {
   origin: string;
@@ -68,50 +74,72 @@ export async function generateItinerary(params: {
   if (!key) throw new Error("GROQ_API_KEY is not set");
 
   const budgetNote = params.budget_amount
-    ? `Total trip budget: ${params.budget_amount} (use this to suggest realistic cost estimates per activity).`
+    ? ` Total trip budget: ${params.budget_amount}.`
     : "";
-  const userContent = `Plan a ${params.days}-day trip from ${params.origin} to ${params.destination}.
-Budget level: ${params.budget}. ${budgetNote}
-Travel type: ${params.travel_type}. Interests: ${params.interests.join(", ") || "general sightseeing"}. Transport: ${params.transport_preference || "any"}.
-Return only the JSON object with "days" array. Each activity must have time, title, description, duration, and costEstimate.`;
+  const tripContext = `Trip: ${params.days} days from ${params.origin} to ${params.destination}. Budget: ${params.budget}.${budgetNote} Travel: ${params.travel_type}. Interests: ${params.interests.join(", ") || "sightseeing"}. Transport: ${params.transport_preference || "any"}.`;
 
-  const res = await fetch(GROQ_API, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${key}`,
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      messages: [
-        { role: "system", content: getSystemPrompt() },
-        { role: "user", content: userContent },
-      ],
-      temperature: 0.5,
-      max_tokens: 8192,
-    }),
-  });
+  const days: DayPlan[] = [];
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Groq API error: ${res.status} ${err}`);
+  for (let dayNum = 1; dayNum <= params.days; dayNum++) {
+    const userContent = `${tripContext}
+
+Plan ONLY day ${dayNum} of ${params.days}. This is day number ${dayNum} of the trip. Return a single JSON object with: "day": ${dayNum}, "summary", "mainPlace", "activities" (4-8 activities). Each activity must have: time, title, description, duration, costEstimate, and activityType (one of: transport, stay, food, experience, shopping, events, hidden_gem, local_service, emergency). No other text.`;
+
+    const res = await fetch(GROQ_API, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: "system", content: SINGLE_DAY_SYSTEM },
+          { role: "user", content: userContent },
+        ],
+        temperature: 0.5,
+        max_tokens: 2048,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Groq API error: ${res.status} ${err}`);
+    }
+
+    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const text = data.choices?.[0]?.message?.content?.trim() ?? "";
+    if (!text) throw new Error(`Empty response from Groq for day ${dayNum}`);
+
+    const jsonStr = extractJson(text);
+    let dayPlan: DayPlan;
+    try {
+      const parsed = JSON.parse(jsonStr) as DayPlan & { days?: DayPlan[] };
+      if (parsed.days && Array.isArray(parsed.days) && parsed.days[0]) {
+        dayPlan = { ...parsed.days[0], day: dayNum };
+      } else {
+        dayPlan = { ...parsed, day: dayNum };
+      }
+    } catch {
+      console.error(`Groq day ${dayNum} parse failed (preview):`, text.slice(0, 300));
+      throw new Error(`Invalid response for day ${dayNum}. Please try again.`);
+    }
+
+    if (!dayPlan.activities || !Array.isArray(dayPlan.activities)) {
+      dayPlan.activities = [];
+    }
+    const validTypes: ActivityType[] = ["transport", "stay", "food", "experience", "shopping", "events", "hidden_gem", "local_service", "emergency"];
+    for (const a of dayPlan.activities) {
+      if (!a.activityType || !validTypes.includes(a.activityType as ActivityType)) {
+        (a as Activity).activityType = "experience";
+      }
+    }
+    if (!dayPlan.summary) dayPlan.summary = `Day ${dayNum} of your trip.`;
+    if (!dayPlan.mainPlace) dayPlan.mainPlace = params.destination;
+    days.push(dayPlan);
   }
 
-  const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-  const text = data.choices?.[0]?.message?.content?.trim() ?? "";
-  if (!text) throw new Error("Empty response from Groq");
-
-  const jsonStr = extractJson(text);
-  let parsed: ItineraryPlan;
-  try {
-    parsed = JSON.parse(jsonStr) as ItineraryPlan;
-  } catch (parseErr) {
-    const preview = text.slice(0, 400).replace(/\n/g, " ");
-    console.error("Groq raw response (preview):", preview + (text.length > 400 ? "..." : ""));
-    throw new Error("Groq returned invalid JSON. Try again or use a shorter trip.");
-  }
-  if (!parsed.days || !Array.isArray(parsed.days)) throw new Error("Groq response missing days array");
-  return parsed;
+  return { days };
 }
 
 /** Extract JSON from Groq response (handles markdown code blocks and surrounding text). */
