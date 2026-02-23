@@ -2,6 +2,35 @@ import { Router, Request, Response } from "express";
 import { query } from "../config/db.js";
 import { authMiddleware } from "../middleware/auth.js";
 
+const MAIN_APP_API_URL = process.env.MAIN_APP_API_URL ?? "http://localhost:3001";
+
+/** Convert 1-based seat number to label (A1, B2, ...). colsPerRow = leftCols + rightCols. */
+function seatNumberToLabel(seatNum: number, colsPerRow: number): string {
+  if (colsPerRow < 1 || seatNum < 1) return String(seatNum);
+  const row = Math.floor((seatNum - 1) / colsPerRow);
+  const col = ((seatNum - 1) % colsPerRow) + 1;
+  return String.fromCharCode(65 + row) + String(col);
+}
+
+type MainApiBooking = {
+  id: string;
+  passengerName: string;
+  email: string;
+  phone: string;
+  selectedSeats: number[];
+  totalCents: number;
+  paymentStatus: string;
+  createdAt: string;
+};
+
+async function fetchBookingsForBus(busId: string, date: string): Promise<MainApiBooking[]> {
+  const url = `${MAIN_APP_API_URL}/api/bookings/for-bus?bus_id=${encodeURIComponent(busId)}&date=${encodeURIComponent(date)}`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data = (await res.json()) as { bookings?: MainApiBooking[] };
+  return Array.isArray(data.bookings) ? data.bookings : [];
+}
+
 const router = Router();
 router.use(authMiddleware);
 
@@ -87,30 +116,29 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
 
     const rows = result.rows;
 
-    const busMap = new Map<
-      string,
-      {
-        busId: string;
-        listingId: string;
-        listingName: string;
-        busName: string;
-        registrationNumber: string | null;
-        busNumber: string | null;
-        totalSeats: number;
-        layoutType: string | null;
-        rows: number;
-        leftCols: number;
-        rightCols: number;
-        hasAisle: boolean;
-        schedules: Array<{
-          scheduleId: string;
-          departureTime: string;
-          arrivalTime: string;
-          routeFrom: string | null;
-          routeTo: string | null;
-        }>;
-      }
-    >();
+    type BusEntry = {
+      busId: string;
+      listingId: string;
+      listingName: string;
+      busName: string;
+      registrationNumber: string | null;
+      busNumber: string | null;
+      totalSeats: number;
+      layoutType: string | null;
+      rows: number;
+      leftCols: number;
+      rightCols: number;
+      hasAisle: boolean;
+      schedules: Array<{
+        scheduleId: string;
+        departureTime: string;
+        arrivalTime: string;
+        routeFrom: string | null;
+        routeTo: string | null;
+      }>;
+    };
+
+    const busMap = new Map<string, BusEntry>();
 
     for (const row of rows) {
       const key = row.bus_id;
@@ -140,7 +168,47 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       });
     }
 
-    const buses = Array.from(busMap.values());
+    const busesRaw = Array.from(busMap.values());
+
+    // Fetch user bookings from main app for each bus and attach to response
+    const buses = await Promise.all(
+      busesRaw.map(async (bus) => {
+        const colsPerRow = Math.max(1, (bus.leftCols ?? 0) + (bus.rightCols ?? 0)) || 4;
+        let bookings: Array<{
+          id: string;
+          customerName: string;
+          email: string;
+          phone: string;
+          seats: string[];
+          amount: number;
+          paymentStatus: "paid" | "pending" | "refunded";
+          status: string;
+          bookedOn: string;
+        }> = [];
+        try {
+          const mainBookings = await fetchBookingsForBus(bus.busId, dateParam);
+          bookings = mainBookings.map((b) => ({
+            id: b.id,
+            customerName: b.passengerName,
+            email: b.email,
+            phone: b.phone,
+            seats: (b.selectedSeats ?? []).map((n) => seatNumberToLabel(n, colsPerRow)),
+            amount: Math.round(b.totalCents / 100),
+            paymentStatus: (b.paymentStatus === "paid" || b.paymentStatus === "refunded" ? b.paymentStatus : "pending") as "paid" | "pending" | "refunded",
+            status: "confirmed",
+            bookedOn: b.createdAt ? new Date(b.createdAt).toISOString().slice(0, 10) : "",
+          }));
+        } catch (_) {
+          // ignore fetch errors; bus still returned with empty bookings
+        }
+        const seatsBooked = bookings.reduce((sum, b) => sum + b.seats.length, 0);
+        return {
+          ...bus,
+          bookings,
+          seatsBooked,
+        };
+      })
+    );
 
     res.json({ buses, date: dateParam });
   } catch (err) {

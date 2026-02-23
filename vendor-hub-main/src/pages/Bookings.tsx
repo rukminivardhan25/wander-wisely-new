@@ -95,7 +95,7 @@ interface BusBookingCard {
   hasAisle?: boolean;
 }
 
-// API response for GET /api/transport-bookings?date=
+// API response for GET /api/transport-bookings?date= (bookings/seatsBooked from main app)
 interface TransportBusFromApi {
   busId: string;
   listingId: string;
@@ -116,6 +116,9 @@ interface TransportBusFromApi {
     routeFrom: string | null;
     routeTo: string | null;
   }>;
+  /** Filled by vendor backend from main app bookings API */
+  bookings?: CustomerBooking[];
+  seatsBooked?: number;
 }
 
 function formatTime(s: string): string {
@@ -134,6 +137,9 @@ function apiBusToCard(bus: TransportBusFromApi, date: string): BusBookingCard {
   const leftCols = bus.leftCols ?? 2;
   const rightCols = bus.rightCols ?? 2;
   const hasAisle = bus.hasAisle ?? true;
+  const bookings = bus.bookings ?? [];
+  const seatsBooked = bus.seatsBooked ?? bookings.reduce((s, b) => s + b.seats.length, 0);
+  const revenue = bookings.reduce((s, b) => s + b.amount, 0);
   return {
     busId: bus.busId,
     listingId: bus.listingId,
@@ -143,10 +149,10 @@ function apiBusToCard(bus: TransportBusFromApi, date: string): BusBookingCard {
     date,
     departure: first ? formatTime(first.departureTime) : "—",
     totalSeats: bus.totalSeats,
-    seatsBooked: 0,
-    revenue: 0,
+    seatsBooked,
+    revenue,
     status: "active",
-    bookings: [],
+    bookings,
     listingName: bus.listingName,
     layoutType: bus.layoutType ?? null,
     rows,

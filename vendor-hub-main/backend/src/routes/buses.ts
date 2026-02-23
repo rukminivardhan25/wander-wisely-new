@@ -47,14 +47,33 @@ interface ListingRow {
   type: string;
 }
 
-/** Fetch listing and validate: must exist, belong to vendor, and be type=transport. */
+/** Fetch listing and validate: must exist, belong to vendor, and be type=transport. Uses listings.vendor_id first (no vendor_listings table required); falls back to vendor_listings if that table exists and listing has no vendor_id. */
 async function getTransportListing(listingId: string, vendorId: string): Promise<ListingRow | null> {
-  const r = await query<ListingRow>(
-    "SELECT id, vendor_id, type FROM listings WHERE id = $1 AND vendor_id = $2 AND LOWER(TRIM(type)) = 'transport'",
-    [listingId, vendorId]
-  );
-  if (r.rows.length === 0) return null;
-  return r.rows[0];
+  // 1) Try listings.vendor_id first (works when vendor_listings table does not exist)
+  try {
+    const r = await query<ListingRow>(
+      "SELECT id, vendor_id, type FROM listings WHERE id = $1 AND vendor_id = $2 AND LOWER(TRIM(type)) = 'transport'",
+      [listingId, vendorId]
+    );
+    if (r.rows.length > 0) return r.rows[0];
+  } catch (_) {
+    // vendor_id column may not exist if 011 migration ran
+  }
+  // 2) Fallback: vendor_listings (only when that table exists)
+  try {
+    const vl = await query<{ listing_id: string }>(
+      "SELECT listing_id FROM vendor_listings WHERE listing_id = $1 AND vendor_id = $2",
+      [listingId, vendorId]
+    );
+    if (vl.rows.length > 0) {
+      const l = await query<{ id: string; type: string }>("SELECT id, type FROM listings WHERE id = $1", [listingId]);
+      if (l.rows.length > 0 && (l.rows[0].type || "").toLowerCase().trim() === "transport")
+        return { id: l.rows[0].id, vendor_id: vendorId, type: l.rows[0].type };
+    }
+  } catch (_) {
+    // vendor_listings table may not exist
+  }
+  return null;
 }
 
 function ensureListingOwned(listingId: string, vendorId: string): Promise<boolean> {
@@ -72,11 +91,11 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
     }
     const listingRow = await getTransportListing(listingId, vendorId);
     if (!listingRow) {
-      const anyListing = await query<ListingRow>("SELECT id, vendor_id, type FROM listings WHERE id = $1", [listingId]);
-      console.log("[List buses] 404 - listingId:", listingId, "vendorId:", vendorId, "db row:", anyListing.rows[0] ?? "none");
+      console.log("[List buses] 404 - listingId:", listingId, "vendorId:", vendorId);
       res.status(404).json({ error: "Listing not found or not a transport listing" });
       return;
     }
+    // Return all buses for this listing (ownership already verified above)
     const result = await query<{
       id: string; name: string; bus_number: string | null; bus_type: string; ac_type: string | null;
       registration_number: string | null; manufacturer: string | null; model: string | null;
@@ -84,8 +103,8 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       layout_type: string; rows: number; left_cols: number; right_cols: number; has_aisle: boolean; total_seats: number;
       base_price_per_seat_cents: number; status: string; created_at: string;
     }>(
-      "select b.id, b.name, b.bus_number, b.bus_type, b.ac_type, b.registration_number, b.manufacturer, b.model, b.has_wifi, b.has_charging, b.has_entertainment, b.has_toilet, b.photo_url, b.layout_type, b.rows, b.left_cols, b.right_cols, b.has_aisle, b.total_seats, b.base_price_per_seat_cents, b.status, b.created_at from buses b join listings l on l.id = b.listing_id and l.vendor_id = $2 where b.listing_id = $1 order by b.created_at desc",
-      [listingId, vendorId]
+      "select b.id, b.name, b.bus_number, b.bus_type, b.ac_type, b.registration_number, b.manufacturer, b.model, b.has_wifi, b.has_charging, b.has_entertainment, b.has_toilet, b.photo_url, b.layout_type, b.rows, b.left_cols, b.right_cols, b.has_aisle, b.total_seats, b.base_price_per_seat_cents, b.status, b.created_at from buses b where b.listing_id = $1 order by b.created_at desc",
+      [listingId]
     );
     res.json({ buses: result.rows });
   } catch (err) {

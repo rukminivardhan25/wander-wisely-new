@@ -6,6 +6,7 @@ import tripsRoutes from "./routes/trips.js";
 import destinationsRoutes from "./routes/destinations.js";
 import postsRoutes from "./routes/posts.js";
 import transportRoutes from "./routes/transport.js";
+import bookingsRoutes from "./routes/bookings.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -36,6 +37,7 @@ app.use("/api/trips", tripsRoutes);
 app.use("/api/destinations", destinationsRoutes);
 app.use("/api/posts", postsRoutes);
 app.use("/api/transport", transportRoutes);
+app.use("/api/bookings", bookingsRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);

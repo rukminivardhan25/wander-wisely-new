@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -189,12 +189,23 @@ const MyTrip = () => {
     return () => { cancelled = true; };
   }, [token, data?.trip.id]);
 
+  const loadBookings = useCallback(() => {
+    if (token) {
+      apiFetch<{ bookings: StoredBusBooking[] }>("/api/bookings", {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(({ data }) => {
+        if (data?.bookings) setStoredBusBookings(data.bookings);
+      });
+    } else {
+      setStoredBusBookings(getStoredBusBookings());
+    }
+  }, [token]);
+
   useEffect(() => {
-    setStoredBusBookings(getStoredBusBookings());
-    const onRefresh = () => setStoredBusBookings(getStoredBusBookings());
-    window.addEventListener("focus", onRefresh);
-    return () => window.removeEventListener("focus", onRefresh);
-  }, []);
+    loadBookings();
+    window.addEventListener("focus", loadBookings);
+    return () => window.removeEventListener("focus", loadBookings);
+  }, [loadBookings]);
 
   if (!token) {
     return (

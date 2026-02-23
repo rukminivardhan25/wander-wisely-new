@@ -5,9 +5,13 @@ import { Button } from "@/components/ui/button";
 import Layout from "@/components/Layout";
 import TicketCard from "@/components/TicketCard";
 import { addStoredBusBooking } from "@/lib/bookingsStorage";
+import { useAuth } from "@/contexts/AuthContext";
+import { apiFetch } from "@/lib/api";
 
 type SuccessLocationState = {
   bus: {
+    busId?: string;
+    listingId?: string;
     listingName: string;
     busName: string;
     registrationNumber?: string | null;
@@ -29,22 +33,30 @@ type SuccessLocationState = {
 
 const BookingSuccessPage = () => {
   const { state } = useLocation() as { state: SuccessLocationState | null };
+  const { token } = useAuth();
   useEffect(() => {
-    if (state?.bookingId) {
-      addStoredBusBooking({
-        bookingId: state.bookingId,
-        bus: state.bus,
-        selectedSeats: state.selectedSeats,
-        travelDate: state.travelDate,
-        routeFrom: state.routeFrom,
-        routeTo: state.routeTo,
-        totalCents: state.totalCents,
-        passengerName: state.passengerName,
-        passengerPhone: state.passengerPhone,
-        email: state.email,
-      });
+    if (!state?.bookingId) return;
+    const payload = {
+      bookingId: state.bookingId,
+      bus: state.bus,
+      selectedSeats: state.selectedSeats,
+      travelDate: state.travelDate,
+      routeFrom: state.routeFrom,
+      routeTo: state.routeTo,
+      totalCents: state.totalCents,
+      passengerName: state.passengerName,
+      passengerPhone: state.passengerPhone,
+      email: state.email,
+    };
+    addStoredBusBooking(payload);
+    if (token) {
+      apiFetch("/api/bookings", {
+        method: "POST",
+        body: payload,
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {});
     }
-  }, [state?.bookingId]);
+  }, [state?.bookingId, token]);
 
   if (!state) {
     return (

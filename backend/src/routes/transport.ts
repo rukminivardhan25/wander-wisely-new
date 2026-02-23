@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { getTransportPool } from "../config/db.js";
+import { getTransportPool, query } from "../config/db.js";
 
 const router = Router();
 
@@ -49,6 +49,20 @@ router.get("/available-buses", async (req: Request, res: Response): Promise<void
     const toParam = typeof req.query.to === "string" ? req.query.to.trim() : null;
     const passengersParam = req.query.passengers != null ? Number(req.query.passengers) : NaN;
     const passengers = Number.isInteger(passengersParam) && passengersParam >= 1 ? passengersParam : 1;
+
+    // Booked seat count per bus for this date (from main DB transport_bookings)
+    const bookedResult = await query<{ bus_id: string; booked: string }>(
+      `select bus_id, sum(cardinality(selected_seats))::text as booked
+       from transport_bookings
+       where travel_date = $1 and bus_id is not null
+       group by bus_id`,
+      [dateParam]
+    ).catch(() => ({ rows: [] as { bus_id: string; booked: string }[] }));
+    const bookedByBus = new Map<string, number>();
+    for (const r of bookedResult.rows) {
+      const n = parseInt(r.booked, 10);
+      if (!Number.isNaN(n) && n > 0) bookedByBus.set(r.bus_id, n);
+    }
 
     const pool = getTransportPool();
     const result = await pool.query<{
@@ -128,7 +142,10 @@ router.get("/available-buses", async (req: Request, res: Response): Promise<void
       [dateParam, fromParam || null, toParam || null, passengers]
     );
 
-    const buses = result.rows.map((row) => ({
+    const buses = result.rows.map((row) => {
+      const booked = bookedByBus.get(row.bus_id) ?? 0;
+      const availableSeats = Math.max(0, row.total_seats - booked);
+      return {
       listingId: row.listing_id,
       listingName: row.listing_name,
       busId: row.bus_id,
@@ -136,7 +153,7 @@ router.get("/available-buses", async (req: Request, res: Response): Promise<void
       registrationNumber: row.registration_number ?? null,
       busNumber: row.bus_number ?? null,
       totalSeats: row.total_seats,
-      availableSeats: row.available_seats,
+      availableSeats,
       rows: row.rows,
       leftCols: row.left_cols,
       rightCols: row.right_cols,
@@ -156,9 +173,11 @@ router.get("/available-buses", async (req: Request, res: Response): Promise<void
       routeFrom: row.route_from_place ?? null,
       routeTo: row.route_to_place ?? null,
       pricePerSeatCents: row.price_per_seat_cents ?? null,
-    }));
+    };
+    });
 
-    res.json({ date: dateParam, buses });
+    const filtered = buses.filter((b) => b.availableSeats >= passengers);
+    res.json({ date: dateParam, buses: filtered });
   } catch (err) {
     console.error("Transport available-buses error:", err);
     const message = err instanceof Error ? err.message : "Failed to fetch available buses";

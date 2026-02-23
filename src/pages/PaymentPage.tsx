@@ -9,6 +9,8 @@ import Layout from "@/components/Layout";
 /** Booking state passed from seat modal (BookingMarketplace). */
 export type PaymentLocationState = {
   bus: {
+    busId?: string;
+    listingId?: string;
     listingName: string;
     busName: string;
     registrationNumber: string | null;

@@ -117,6 +117,7 @@ const BookingMarketplace = () => {
   const [seatModalOpen, setSeatModalOpen] = useState(false);
   const [selectedBusId, setSelectedBusId] = useState<string | null>(null);
   const [selectedSeats, setSelectedSeats] = useState<number[]>([]);
+  const [bookedSeatNumbers, setBookedSeatNumbers] = useState<number[]>([]);
   const [busList, setBusList] = useState<ApiBusOption[]>([]);
   const [busLoading, setBusLoading] = useState(false);
   const [busError, setBusError] = useState("");
@@ -266,8 +267,22 @@ const BookingMarketplace = () => {
   const rightCols = selectedBus?.rightCols ?? 2;
   const hasAisle = selectedBus?.hasAisle ?? true;
   const colsPerRow = leftCols + rightCols;
-  const bookedSet = new Set<number>(); // TODO: load from API when schedule bookings exist
+  const bookedSet = useMemo(() => new Set(bookedSeatNumbers), [bookedSeatNumbers]);
   const pricePerSeat = selectedBus?.pricePerSeatCents ?? 0;
+
+  // Load already-booked seats when seat modal opens for a bus/date so they show as unavailable
+  useEffect(() => {
+    if (!seatModalOpen || !selectedBus?.busId || !date) {
+      setBookedSeatNumbers([]);
+      return;
+    }
+    const travelDate = dateToYYYYMMDD(date);
+    apiFetch<{ bookedSeats?: number[] }>(
+      `/api/bookings/booked-seats?bus_id=${encodeURIComponent(selectedBus.busId)}&date=${encodeURIComponent(travelDate)}`
+    ).then(({ data }) => {
+      setBookedSeatNumbers(data?.bookedSeats ?? []);
+    });
+  }, [seatModalOpen, selectedBus?.busId, date]);
   const layoutLabel = selectedBus?.layoutType
     ? `${selectedBus.layoutType} seater layout`
     : `${leftCols}+${rightCols} seater layout`;
@@ -716,6 +731,8 @@ const BookingMarketplace = () => {
                 navigate("/my-trip/payment", {
                   state: {
                     bus: {
+                      busId: selectedBus.busId,
+                      listingId: selectedBus.listingId,
                       listingName: selectedBus.listingName,
                       busName: selectedBus.busName,
                       registrationNumber: selectedBus.registrationNumber ?? null,

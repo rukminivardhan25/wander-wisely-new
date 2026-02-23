@@ -24,30 +24,40 @@ const createSchema = z.object({
 
 const updateSchema = createSchema.partial();
 
-// List my listings (vendor can have multiple listings)
+/** Check if vendor owns the listing (supports vendor_id on listings or vendor_listings table). */
+async function vendorOwnsListing(listingId: string, vendorId: string): Promise<boolean> {
+  try {
+    const r = await query<{ id: string }>("SELECT id FROM listings WHERE id = $1 AND vendor_id = $2", [listingId, vendorId]);
+    if (r.rows.length > 0) return true;
+  } catch {
+    // vendor_id column may not exist
+  }
+  try {
+    const vl = await query<{ listing_id: string }>("SELECT listing_id FROM vendor_listings WHERE listing_id = $1 AND vendor_id = $2", [listingId, vendorId]);
+    return vl.rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+// List my listings (vendor can have multiple listings). Uses vendor_listings if present, else listings.vendor_id.
 router.get("/", async (req: Request, res: Response): Promise<void> => {
   try {
     const vendorId = req.vendorId!;
-    const result = await query<{
-      id: string;
-      vendor_id: string;
-      type: string;
-      name: string;
-      tagline: string | null;
-      description: string | null;
-      registered_address: string | null;
-      service_area: string | null;
-      address: string | null;
-      city: string | null;
-      cover_image_url: string | null;
-      status: string;
-      created_at: string;
-      updated_at: string;
-    }>(
-      `select id, vendor_id, type, name, tagline, description, registered_address, service_area, address, city, cover_image_url, status, created_at, updated_at
-       from listings where vendor_id = $1 order by created_at desc`,
-      [vendorId]
-    );
+    type Row = { id: string; vendor_id: string; type: string; name: string; tagline: string | null; description: string | null; registered_address: string | null; service_area: string | null; address: string | null; city: string | null; cover_image_url: string | null; status: string; created_at: string; updated_at: string };
+    let result: { rows: Row[] };
+    try {
+      result = await query<Row>(`select id, vendor_id, type, name, tagline, description, registered_address, service_area, address, city, cover_image_url, status, created_at, updated_at from listings where vendor_id = $1 order by created_at desc`, [vendorId]);
+    } catch {
+      try {
+        result = await query<Row & { vendor_id?: string }>(
+          `select l.id, $1::uuid as vendor_id, l.type, l.name, l.tagline, l.description, l.registered_address, l.service_area, l.address, l.city, l.cover_image_url, l.status, l.created_at, l.updated_at from listings l inner join vendor_listings vl on vl.listing_id = l.id and vl.vendor_id = $1 order by l.created_at desc`,
+          [vendorId]
+        );
+      } catch {
+        result = { rows: [] };
+      }
+    }
     res.json({ listings: result.rows });
   } catch (err) {
     console.error("List listings error:", err);
@@ -55,31 +65,23 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-// Get one listing
+// Get one listing (supports vendor_listings and listings.vendor_id)
 router.get("/:id", async (req: Request, res: Response): Promise<void> => {
   try {
     const vendorId = req.vendorId!;
     const { id } = req.params;
-    const result = await query<{
-      id: string;
-      vendor_id: string;
-      type: string;
-      name: string;
-      tagline: string | null;
-      description: string | null;
-      registered_address: string | null;
-      service_area: string | null;
-      address: string | null;
-      city: string | null;
-      cover_image_url: string | null;
-      status: string;
-      created_at: string;
-      updated_at: string;
-    }>(
-      `select id, vendor_id, type, name, tagline, description, registered_address, service_area, address, city, cover_image_url, status, created_at, updated_at
-       from listings where id = $1 and vendor_id = $2`,
-      [id, vendorId]
-    );
+    type Row = { id: string; vendor_id: string; type: string; name: string; tagline: string | null; description: string | null; registered_address: string | null; service_area: string | null; address: string | null; city: string | null; cover_image_url: string | null; status: string; created_at: string; updated_at: string };
+    let result: { rows: Row[] };
+    try {
+      result = await query<Row>(`select id, vendor_id, type, name, tagline, description, registered_address, service_area, address, city, cover_image_url, status, created_at, updated_at from listings where id = $1 and vendor_id = $2`, [id, vendorId]);
+    } catch {
+      try {
+        const r = await query<Row & { vendor_id?: string }>(`select l.id, $2::uuid as vendor_id, l.type, l.name, l.tagline, l.description, l.registered_address, l.service_area, l.address, l.city, l.cover_image_url, l.status, l.created_at, l.updated_at from listings l inner join vendor_listings vl on vl.listing_id = l.id and vl.vendor_id = $2 where l.id = $1`, [id, vendorId]);
+        result = { rows: r.rows as Row[] };
+      } catch {
+        result = { rows: [] };
+      }
+    }
     if (result.rows.length === 0) {
       res.status(404).json({ error: "Listing not found" });
       return;
@@ -192,15 +194,33 @@ router.patch("/:id", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-// Delete listing
+// Delete listing and all related data: explicit deletes for every related table.
 router.delete("/:id", async (req: Request, res: Response): Promise<void> => {
   try {
     const vendorId = req.vendorId!;
-    const { id } = req.params;
-    const result = await query(
-      "delete from listings where id = $1 and vendor_id = $2 returning id",
-      [id, vendorId]
-    );
+    const listingId = req.params.id;
+    const owns = await vendorOwnsListing(listingId, vendorId);
+    if (!owns) {
+      res.status(404).json({ error: "Listing not found" });
+      return;
+    }
+    // Delete in dependency order; wrap each in try/catch so missing tables don't fail the whole delete
+    const runIfExists = async (sql: string, params: string[]) => {
+      try {
+        await query(sql, params);
+      } catch {
+        // Table may not exist in this DB
+      }
+    };
+    await runIfExists("DELETE FROM route_schedules WHERE route_id IN (SELECT id FROM routes WHERE listing_id = $1)", [listingId]);
+    await runIfExists("DELETE FROM vendor_bookings WHERE listing_id = $1", [listingId]);
+    await runIfExists("DELETE FROM bus_schedules WHERE bus_id IN (SELECT id FROM buses WHERE listing_id = $1)", [listingId]);
+    await runIfExists("DELETE FROM routes WHERE listing_id = $1", [listingId]);
+    await runIfExists("DELETE FROM buses WHERE listing_id = $1", [listingId]);
+    await runIfExists("DELETE FROM drivers WHERE listing_id = $1", [listingId]);
+    await runIfExists("DELETE FROM listing_availability WHERE listing_id = $1", [listingId]);
+    await runIfExists("DELETE FROM vendor_listings WHERE listing_id = $1", [listingId]);
+    const result = await query("DELETE FROM listings WHERE id = $1 RETURNING id", [listingId]);
     if (result.rowCount === 0) {
       res.status(404).json({ error: "Listing not found" });
       return;

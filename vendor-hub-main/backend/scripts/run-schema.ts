@@ -29,6 +29,7 @@ const schemaFiles = [
   "018_drivers_routes_bus_id.sql",
   "019_bus_schedules_route_id.sql",
   "020_buses_unique_registration_per_listing.sql",
+  "021_vendor_customers.sql",
 ];
 
 async function run() {
