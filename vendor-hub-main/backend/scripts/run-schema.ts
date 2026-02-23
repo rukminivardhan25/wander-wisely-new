@@ -18,17 +18,17 @@ const pool = new pg.Pool({
 });
 
 const schemaFiles = [
+  "000_drop_all_vendor_tables.sql",
   "001_vendors.sql",
   "002_listings.sql",
-  "003_vendor_bookings.sql",
-  "004_buses.sql",
+  "003_buses.sql",
+  "004_drivers.sql",
   "005_routes.sql",
   "006_route_schedules.sql",
   "007_listing_availability.sql",
-  "008_listing_driver_info.sql",
-  "009_drivers.sql",
-  "010_drop_listing_driver_columns.sql",
-  "011_vendor_listings.sql",
+  "018_drivers_routes_bus_id.sql",
+  "019_bus_schedules_route_id.sql",
+  "020_buses_unique_registration_per_listing.sql",
 ];
 
 async function run() {

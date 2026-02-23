@@ -1,34 +1,40 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
 import authRoutes from "./routes/auth.js";
 import listingsIndexRoutes from "./routes/listingsIndex.js";
-import bookingsRoutes from "./routes/bookings.js";
-import routeSchedulesRoutes from "./routes/routeSchedules.js";
+import uploadRoutes from "./routes/upload.js";
+import transportBookingsRoutes from "./routes/transportBookings.js";
+import publicTransportRoutes from "./routes/publicTransport.js";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT ?? 3002;
 
-const corsOrigin = process.env.CORS_ORIGIN ?? "http://localhost:8080,http://127.0.0.1:8080";
+const corsOrigin = process.env.CORS_ORIGIN ?? "http://localhost:8080,http://localhost:8081,http://127.0.0.1:8080";
 const corsOrigins = corsOrigin.split(",").map((o) => o.trim()).filter(Boolean);
+const allowedOrigins = corsOrigins.length ? corsOrigins : ["http://localhost:8080", "http://localhost:8081"];
 app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin) return cb(null, true);
-    if (corsOrigins.includes(origin)) return cb(null, true);
-    return cb(null, corsOrigins[0] ?? true);
-  },
+  origin: allowedOrigins,
   credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  optionsSuccessStatus: 204,
 }));
-app.use(express.json());
+app.use(express.json({ limit: "6mb" }));
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", message: "Vendor Hub API" });
 });
 
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/api/auth", authRoutes);
 app.use("/api/listings", listingsIndexRoutes);
-app.use("/api/routes/:routeId/schedules", routeSchedulesRoutes);
-app.use("/api/bookings", bookingsRoutes);
+app.use("/api/upload", uploadRoutes);
+app.use("/api/transport-bookings", transportBookingsRoutes);
+app.use("/api/public", publicTransportRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });

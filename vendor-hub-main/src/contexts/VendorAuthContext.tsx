@@ -2,10 +2,9 @@ import { createContext, useState, useCallback, useEffect, type ReactNode } from 
 
 export interface Vendor {
   id: string;
+  name: string;
   email: string;
-  business_name: string;
-  plan: string | null;
-  verified: boolean;
+  phone: string | null;
 }
 
 interface AuthState {
@@ -16,7 +15,7 @@ interface AuthState {
 
 interface VendorAuthContextValue extends AuthState {
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (data: { email: string; password: string; business_name: string; plan?: string }) => Promise<void>;
+  signUp: (data: { name: string; email: string; phone?: string; password: string }) => Promise<void>;
   logout: () => void;
 }
 
@@ -74,7 +73,7 @@ export function VendorAuthProvider({ children }: { children: ReactNode }) {
     setState({ token, vendor, ready: true });
   }, []);
 
-  const signUp = useCallback(async (data: { email: string; password: string; business_name: string; plan?: string }) => {
+  const signUp = useCallback(async (data: { name: string; email: string; phone?: string; password: string }) => {
     const url = `${getApiUrl()}/api/auth/signup`;
     let res: Response;
     try {

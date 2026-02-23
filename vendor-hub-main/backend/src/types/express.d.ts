@@ -5,6 +5,7 @@ declare global {
     interface Request {
       userId?: string;
       vendorId?: string;
+      listingId?: string;
     }
   }
 }

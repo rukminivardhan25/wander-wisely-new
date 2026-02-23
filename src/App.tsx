@@ -9,6 +9,8 @@ import Explore from "./pages/Explore";
 import PlanTrip from "./pages/PlanTrip";
 import MyTrip from "./pages/MyTrip";
 import BookingMarketplace from "./pages/BookingMarketplace";
+import PaymentPage from "./pages/PaymentPage";
+import BookingSuccessPage from "./pages/BookingSuccessPage";
 import ActivityDetail from "./pages/ActivityDetail";
 import TransportBook from "./pages/TransportBook";
 import Community from "./pages/Community";
@@ -33,6 +35,8 @@ const App = () => (
             <Route path="/plan-trip/activity" element={<ActivityDetail />} />
             <Route path="/my-trip" element={<MyTrip />} />
             <Route path="/my-trip/book" element={<BookingMarketplace />} />
+            <Route path="/my-trip/payment" element={<PaymentPage />} />
+            <Route path="/my-trip/booking-success" element={<BookingSuccessPage />} />
             <Route path="/book/transport" element={<TransportBook />} />
             <Route path="/community" element={<Community />} />
             <Route path="/about" element={<About />} />

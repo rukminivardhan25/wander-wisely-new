@@ -11,6 +11,8 @@ import SignUp from "./pages/SignUp";
 import Dashboard from "./pages/Dashboard";
 import Listings from "./pages/Listings";
 import TransportListing from "./pages/TransportListing";
+import BusDetail from "./pages/BusDetail";
+import ListingDetail from "./pages/ListingDetail";
 import AddListing from "./pages/AddListing";
 import Bookings from "./pages/Bookings";
 import Customers from "./pages/Customers";
@@ -41,6 +43,8 @@ const App = () => (
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/listings" element={<Listings />} />
                 <Route path="/listings/:listingId/transport" element={<TransportListing />} />
+                <Route path="/listings/:listingId/transport/bus/:busId" element={<BusDetail />} />
+                <Route path="/listings/:listingId" element={<ListingDetail />} />
                 <Route path="/add-listing" element={<AddListing />} />
                 <Route path="/bookings" element={<Bookings />} />
                 <Route path="/customers" element={<Customers />} />

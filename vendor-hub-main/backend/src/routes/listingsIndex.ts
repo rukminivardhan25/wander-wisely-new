@@ -1,19 +1,24 @@
 import { Router } from "express";
 import listingsRoutes from "./listings.js";
 import busesRoutes from "./buses.js";
-import transportRoutes from "./transportRoutes.js";
-import listingAvailabilityRoutes from "./listingAvailability.js";
 import driversRoutes from "./drivers.js";
+import transportRoutes from "./transportRoutes.js";
 
 const router = Router();
 
-// Nested routes first (so /api/listings/:listingId/buses, /routes, etc. are matched before /:id)
-router.use("/:listingId/buses", busesRoutes);
-router.use("/:listingId/routes", transportRoutes);
-router.use("/:listingId/availability", listingAvailabilityRoutes);
-router.use("/:listingId/drivers", driversRoutes);
+// Ensure listingId is always on req for nested routes (param merging can drop it in some setups)
+const nestedRouter = Router({ mergeParams: true });
+nestedRouter.use((req, _res, next) => {
+  req.listingId = req.params.listingId ?? req.listingId;
+  next();
+});
+nestedRouter.use("/buses", busesRoutes);
+nestedRouter.use("/drivers", driversRoutes);
+nestedRouter.use("/routes", transportRoutes);
 
-// Then top-level listing CRUD (/, /:id)
+router.use("/:listingId", nestedRouter);
+
+// Top-level: GET/POST /api/listings, GET/PATCH/DELETE /api/listings/:id
 router.use("/", listingsRoutes);
 
 export default router;

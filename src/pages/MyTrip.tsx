@@ -36,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Layout from "@/components/Layout";
 import { useAuth } from "@/contexts/AuthContext";
+import { getStoredBusBookings, type StoredBusBooking } from "@/lib/bookingsStorage";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api";
 
@@ -157,6 +158,7 @@ const MyTrip = () => {
   const [expenseSubmitting, setExpenseSubmitting] = useState(false);
   const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date | undefined>(undefined);
   const [startDateSetting, setStartDateSetting] = useState(false);
+  const [storedBusBookings, setStoredBusBookings] = useState<StoredBusBooking[]>([]);
   const { token } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -186,6 +188,13 @@ const MyTrip = () => {
     });
     return () => { cancelled = true; };
   }, [token, data?.trip.id]);
+
+  useEffect(() => {
+    setStoredBusBookings(getStoredBusBookings());
+    const onRefresh = () => setStoredBusBookings(getStoredBusBookings());
+    window.addEventListener("focus", onRefresh);
+    return () => window.removeEventListener("focus", onRefresh);
+  }, []);
 
   if (!token) {
     return (
@@ -568,23 +577,49 @@ const MyTrip = () => {
                     </Button>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {[
-                      { icon: Train, title: "Hyderabad → Chandigarh", sub: "Train · Day 1", status: "Confirmed", img: true },
-                      { icon: Hotel, title: "Hotel in Manali", sub: "Stay · Day 1–5", status: "Pending", img: true },
-                      { icon: Ticket, title: "Rohtang Pass Tour", sub: "Experience · Day 3", status: "Not booked", img: true },
-                    ].map((b, i) => (
-                      <div key={i} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3">
-                        <div className="w-14 h-14 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
-                          <b.icon className="h-6 w-6 text-slate-600" />
+                    {storedBusBookings.map((b) => {
+                      const { bookedAt: _, ...stateForSuccess } = b;
+                      return (
+                        <div key={b.bookingId} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3">
+                          <div className="w-14 h-14 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
+                            <Bus className="h-6 w-6 text-slate-600" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-foreground truncate">{b.routeFrom} → {b.routeTo}</p>
+                            <p className="text-xs text-muted-foreground">Bus · {b.travelDate}</p>
+                            <p className="text-xs mt-1 text-amber-600">Confirmed</p>
+                            <Button asChild size="sm" variant="outline" className="mt-2 rounded-lg text-xs">
+                              <Link to="/my-trip/booking-success" state={stateForSuccess}>View ticket</Link>
+                            </Button>
+                          </div>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium text-foreground truncate">{b.title}</p>
-                          <p className="text-xs text-muted-foreground">{b.sub}</p>
-                          <p className="text-xs mt-1 text-amber-600">{b.status}</p>
-                          <Button size="sm" variant="outline" className="mt-2 rounded-lg text-xs">View ticket</Button>
-                        </div>
+                      );
+                    })}
+                    {storedBusBookings.length === 0 && (
+                      <p className="text-sm text-muted-foreground col-span-full">No bus bookings yet. Book transport to see your tickets here.</p>
+                    )}
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3">
+                      <div className="w-14 h-14 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
+                        <Hotel className="h-6 w-6 text-slate-600" />
                       </div>
-                    ))}
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-foreground truncate">Hotel in {data.trip.destination}</p>
+                        <p className="text-xs text-muted-foreground">Stay · Day 1–{data.trip.days}</p>
+                        <p className="text-xs mt-1 text-amber-600">Not booked</p>
+                        <Button size="sm" variant="outline" className="mt-2 rounded-lg text-xs" disabled>View ticket</Button>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3">
+                      <div className="w-14 h-14 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
+                        <Ticket className="h-6 w-6 text-slate-600" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-foreground truncate">Experiences in {data.trip.destination}</p>
+                        <p className="text-xs text-muted-foreground">Experience</p>
+                        <p className="text-xs mt-1 text-amber-600">Not booked</p>
+                        <Button size="sm" variant="outline" className="mt-2 rounded-lg text-xs" disabled>View ticket</Button>
+                      </div>
+                    </div>
                   </div>
                 </TabsContent>
                 <TabsContent value="restaurants" className="mt-0">

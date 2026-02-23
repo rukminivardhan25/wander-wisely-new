@@ -10,10 +10,10 @@ const JWT_SECRET = process.env.JWT_SECRET!;
 const SALT_ROUNDS = 10;
 
 const signUpSchema = z.object({
+  name: z.string().min(1, "Name is required"),
   email: z.string().email(),
+  phone: z.string().optional(),
   password: z.string().min(8, "Password must be at least 8 characters"),
-  business_name: z.string().min(1, "Business name is required"),
-  plan: z.enum(["basic", "premium", "enterprise"]).optional(),
 });
 
 const signInSchema = z.object({
@@ -28,7 +28,7 @@ router.post("/signup", async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
       return;
     }
-    const { email, password, business_name, plan } = parsed.data;
+    const { name, email, phone, password } = parsed.data;
 
     const existing = await query<{ id: string }>("select id from vendors where email = $1", [email]);
     if (existing.rows.length > 0) {
@@ -37,9 +37,9 @@ router.post("/signup", async (req: Request, res: Response): Promise<void> => {
     }
 
     const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
-    const insert = await query<{ id: string; email: string; business_name: string; plan: string | null; verified: boolean }>(
-      "insert into vendors (email, password_hash, business_name, plan) values ($1, $2, $3, $4) returning id, email, business_name, plan, verified",
-      [email, password_hash, business_name, plan ?? "basic"]
+    const insert = await query<{ id: string; name: string; email: string; phone: string | null }>(
+      "insert into vendors (name, email, phone, password_hash) values ($1, $2, $3, $4) returning id, name, email, phone",
+      [name, email, phone ?? null, password_hash]
     );
     const vendor = insert.rows[0];
 
@@ -50,7 +50,7 @@ router.post("/signup", async (req: Request, res: Response): Promise<void> => {
     );
 
     res.status(201).json({
-      vendor: { id: vendor.id, email: vendor.email, business_name: vendor.business_name, plan: vendor.plan, verified: vendor.verified },
+      vendor: { id: vendor.id, name: vendor.name, email: vendor.email, phone: vendor.phone },
       token,
     });
   } catch (err) {
@@ -68,8 +68,8 @@ router.post("/signin", async (req: Request, res: Response): Promise<void> => {
     }
     const { email, password } = parsed.data;
 
-    const result = await query<{ id: string; email: string; business_name: string; plan: string | null; verified: boolean; password_hash: string }>(
-      "select id, email, business_name, plan, verified, password_hash from vendors where email = $1",
+    const result = await query<{ id: string; name: string; email: string; phone: string | null; password_hash: string }>(
+      "select id, name, email, phone, password_hash from vendors where email = $1",
       [email]
     );
     if (result.rows.length === 0) {
@@ -91,7 +91,7 @@ router.post("/signin", async (req: Request, res: Response): Promise<void> => {
     );
 
     res.json({
-      vendor: { id: vendor.id, email: vendor.email, business_name: vendor.business_name, plan: vendor.plan, verified: vendor.verified },
+      vendor: { id: vendor.id, name: vendor.name, email: vendor.email, phone: vendor.phone },
       token,
     });
   } catch (err) {

@@ -9,11 +9,19 @@ create table if not exists public.vendor_listings (
 create index if not exists idx_vendor_listings_vendor_id on public.vendor_listings(vendor_id);
 create index if not exists idx_vendor_listings_listing_id on public.vendor_listings(listing_id);
 
--- Migrate: copy vendor_id from listings into vendor_listings
-insert into public.vendor_listings (vendor_id, listing_id)
-select vendor_id, id from public.listings
-where vendor_id is not null
-on conflict (vendor_id, listing_id) do nothing;
+-- Migrate: copy vendor_id from listings into vendor_listings (only if column still exists)
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'listings' and column_name = 'vendor_id'
+  ) then
+    insert into public.vendor_listings (vendor_id, listing_id)
+    select vendor_id, id from public.listings
+    where vendor_id is not null
+    on conflict (vendor_id, listing_id) do nothing;
+  end if;
+end $$;
 
 -- Drop vendor_id from listings (after migration)
 do $$

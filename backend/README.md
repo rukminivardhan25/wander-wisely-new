@@ -22,6 +22,13 @@ npm run dev
 
 The API will be at `http://localhost:3001`.
 
+### Bus / transport booking
+
+**Available buses** are read **directly from the database**; the vendor hub backend does not need to be running.
+
+- **Option A – Same DB:** If your main app and vendor hub use the same PostgreSQL database (and that DB has the vendor hub schema: `listings`, `buses`, `bus_schedules`, `routes`), no extra config is needed. The main backend uses `DATABASE_URL` for the bus query.
+- **Option B – Separate DB:** If transport data lives in a different database (e.g. vendor hub’s DB), set **`TRANSPORT_DATABASE_URL`** in this backend’s `.env` to that database’s connection string. The main backend will use it only for the available-buses query.
+
 ## Endpoints
 
 | Method | Path | Auth | Description |
@@ -40,5 +47,6 @@ The API will be at `http://localhost:3001`.
 | POST | `/api/posts/:id/comments` | Yes | Add comment (body) |
 | POST | `/api/posts/:id/like` | Yes | Like post |
 | DELETE | `/api/posts/:id/like` | Yes | Unlike post |
+| GET | `/api/transport/available-buses` | No | Available buses for a date (`?date=YYYY-MM-DD`). Proxies to Vendor Hub. |
 
 Protected routes require header: `Authorization: Bearer <token>`.

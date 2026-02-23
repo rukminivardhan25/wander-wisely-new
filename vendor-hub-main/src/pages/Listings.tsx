@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Star, Eye, Edit, Trash2, Bus } from "lucide-react";
+import { Eye, Edit, Trash2, Bus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { vendorFetch } from "@/lib/api";
 
@@ -22,10 +22,12 @@ const statusStyles: Record<string, string> = {
 };
 
 export default function Listings() {
+  const location = useLocation();
   const [listings, setListings] = useState<ListingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const redirectMessage = (location.state as { message?: string } | null)?.message;
 
   const loadListings = () => {
     setLoading(true);
@@ -58,6 +60,11 @@ export default function Listings() {
 
   return (
     <div className="space-y-6">
+      {redirectMessage && (
+        <div className="rounded-xl bg-destructive/10 text-destructive border border-destructive/20 px-4 py-3 text-sm">
+          {redirectMessage}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground">My Listings</h1>
@@ -99,9 +106,12 @@ export default function Listings() {
                     <Bus size={14} /> Manage Fleet
                   </Link>
                 )}
-                <button type="button" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                <Link
+                  to={l.type === "transport" ? `/listings/${l.id}/transport?view=1` : `/listings/${l.id}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
                   <Eye size={14} /> View
-                </button>
+                </Link>
                 <button type="button" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
                   <Edit size={14} /> Edit
                 </button>

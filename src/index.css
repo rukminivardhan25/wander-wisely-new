@@ -168,3 +168,28 @@
     box-shadow: var(--shadow-accent);
   }
 }
+
+/* Print: only show the ticket card when user clicks Download Ticket (window.print) */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .ticket-print-area,
+  .ticket-print-area * {
+    visibility: visible;
+  }
+  .ticket-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: 100%;
+    padding: 1rem;
+    background: white;
+    box-shadow: none;
+    border: 1px solid #e2e8f0;
+  }
+  .ticket-download-btn {
+    display: none !important;
+  }
+}

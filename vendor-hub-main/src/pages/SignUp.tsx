@@ -4,22 +4,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useVendorAuth } from "@/hooks/useVendorAuth";
 
 export default function SignUp() {
   const navigate = useNavigate();
   const { signUp, token } = useVendorAuth();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [businessName, setBusinessName] = useState("");
-  const [plan, setPlan] = useState<string>("basic");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -33,7 +26,7 @@ export default function SignUp() {
     setError("");
     setLoading(true);
     try {
-      await signUp({ email, password, business_name: businessName, plan });
+      await signUp({ name, email, phone: phone || undefined, password });
       navigate("/", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign up failed");
@@ -53,7 +46,7 @@ export default function SignUp() {
         <Card className="border-border shadow-card">
           <CardHeader className="text-center">
             <CardTitle className="font-display text-2xl">Create vendor account</CardTitle>
-            <CardDescription>Register your business to start listing and managing bookings.</CardDescription>
+            <CardDescription>Register as a vendor to create and manage your listings.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -61,15 +54,15 @@ export default function SignUp() {
                 <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</p>
               )}
               <div className="space-y-2">
-                <Label htmlFor="business_name">Business name</Label>
+                <Label htmlFor="name">Your name</Label>
                 <Input
-                  id="business_name"
+                  id="name"
                   type="text"
-                  placeholder="e.g. John's Bistro"
-                  value={businessName}
-                  onChange={(e) => setBusinessName(e.target.value)}
+                  placeholder="e.g. John Doe"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   required
-                  autoComplete="organization"
+                  autoComplete="name"
                   className="rounded-xl"
                 />
               </div>
@@ -101,17 +94,16 @@ export default function SignUp() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Plan</Label>
-                <Select value={plan} onValueChange={setPlan}>
-                  <SelectTrigger className="rounded-xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="basic">Basic</SelectItem>
-                    <SelectItem value="premium">Premium</SelectItem>
-                    <SelectItem value="enterprise">Enterprise</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="phone">Phone (optional)</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="e.g. +91 98765 43210"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  autoComplete="tel"
+                  className="rounded-xl"
+                />
               </div>
               <Button type="submit" className="w-full rounded-xl vendor-gradient text-primary-foreground hover:opacity-90" disabled={loading}>
                 {loading ? "Creating account…" : "Sign up"}

@@ -6,37 +6,46 @@ import { authMiddleware } from "../middleware/auth.js";
 const router = Router();
 router.use(authMiddleware);
 
-const listingTypes = ["restaurant", "event", "experience", "hotel", "transport", "other"] as const;
 const statuses = ["draft", "pending_approval", "live"] as const;
+const businessTypes = ["restaurant", "hotel", "shop", "transport", "experience", "rental", "event", "guide", "emergency"] as const;
 
 const createSchema = z.object({
   name: z.string().min(1),
-  type: z.enum(listingTypes),
+  type: z.enum(businessTypes),
   status: z.enum(statuses).optional(),
-  description: z.string().optional(),
+  tagline: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  registered_address: z.string().optional().nullable(),
+  service_area: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
   cover_image_url: z.string().url().optional().nullable(),
 });
 
 const updateSchema = createSchema.partial();
 
-// List my listings (via vendor_listings: businesses linked to this vendor)
+// List my listings (vendor can have multiple listings)
 router.get("/", async (req: Request, res: Response): Promise<void> => {
   try {
     const vendorId = req.vendorId!;
     const result = await query<{
       id: string;
-      name: string;
+      vendor_id: string;
       type: string;
-      status: string;
+      name: string;
+      tagline: string | null;
       description: string | null;
+      registered_address: string | null;
+      service_area: string | null;
+      address: string | null;
+      city: string | null;
       cover_image_url: string | null;
+      status: string;
       created_at: string;
+      updated_at: string;
     }>(
-      `select l.id, l.name, l.type, l.status, l.description, l.cover_image_url, l.created_at
-       from listings l
-       join vendor_listings vl on l.id = vl.listing_id
-       where vl.vendor_id = $1
-       order by l.created_at desc`,
+      `select id, vendor_id, type, name, tagline, description, registered_address, service_area, address, city, cover_image_url, status, created_at, updated_at
+       from listings where vendor_id = $1 order by created_at desc`,
       [vendorId]
     );
     res.json({ listings: result.rows });
@@ -53,17 +62,22 @@ router.get("/:id", async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
     const result = await query<{
       id: string;
-      name: string;
+      vendor_id: string;
       type: string;
-      status: string;
+      name: string;
+      tagline: string | null;
       description: string | null;
+      registered_address: string | null;
+      service_area: string | null;
+      address: string | null;
+      city: string | null;
       cover_image_url: string | null;
+      status: string;
       created_at: string;
+      updated_at: string;
     }>(
-      `select l.id, l.name, l.type, l.status, l.description, l.cover_image_url, l.created_at
-       from listings l
-       join vendor_listings vl on l.id = vl.listing_id
-       where l.id = $1 and vl.vendor_id = $2`,
+      `select id, vendor_id, type, name, tagline, description, registered_address, service_area, address, city, cover_image_url, status, created_at, updated_at
+       from listings where id = $1 and vendor_id = $2`,
       [id, vendorId]
     );
     if (result.rows.length === 0) {
@@ -77,26 +91,26 @@ router.get("/:id", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-// Create listing (business) and link to vendor
+// Create listing (all five steps: business type, basic info, location, photos, publish)
 router.post("/", async (req: Request, res: Response): Promise<void> => {
   try {
     const vendorId = req.vendorId!;
+    console.log("[Create listing] Vendor ID from JWT:", vendorId);
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
       return;
     }
-    const { name, type, status, description, cover_image_url } = parsed.data;
-    const insertResult = await query<{ id: string; name: string; type: string; status: string }>(
-      "insert into listings (name, type, status, description, cover_image_url) values ($1, $2, $3, $4, $5) returning id, name, type, status",
-      [name, type, status ?? "draft", description ?? null, cover_image_url ?? null]
+    const { name, type, status, tagline, description, registered_address, service_area, address, city, cover_image_url } = parsed.data;
+    const insertResult = await query<{ id: string; vendor_id: string; name: string; type: string; status: string }>(
+      `insert into listings (vendor_id, name, type, status, tagline, description, registered_address, service_area, address, city, cover_image_url)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       returning id, vendor_id, name, type, status`,
+      [vendorId, name, type, status ?? "draft", tagline ?? null, description ?? null, registered_address ?? null, service_area ?? null, address ?? null, city ?? null, cover_image_url ?? null]
     );
-    const listingId = insertResult.rows[0].id;
-    await query(
-      "insert into vendor_listings (vendor_id, listing_id) values ($1, $2)",
-      [vendorId, listingId]
-    );
-    res.status(201).json(insertResult.rows[0]);
+    const row = insertResult.rows[0];
+    console.log("[Create listing] Created:", { id: row.id, vendor_id: row.vendor_id, type: row.type });
+    res.status(201).json({ id: row.id, name: row.name, type: row.type, status: row.status });
   } catch (err) {
     console.error("Create listing error:", err);
     res.status(500).json({ error: "Failed to create listing" });
@@ -123,7 +137,7 @@ router.patch("/:id", async (req: Request, res: Response): Promise<void> => {
     }
     if (updates.type !== undefined) {
       fields.push(`type = $${i++}`);
-      values.push(updates.type);
+      values.push(updates.type); // only 'transport' allowed
     }
     if (updates.status !== undefined) {
       fields.push(`status = $${i++}`);
@@ -137,18 +151,35 @@ router.patch("/:id", async (req: Request, res: Response): Promise<void> => {
       fields.push(`cover_image_url = $${i++}`);
       values.push(updates.cover_image_url);
     }
+    if (updates.tagline !== undefined) {
+      fields.push(`tagline = $${i++}`);
+      values.push(updates.tagline);
+    }
+    if (updates.registered_address !== undefined) {
+      fields.push(`registered_address = $${i++}`);
+      values.push(updates.registered_address);
+    }
+    if (updates.service_area !== undefined) {
+      fields.push(`service_area = $${i++}`);
+      values.push(updates.service_area);
+    }
+    if (updates.address !== undefined) {
+      fields.push(`address = $${i++}`);
+      values.push(updates.address);
+    }
+    if (updates.city !== undefined) {
+      fields.push(`city = $${i++}`);
+      values.push(updates.city);
+    }
     if (fields.length === 0) {
       res.status(400).json({ error: "No fields to update" });
       return;
     }
     fields.push(`updated_at = now()`);
-    values.push(id);
+    values.push(id, vendorId);
     const result = await query<{ id: string; name: string; type: string; status: string }>(
-      `update listings set ${fields.join(", ")}
-       where id = $${i}
-       and id in (select listing_id from vendor_listings where vendor_id = $${i + 1})
-       returning id, name, type, status`,
-      [...values, vendorId]
+      `update listings set ${fields.join(", ")} where id = $${i} and vendor_id = $${i + 1} returning id, name, type, status`,
+      values
     );
     if (result.rows.length === 0) {
       res.status(404).json({ error: "Listing not found" });
@@ -167,7 +198,7 @@ router.delete("/:id", async (req: Request, res: Response): Promise<void> => {
     const vendorId = req.vendorId!;
     const { id } = req.params;
     const result = await query(
-      "delete from listings where id = $1 and id in (select listing_id from vendor_listings where vendor_id = $2) returning id",
+      "delete from listings where id = $1 and vendor_id = $2 returning id",
       [id, vendorId]
     );
     if (result.rowCount === 0) {

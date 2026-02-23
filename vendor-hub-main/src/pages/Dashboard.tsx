@@ -37,7 +37,7 @@ export default function Dashboard() {
     <div className="space-y-6">
       {/* Welcome */}
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-        <h1 className="text-2xl font-display font-bold text-foreground">Welcome back, {vendor?.business_name ?? "Vendor"}</h1>
+        <h1 className="text-2xl font-display font-bold text-foreground">Welcome back, {vendor?.name ?? "Vendor"}</h1>
         <p className="text-muted-foreground mt-1">Here's what's happening with your business today.</p>
       </motion.div>
 

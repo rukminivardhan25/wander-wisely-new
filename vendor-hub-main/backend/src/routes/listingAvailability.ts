@@ -18,23 +18,27 @@ const updateSchema = z.object({
 });
 
 async function ensureListingOwned(listingId: string, vendorId: string): Promise<boolean> {
-  const r = await query<{ listing_id: string }>("select listing_id from vendor_listings where listing_id = $1 and vendor_id = $2", [listingId, vendorId]);
+  const r = await query<{ id: string }>("select id from listings where id = $1 and vendor_id = $2", [listingId, vendorId]);
   return r.rows.length > 0;
 }
 
 router.get("/", async (req: Request, res: Response): Promise<void> => {
   try {
     const vendorId = req.vendorId!;
-    const { listingId } = req.params;
+    const listingId = req.listingId ?? req.params.listingId;
+    if (!listingId) {
+      res.status(404).json({ error: "Listing not found" });
+      return;
+    }
     const from = typeof req.query.from === "string" ? req.query.from : null;
     const to = typeof req.query.to === "string" ? req.query.to : null;
-    const ok = await ensureListingOwned(listingId!, vendorId);
+    const ok = await ensureListingOwned(listingId, vendorId);
     if (!ok) {
       res.status(404).json({ error: "Listing not found" });
       return;
     }
     let q = "select id, date, status, note from listing_availability where listing_id = $1";
-    const params: string[] = [listingId!];
+    const params: string[] = [listingId];
     if (from) {
       params.push(from);
       q += ` and date >= $${params.length}`;
@@ -55,8 +59,12 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
 router.post("/", async (req: Request, res: Response): Promise<void> => {
   try {
     const vendorId = req.vendorId!;
-    const { listingId } = req.params;
-    const ok = await ensureListingOwned(listingId!, vendorId);
+    const listingId = req.listingId ?? req.params.listingId;
+    if (!listingId) {
+      res.status(404).json({ error: "Listing not found" });
+      return;
+    }
+    const ok = await ensureListingOwned(listingId, vendorId);
     if (!ok) {
       res.status(404).json({ error: "Listing not found" });
       return;
@@ -81,12 +89,17 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
 router.patch("/:date", async (req: Request, res: Response): Promise<void> => {
   try {
     const vendorId = req.vendorId!;
-    const { listingId, date } = req.params;
+    const listingId = req.listingId ?? req.params.listingId;
+    const { date } = req.params;
+    if (!listingId) {
+      res.status(404).json({ error: "Listing not found" });
+      return;
+    }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date!)) {
       res.status(400).json({ error: "Invalid date format (use YYYY-MM-DD)" });
       return;
     }
-    const ok = await ensureListingOwned(listingId!, vendorId);
+    const ok = await ensureListingOwned(listingId, vendorId);
     if (!ok) {
       res.status(404).json({ error: "Listing not found" });
       return;
@@ -108,7 +121,7 @@ router.patch("/:date", async (req: Request, res: Response): Promise<void> => {
     }
     values.push(date, listingId, vendorId);
     const result = await query<{ id: string; date: string; status: string }>(
-      `update listing_availability set ${updates.join(", ")} where date = $${i} and listing_id = $${i + 1} and listing_id in (select listing_id from vendor_listings where vendor_id = $${i + 2}) returning id, date, status`,
+      `update listing_availability set ${updates.join(", ")} where date = $${i} and listing_id = $${i + 1} and listing_id in (select id from listings where vendor_id = $${i + 2}) returning id, date, status`,
       values
     );
     if (result.rows.length === 0) {
@@ -125,13 +138,18 @@ router.patch("/:date", async (req: Request, res: Response): Promise<void> => {
 router.delete("/:date", async (req: Request, res: Response): Promise<void> => {
   try {
     const vendorId = req.vendorId!;
-    const { listingId, date } = req.params;
-    const ok = await ensureListingOwned(listingId!, vendorId);
+    const listingId = req.listingId ?? req.params.listingId;
+    const { date } = req.params;
+    if (!listingId) {
+      res.status(404).json({ error: "Listing not found" });
+      return;
+    }
+    const ok = await ensureListingOwned(listingId, vendorId);
     if (!ok) {
       res.status(404).json({ error: "Listing not found" });
       return;
     }
-    const result = await query("delete from listing_availability where listing_id = $1 and date = $2 and listing_id in (select listing_id from vendor_listings where vendor_id = $3) returning id", [listingId, date, vendorId]);
+    const result = await query("delete from listing_availability where listing_id = $1 and date = $2 and listing_id in (select id from listings where vendor_id = $3) returning id", [listingId, date, vendorId]);
     if (result.rowCount === 0) {
       res.status(404).json({ error: "Availability entry not found" });
       return;

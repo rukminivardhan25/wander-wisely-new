@@ -1,6 +1,5 @@
 import { Search, Bell, ChevronDown, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,8 +12,8 @@ export function TopHeader() {
   const navigate = useNavigate();
   const { vendor, logout } = useVendorAuth();
 
-  const initials = vendor?.business_name
-    ? vendor.business_name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase()
+  const initials = vendor?.name
+    ? vendor.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase()
     : "V";
 
   function handleLogout() {
@@ -36,12 +35,6 @@ export function TopHeader() {
 
       {/* Right */}
       <div className="flex items-center gap-4">
-        {vendor?.verified && (
-          <Badge variant="outline" className="bg-success/10 text-success border-success/20 font-medium text-xs px-3 py-1">
-            Verified
-          </Badge>
-        )}
-
         <button type="button" className="relative p-2 rounded-lg hover:bg-muted transition-colors">
           <Bell size={20} className="text-muted-foreground" />
           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-accent rounded-full" />
@@ -54,8 +47,8 @@ export function TopHeader() {
                 {initials}
               </div>
               <div className="hidden md:block text-left">
-                <p className="text-sm font-medium text-foreground leading-tight">{vendor?.business_name ?? "Vendor"}</p>
-                <p className="text-xs text-muted-foreground capitalize">{vendor?.plan ?? "Basic"} Plan</p>
+                <p className="text-sm font-medium text-foreground leading-tight">{vendor?.name ?? "Vendor"}</p>
+                {vendor?.email && <p className="text-xs text-muted-foreground">{vendor.email}</p>}
               </div>
               <ChevronDown size={16} className="text-muted-foreground" />
             </button>
