@@ -13,20 +13,28 @@ const UPLOAD_DIR = path.join(__dirname, "../../uploads");
 
 router.post("/", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { image } = req.body as { image?: string };
-    if (!image || typeof image !== "string" || !image.startsWith("data:image/")) {
-      res.status(400).json({ error: "Invalid image: send { image: 'data:image/...;base64,...' }" });
+    const { image, file: fileDataUrl } = req.body as { image?: string; file?: string };
+    const dataUrl = typeof image === "string" && image ? image : typeof fileDataUrl === "string" && fileDataUrl ? fileDataUrl : null;
+    if (!dataUrl || !dataUrl.startsWith("data:")) {
+      res.status(400).json({ error: "Invalid upload: send { image: 'data:image/...;base64,...' } or { file: 'data:...;base64,...' } for image/PDF" });
       return;
     }
-    const match = image.match(/^data:image\/(\w+);base64,(.+)$/);
-    if (!match) {
-      res.status(400).json({ error: "Invalid base64 image" });
+    let ext: string;
+    let buffer: Buffer;
+    const imageMatch = dataUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+    const pdfMatch = dataUrl.match(/^data:application\/pdf;base64,(.+)$/);
+    if (imageMatch) {
+      ext = imageMatch[1] === "jpeg" ? "jpg" : imageMatch[1];
+      buffer = Buffer.from(imageMatch[2], "base64");
+    } else if (pdfMatch) {
+      ext = "pdf";
+      buffer = Buffer.from(pdfMatch[1], "base64");
+    } else {
+      res.status(400).json({ error: "Unsupported file type. Use image (JPEG, PNG, etc.) or PDF." });
       return;
     }
-    const ext = match[1] === "jpeg" ? "jpg" : match[1];
-    const buffer = Buffer.from(match[2], "base64");
-    if (buffer.length > 5 * 1024 * 1024) {
-      res.status(400).json({ error: "Image too large (max 5MB)" });
+    if (buffer.length > 10 * 1024 * 1024) {
+      res.status(400).json({ error: "File too large (max 10MB)" });
       return;
     }
     if (!fs.existsSync(UPLOAD_DIR)) {

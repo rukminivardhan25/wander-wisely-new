@@ -3,6 +3,9 @@ import listingsRoutes from "./listings.js";
 import busesRoutes from "./buses.js";
 import driversRoutes from "./drivers.js";
 import transportRoutes from "./transportRoutes.js";
+import carsRoutes from "./cars.js";
+import carBookingsRoutes from "./carBookings.js";
+import scheduledCarsRoutes from "./scheduledCars.js";
 
 const router = Router();
 
@@ -13,12 +16,14 @@ nestedRouter.use((req, _res, next) => {
   next();
 });
 nestedRouter.use("/buses", busesRoutes);
+nestedRouter.use("/cars", carsRoutes);
+nestedRouter.use("/car-bookings", carBookingsRoutes);
+nestedRouter.use("/scheduled-cars", scheduledCarsRoutes);
 nestedRouter.use("/drivers", driversRoutes);
 nestedRouter.use("/routes", transportRoutes);
 
-router.use("/:listingId", nestedRouter);
-
-// Top-level: GET/POST /api/listings, GET/PATCH/DELETE /api/listings/:id
+// Listings routes first so POST /:id/generate-verification-token is matched (then nested routes for /:id/buses etc.)
 router.use("/", listingsRoutes);
+router.use("/:listingId", nestedRouter);
 
 export default router;

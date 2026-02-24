@@ -106,6 +106,7 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
        left join routes r on r.id = s.route_id
        where l.vendor_id = $1
          and lower(trim(l.type)) = 'transport'
+         and coalesce(b.status, 'active') = 'active'
          and s.start_date is not null
          and (s.start_date)::date = ($2)::date
          and coalesce(s.status, 'active') = 'active'

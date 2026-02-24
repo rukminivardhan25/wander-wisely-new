@@ -9,6 +9,8 @@ import uploadRoutes from "./routes/upload.js";
 import transportBookingsRoutes from "./routes/transportBookings.js";
 import publicTransportRoutes from "./routes/publicTransport.js";
 import customersRoutes from "./routes/customers.js";
+import verificationRoutes from "./routes/verification.js";
+import citiesRoutes from "./routes/cities.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -41,6 +43,8 @@ app.use("/api/listings", listingsIndexRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/transport-bookings", transportBookingsRoutes);
 app.use("/api/customers", customersRoutes);
+app.use("/api/verification", verificationRoutes);
+app.use("/api/cities", citiesRoutes);
 app.use("/api/public", publicTransportRoutes);
 
 app.use((_req, res) => {

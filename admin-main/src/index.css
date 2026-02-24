@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Forest green palette – dark to pleasant */
+    --forest-950: 152 55% 12%;   /* deepest forest */
+    --forest-900: 152 48% 18%;   /* dark forest – sidebar */
+    --forest-800: 152 45% 24%;
+    --forest-700: 152 42% 30%;
+    --forest-600: 152 38% 36%;  /* mid forest */
+    --forest-500: 152 35% 42%;  /* forest – primary/active */
+    --forest-400: 150 32% 48%;   /* pleasant green */
+    --forest-300: 148 28% 58%;
+    --forest-200: 148 25% 78%;  /* light sage */
+    --forest-100: 146 22% 92%;  /* pale */
+    --forest-50: 145 20% 97%;   /* background tint */
+
+    --background: 145 20% 97%;
+    --foreground: 152 55% 14%;
+    --card: 0 0% 100%;
+    --card-foreground: 152 55% 14%;
+    --primary: 152 35% 42%;
+    --primary-foreground: 0 0% 100%;
+    --muted: 146 22% 92%;
+    --muted-foreground: 152 25% 40%;
+    --border: 148 20% 88%;
+    --radius: 1rem;
+
+    --sidebar-background: var(--forest-900);
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: var(--forest-500);
+    --sidebar-hover: var(--forest-800);
+
+    --success: 152 38% 40%;
+    --success-foreground: 0 0% 100%;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}

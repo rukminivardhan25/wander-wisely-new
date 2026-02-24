@@ -95,17 +95,28 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       res.status(404).json({ error: "Listing not found or not a transport listing" });
       return;
     }
-    // Return all buses for this listing (ownership already verified above)
-    const result = await query<{
+    // Return all buses for this listing (ownership already verified above). Include verification fields when present.
+    type BusListRow = {
       id: string; name: string; bus_number: string | null; bus_type: string; ac_type: string | null;
       registration_number: string | null; manufacturer: string | null; model: string | null;
       has_wifi: boolean; has_charging: boolean; has_entertainment: boolean; has_toilet: boolean; photo_url: string | null;
       layout_type: string; rows: number; left_cols: number; right_cols: number; has_aisle: boolean; total_seats: number;
       base_price_per_seat_cents: number; status: string; created_at: string;
-    }>(
-      "select b.id, b.name, b.bus_number, b.bus_type, b.ac_type, b.registration_number, b.manufacturer, b.model, b.has_wifi, b.has_charging, b.has_entertainment, b.has_toilet, b.photo_url, b.layout_type, b.rows, b.left_cols, b.right_cols, b.has_aisle, b.total_seats, b.base_price_per_seat_cents, b.status, b.created_at from buses b where b.listing_id = $1 order by b.created_at desc",
-      [listingId]
-    );
+      verification_token?: string | null; verification_status?: string | null;
+    };
+    let result: { rows: BusListRow[] };
+    try {
+      result = await query<BusListRow>(
+        "select b.id, b.name, b.bus_number, b.bus_type, b.ac_type, b.registration_number, b.manufacturer, b.model, b.has_wifi, b.has_charging, b.has_entertainment, b.has_toilet, b.photo_url, b.layout_type, b.rows, b.left_cols, b.right_cols, b.has_aisle, b.total_seats, b.base_price_per_seat_cents, b.status, b.created_at, b.verification_token, b.verification_status from buses b where b.listing_id = $1 order by b.created_at desc",
+        [listingId]
+      );
+    } catch {
+      const fallback = await query<Omit<BusListRow, "verification_token" | "verification_status">>(
+        "select b.id, b.name, b.bus_number, b.bus_type, b.ac_type, b.registration_number, b.manufacturer, b.model, b.has_wifi, b.has_charging, b.has_entertainment, b.has_toilet, b.photo_url, b.layout_type, b.rows, b.left_cols, b.right_cols, b.has_aisle, b.total_seats, b.base_price_per_seat_cents, b.status, b.created_at from buses b where b.listing_id = $1 order by b.created_at desc",
+        [listingId]
+      );
+      result = { rows: fallback.rows.map((r) => ({ ...r, verification_token: null, verification_status: null })) as BusListRow[] };
+    }
     res.json({ buses: result.rows });
   } catch (err) {
     console.error("List buses error:", err);
@@ -160,7 +171,7 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
       `insert into buses (listing_id, name, bus_number, bus_type, ac_type, registration_number, manufacturer, model, has_wifi, has_charging, has_entertainment, has_toilet, photo_url, layout_type, rows, left_cols, right_cols, has_aisle, total_seats, base_price_per_seat_cents, status)
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
        returning id, name, total_seats, status`,
-      [listingId, d.name, d.bus_number ?? null, d.bus_type, ac_type, regNum, d.manufacturer ?? null, d.model ?? null, d.has_wifi ?? false, d.has_charging ?? false, d.has_entertainment ?? false, d.has_toilet ?? false, photoUrl, d.layout_type, d.rows, d.left_cols, d.right_cols, has_aisle, total_seats, d.base_price_per_seat_cents ?? 0, d.status ?? "active"]
+      [listingId, d.name, d.bus_number ?? null, d.bus_type, ac_type, regNum, d.manufacturer ?? null, d.model ?? null, d.has_wifi ?? false, d.has_charging ?? false, d.has_entertainment ?? false, d.has_toilet ?? false, photoUrl, d.layout_type, d.rows, d.left_cols, d.right_cols, has_aisle, total_seats, d.base_price_per_seat_cents ?? 0, d.status ?? "inactive"]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -177,6 +188,57 @@ async function ensureBusOwned(busId: string, listingId: string, vendorId: string
   );
   return r.rows.length > 0;
 }
+
+/** Generate verification token for a bus (does not set pending; vendor sends request separately). */
+router.post("/:busId/generate-verification-token", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const vendorId = req.vendorId!;
+    const listingId = req.listingId ?? req.params.listingId;
+    const { busId } = req.params;
+    if (!listingId || !busId) {
+      res.status(404).json({ error: "Bus not found" });
+      return;
+    }
+    const ok = await ensureBusOwned(busId, listingId, vendorId);
+    if (!ok) {
+      res.status(404).json({ error: "Bus not found" });
+      return;
+    }
+    const row = await query<{ verification_token: string | null; verification_status: string | null }>(
+      "SELECT verification_token, verification_status FROM buses WHERE id = $1 AND listing_id = $2",
+      [busId, listingId]
+    );
+    if (row.rows.length === 0) {
+      res.status(404).json({ error: "Bus not found" });
+      return;
+    }
+    let token = row.rows[0].verification_token;
+    const currentStatus = row.rows[0].verification_status ?? "no_request";
+    if (token) {
+      return void res.json({ verification_token: token, verification_status: currentStatus });
+    }
+    const slug = () => Math.random().toString(36).slice(2, 6).toUpperCase();
+    token = `BUS-${slug()}-${slug()}`;
+    try {
+      await query("UPDATE buses SET verification_token = $1 WHERE id = $2 AND listing_id = $3", [token, busId, listingId]);
+    } catch (err) {
+      const msg = String(err instanceof Error ? err.message : err);
+      if (msg.includes("unique") || msg.includes("duplicate")) {
+        const retry = await query<{ verification_token: string | null }>("SELECT verification_token FROM buses WHERE id = $1 AND listing_id = $2", [busId, listingId]);
+        token = retry.rows[0]?.verification_token ?? token;
+      } else throw err;
+    }
+    res.json({ verification_token: token, verification_status: "no_request" });
+  } catch (err) {
+    console.error("Bus generate verification token error:", err);
+    const code = err && typeof err === "object" && "code" in err ? String((err as { code: string }).code) : "";
+    if (code === "42703") {
+      res.status(503).json({ error: "Bus verification not configured. Run migration 022_verification_listings_buses.sql" });
+      return;
+    }
+    res.status(500).json({ error: "Failed to generate token" });
+  }
+});
 
 router.get("/:busId/drivers", async (req: Request, res: Response): Promise<void> => {
   try {
@@ -246,16 +308,17 @@ router.get("/:busId", async (req: Request, res: Response): Promise<void> => {
       registration_number: string | null; manufacturer: string | null; model: string | null;
       has_wifi: boolean; has_charging: boolean; has_entertainment: boolean; has_toilet: boolean; photo_url: string | null;
       layout_type: string; rows: number; left_cols: number; right_cols: number; has_aisle: boolean; total_seats: number;
-      base_price_per_seat_cents: number; status: string; created_at: string;
+      base_price_per_seat_cents: number; status: string; created_at: string; verification_status?: string | null;
     }>(
-      "select b.id, b.name, b.bus_number, b.bus_type, b.ac_type, b.registration_number, b.manufacturer, b.model, b.has_wifi, b.has_charging, b.has_entertainment, b.has_toilet, b.photo_url, b.layout_type, b.rows, b.left_cols, b.right_cols, b.has_aisle, b.total_seats, b.base_price_per_seat_cents, b.status, b.created_at from buses b join listings l on l.id = b.listing_id and l.vendor_id = $3 where b.id = $1 and b.listing_id = $2",
+      "select b.id, b.name, b.bus_number, b.bus_type, b.ac_type, b.registration_number, b.manufacturer, b.model, b.has_wifi, b.has_charging, b.has_entertainment, b.has_toilet, b.photo_url, b.layout_type, b.rows, b.left_cols, b.right_cols, b.has_aisle, b.total_seats, b.base_price_per_seat_cents, b.status, b.created_at, b.verification_status from buses b join listings l on l.id = b.listing_id and l.vendor_id = $3 where b.id = $1 and b.listing_id = $2",
       [busId, listingId, vendorId]
     );
     if (result.rows.length === 0) {
       res.status(404).json({ error: "Bus not found" });
       return;
     }
-    res.json(result.rows[0]);
+    const row = result.rows[0];
+    res.json({ ...row, verification_status: row.verification_status ?? "no_request" });
   } catch (err) {
     console.error("Get bus error:", err);
     res.status(500).json({ error: "Failed to fetch bus" });
@@ -282,6 +345,19 @@ router.patch("/:busId", async (req: Request, res: Response): Promise<void> => {
       return;
     }
     const d = parsed.data;
+    const onlyStatus = Object.keys(d).length === 1 && d.status !== undefined;
+    if (onlyStatus && d.status === "active") {
+      const cur = await query<{ verification_status: string | null }>("SELECT verification_status FROM buses WHERE id = $1 AND listing_id = $2", [busId, listingId]);
+      if (cur.rows.length === 0) {
+        res.status(404).json({ error: "Bus not found" });
+        return;
+      }
+      const vStatus = cur.rows[0].verification_status ?? "no_request";
+      if (vStatus !== "approved") {
+        res.status(400).json({ error: "Bus must be verified before it can be set to Active. Complete verification in Verification → Vehicles → Buses." });
+        return;
+      }
+    }
     const updates: string[] = [];
     const values: unknown[] = [];
     let i = 1;
@@ -317,10 +393,18 @@ router.patch("/:busId", async (req: Request, res: Response): Promise<void> => {
     if (d.right_cols !== undefined) { updates.push(`right_cols = $${i++}`); values.push(d.right_cols); }
     if (d.has_aisle !== undefined) { updates.push(`has_aisle = $${i++}`); values.push(d.has_aisle); }
     if (d.base_price_per_seat_cents !== undefined) { updates.push(`base_price_per_seat_cents = $${i++}`); values.push(d.base_price_per_seat_cents); }
-    if (d.status !== undefined) { updates.push(`status = $${i++}`); values.push(d.status); }
+    if (d.status !== undefined && onlyStatus) { updates.push(`status = $${i++}`); values.push(d.status); }
     if (updates.length === 0) {
       res.status(400).json({ error: "No fields to update" });
       return;
+    }
+    if (!onlyStatus) {
+      updates.push(`verification_status = $${i++}`);
+      values.push("no_request");
+      updates.push(`verified_at = $${i++}`);
+      values.push(null);
+      updates.push(`status = $${i++}`);
+      values.push("inactive");
     }
     if (d.rows !== undefined || d.left_cols !== undefined || d.right_cols !== undefined) {
       const row = await query<{ rows: number; left_cols: number; right_cols: number }>("select rows, left_cols, right_cols from buses where id = $1 and listing_id = $2", [busId, listingId]);
@@ -332,15 +416,16 @@ router.patch("/:busId", async (req: Request, res: Response): Promise<void> => {
     }
     updates.push(`updated_at = now()`);
     values.push(busId, listingId);
-    const result = await query<{ id: string; name: string; total_seats: number; status: string }>(
-      `update buses set ${updates.join(", ")} where id = $${i} and listing_id = $${i + 1} returning id, name, total_seats, status`,
+    const result = await query<{ id: string; name: string; total_seats: number; status: string; verification_status: string | null }>(
+      `update buses set ${updates.join(", ")} where id = $${i} and listing_id = $${i + 1} returning id, name, total_seats, status, verification_status`,
       values
     );
     if (result.rows.length === 0) {
       res.status(404).json({ error: "Bus not found" });
       return;
     }
-    res.json(result.rows[0]);
+    const row = result.rows[0];
+    res.json({ id: row.id, name: row.name, total_seats: row.total_seats, status: row.status, verification_status: row.verification_status ?? "no_request" });
   } catch (err) {
     console.error("Update bus error:", err);
     res.status(500).json({ error: "Failed to update bus" });

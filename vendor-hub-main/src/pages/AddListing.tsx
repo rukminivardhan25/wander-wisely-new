@@ -255,11 +255,7 @@ export default function AddListing() {
                           description: basicInfo.description.trim() || basicInfo.tagline.trim() || null,
                         }),
                       });
-                      if (res.type === "transport") {
-                        navigate(`/listings/${res.id}/transport`);
-                      } else {
-                        navigate("/listings");
-                      }
+                      navigate("/listings", { state: { message: "Listing submitted for review. You can add buses and manage fleet after your company is verified.", success: true }, replace: true });
                     } catch (e) {
                       setSubmitError(e instanceof Error ? e.message : "Failed to create listing");
                     } finally {

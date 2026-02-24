@@ -13,8 +13,10 @@ router.get("/cities", async (req: Request, res: Response): Promise<void> => {
     const result = await pool.query<{ city: string }>(
       `select distinct trim(c) as city from (
         select from_place as c from routes where from_place is not null and trim(from_place) != ''
-        union
-        select to_place as c from routes where to_place is not null and trim(to_place) != ''
+        union select to_place as c from routes where to_place is not null and trim(to_place) != ''
+        union select city_name as c from car_operating_areas where city_name is not null and trim(city_name) != ''
+        union select from_city as c from car_operating_areas where from_city is not null and trim(from_city) != ''
+        union select to_city as c from car_operating_areas where to_city is not null and trim(to_city) != ''
       ) u where trim(c) != '' order by 1`
     );
     const cities = result.rows.map((r) => r.city).filter(Boolean);
@@ -131,7 +133,8 @@ router.get("/available-buses", async (req: Request, res: Response): Promise<void
          from drivers d where d.bus_id = b.id limit 1
        ) dr on true
        where lower(trim(l.type)) = 'transport'
-         and (b.status is null or b.status = 'active')
+         and b.status = 'active'
+         and coalesce(b.verification_status, 'no_request') = 'approved'
          and s.start_date is not null
          and (s.start_date)::date = ($1)::date
          and coalesce(s.status, 'active') = 'active'
@@ -185,6 +188,144 @@ router.get("/available-buses", async (req: Request, res: Response): Promise<void
       error: message.includes("does not exist")
         ? "Transport tables not found. Set TRANSPORT_DATABASE_URL to the vendor hub database, or use a shared database with listings, buses, bus_schedules, routes."
         : "Failed to fetch available buses",
+    });
+  }
+});
+
+/**
+ * GET /api/transport/available-cars
+ * Local: ?type=local&city=Hyderabad&passengers=2 — today and current time only; cars with area from_date<=today<=to_date, start_time<=now<=end_time.
+ * Intercity: ?type=intercity&from=Hyderabad&to=Bangalore&date=YYYY-MM-DD&passengers=2 — cars with route and date in from_date..to_date.
+ */
+router.get("/available-cars", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const pool = getTransportPool();
+    const typeParam = typeof req.query.type === "string" ? req.query.type.trim().toLowerCase() : null;
+    if (typeParam !== "local" && typeParam !== "intercity") {
+      res.status(400).json({ error: "Query param 'type' is required and must be 'local' or 'intercity'" });
+      return;
+    }
+    const passengersParam = req.query.passengers != null ? Number(req.query.passengers) : NaN;
+    const passengers = Number.isInteger(passengersParam) && passengersParam >= 1 ? passengersParam : 1;
+
+    if (typeParam === "local") {
+      const cityParam = typeof req.query.city === "string" ? req.query.city.trim() : null;
+      if (!cityParam) {
+        res.status(400).json({ error: "For type=local, query param 'city' is required" });
+        return;
+      }
+      const result = await pool.query<{
+        listing_id: string;
+        listing_name: string;
+        car_id: string;
+        car_name: string;
+        registration_number: string | null;
+        car_type: string;
+        seats: number;
+        ac_type: string | null;
+        area_id: string;
+        base_fare_cents: number | null;
+        price_per_km_cents: number | null;
+        minimum_fare_cents: number | null;
+      }>(
+        `SELECT l.id AS listing_id, l.name AS listing_name, c.id AS car_id, c.name AS car_name,
+         c.registration_number, c.car_type, c.seats, c.ac_type, a.id AS area_id,
+         a.base_fare_cents, a.price_per_km_cents, a.minimum_fare_cents
+         FROM listings l
+         JOIN cars c ON c.listing_id = l.id
+         JOIN car_operating_areas a ON a.car_id = c.id
+         WHERE LOWER(TRIM(l.type)) = 'transport'
+           AND c.status = 'active'
+           AND COALESCE(c.verification_status, 'no_request') = 'approved'
+           AND a.area_type = 'local'
+           AND LOWER(TRIM(a.city_name)) = LOWER(TRIM($1))
+           AND c.seats >= $2
+           AND (a.from_date IS NULL OR a.from_date <= current_date)
+           AND (a.to_date IS NULL OR a.to_date >= current_date)
+           AND (a.start_time IS NULL OR a.start_time <= current_time)
+           AND (a.end_time IS NULL OR a.end_time >= current_time)
+         ORDER BY l.name, c.name`,
+        [cityParam, passengers]
+      );
+      const cars = result.rows.map((r) => ({
+        listingId: r.listing_id,
+        listingName: r.listing_name,
+        carId: r.car_id,
+        carName: r.car_name,
+        registrationNumber: r.registration_number ?? null,
+        carType: r.car_type,
+        seats: r.seats,
+        acType: r.ac_type ?? null,
+        areaId: r.area_id,
+        baseFareCents: r.base_fare_cents ?? null,
+        pricePerKmCents: r.price_per_km_cents ?? null,
+        minimumFareCents: r.minimum_fare_cents ?? null,
+      }));
+      res.json({ type: "local", date: new Date().toISOString().slice(0, 10), cars });
+      return;
+    }
+
+    const fromParam = typeof req.query.from === "string" ? req.query.from.trim() : null;
+    const toParam = typeof req.query.to === "string" ? req.query.to.trim() : null;
+    const dateParam = typeof req.query.date === "string" ? req.query.date.trim() : null;
+    if (!fromParam || !toParam || !dateParam || !/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      res.status(400).json({ error: "For type=intercity, query params 'from', 'to', and 'date' (YYYY-MM-DD) are required" });
+      return;
+    }
+    const result = await pool.query<{
+      listing_id: string;
+      listing_name: string;
+      car_id: string;
+      car_name: string;
+      registration_number: string | null;
+      car_type: string;
+      seats: number;
+      ac_type: string | null;
+      area_id: string;
+      base_fare_cents: number | null;
+      price_per_km_cents: number | null;
+      estimated_duration_minutes: number | null;
+    }>(
+      `SELECT l.id AS listing_id, l.name AS listing_name, c.id AS car_id, c.name AS car_name,
+       c.registration_number, c.car_type, c.seats, c.ac_type, a.id AS area_id,
+       a.base_fare_cents, a.price_per_km_cents, a.estimated_duration_minutes
+       FROM listings l
+       JOIN cars c ON c.listing_id = l.id
+       JOIN car_operating_areas a ON a.car_id = c.id
+       WHERE LOWER(TRIM(l.type)) = 'transport'
+         AND c.status = 'active'
+         AND COALESCE(c.verification_status, 'no_request') = 'approved'
+         AND a.area_type = 'intercity'
+         AND LOWER(TRIM(a.from_city)) = LOWER(TRIM($1))
+         AND LOWER(TRIM(a.to_city)) = LOWER(TRIM($2))
+         AND c.seats >= $3
+         AND (a.from_date IS NULL OR a.from_date <= ($4)::date)
+         AND (a.to_date IS NULL OR a.to_date >= ($4)::date)
+       ORDER BY l.name, c.name`,
+      [fromParam, toParam, passengers, dateParam]
+    );
+    const cars = result.rows.map((r) => ({
+      listingId: r.listing_id,
+      listingName: r.listing_name,
+      carId: r.car_id,
+      carName: r.car_name,
+      registrationNumber: r.registration_number ?? null,
+      carType: r.car_type,
+      seats: r.seats,
+      acType: r.ac_type ?? null,
+      areaId: r.area_id,
+      baseFareCents: r.base_fare_cents ?? null,
+      pricePerKmCents: r.price_per_km_cents ?? null,
+      estimatedDurationMinutes: r.estimated_duration_minutes ?? null,
+    }));
+    res.json({ type: "intercity", date: dateParam, cars });
+  } catch (err) {
+    console.error("Transport available-cars error:", err);
+    const message = err instanceof Error ? err.message : "Failed to fetch available cars";
+    res.status(500).json({
+      error: message.includes("does not exist")
+        ? "Car/transport tables not found. Run vendor-hub migrations 026, 028, 031, 032 and set TRANSPORT_DATABASE_URL."
+        : message,
     });
   }
 });

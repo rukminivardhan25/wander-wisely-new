@@ -72,12 +72,17 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
       "insert into routes (listing_id, from_place, to_place, distance_km, duration_minutes, price_per_seat_cents, bus_id) values ($1, $2, $3, $4, $5, $6, $7) returning id, from_place, to_place",
       [listingId, d.from_place, d.to_place, d.distance_km ?? null, d.duration_minutes ?? null, d.price_per_seat_cents ?? null, d.bus_id ?? null]
     );
-    // If route has a price and is assigned to a bus, sync bus base_price when it's 0
-    if (d.bus_id && d.price_per_seat_cents != null && d.price_per_seat_cents > 0) {
+    if (d.bus_id) {
       await query(
-        "update buses set base_price_per_seat_cents = $1, updated_at = now() where id = $2 and base_price_per_seat_cents = 0",
-        [d.price_per_seat_cents, d.bus_id]
-      );
+        "UPDATE buses SET verification_status = 'no_request', verified_at = NULL, status = 'inactive' WHERE id = $1",
+        [d.bus_id]
+      ).catch(() => {});
+      if (d.price_per_seat_cents != null && d.price_per_seat_cents > 0) {
+        await query(
+          "update buses set base_price_per_seat_cents = $1, updated_at = now() where id = $2 and base_price_per_seat_cents = 0",
+          [d.price_per_seat_cents, d.bus_id]
+        );
+      }
     }
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -156,13 +161,18 @@ router.patch("/:routeId", async (req: Request, res: Response): Promise<void> => 
       res.status(404).json({ error: "Route not found" });
       return;
     }
-    // If route got a price and is assigned to a bus, sync bus base_price when it's 0
     const busId = result.rows[0].bus_id;
-    if (busId && d.price_per_seat_cents != null && d.price_per_seat_cents > 0) {
+    if (busId) {
       await query(
-        "update buses set base_price_per_seat_cents = $1, updated_at = now() where id = $2 and base_price_per_seat_cents = 0",
-        [d.price_per_seat_cents, busId]
-      );
+        "UPDATE buses SET verification_status = 'no_request', verified_at = NULL, status = 'inactive' WHERE id = $1",
+        [busId]
+      ).catch(() => {});
+      if (d.price_per_seat_cents != null && d.price_per_seat_cents > 0) {
+        await query(
+          "update buses set base_price_per_seat_cents = $1, updated_at = now() where id = $2 and base_price_per_seat_cents = 0",
+          [d.price_per_seat_cents, busId]
+        );
+      }
     }
     res.json(result.rows[0]);
   } catch (err) {

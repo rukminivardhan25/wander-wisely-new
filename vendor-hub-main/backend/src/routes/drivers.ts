@@ -138,6 +138,13 @@ router.patch("/:driverId", async (req: Request, res: Response): Promise<void> =>
       res.status(404).json({ error: "Driver not found" });
       return;
     }
+    const busIdAssigned = result.rows[0].bus_id;
+    if (busIdAssigned) {
+      await query(
+        "UPDATE buses SET verification_status = 'no_request', verified_at = NULL, status = 'inactive' WHERE id = $1",
+        [busIdAssigned]
+      ).catch(() => {});
+    }
     res.json(result.rows[0]);
   } catch (err) {
     console.error("Update driver error:", err);

@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { vendorFetch } from "@/lib/api";
 import {
   Bus,
+  Car,
   UtensilsCrossed,
   Hotel,
   Ticket,
@@ -119,6 +120,114 @@ interface TransportBusFromApi {
   /** Filled by vendor backend from main app bookings API */
   bookings?: CustomerBooking[];
   seatsBooked?: number;
+}
+
+/** Car booking from GET /api/listings/:listingId/car-bookings */
+interface CarBookingRow {
+  id: string;
+  bookingRef: string;
+  userId: string;
+  carId: string;
+  areaId: string;
+  carName?: string;
+  bookingType: string;
+  city?: string;
+  pickupPoint?: string;
+  dropPoint?: string;
+  travelTime?: string;
+  fromCity?: string;
+  toCity?: string;
+  travelDate: string;
+  passengers: number;
+  totalCents?: number;
+  status: string;
+  createdAt: string;
+  listingId?: string;
+  listingName?: string;
+}
+
+/** Scheduled car from GET /api/listings/:listingId/scheduled-cars?date= */
+interface ScheduledCarArea {
+  areaId: string;
+  areaType: string;
+  cityName?: string;
+  fromCity?: string;
+  toCity?: string;
+  fromDate?: string;
+  toDate?: string;
+  startTime?: string;
+  endTime?: string;
+  baseFareCents?: number;
+  pricePerKmCents?: number;
+}
+interface ScheduledCar {
+  carId: string;
+  carName: string;
+  areas: ScheduledCarArea[];
+  listingId?: string;
+  listingName?: string;
+}
+
+/** One card in the scheduled cars grid: car + one area (local or intercity). */
+function ScheduledCarCard({
+  carName,
+  listingName,
+  area,
+}: {
+  carName: string;
+  listingName?: string;
+  area: ScheduledCarArea;
+}) {
+  const isLocal = (area.areaType || "local").toLowerCase() === "local";
+  const routeLabel = isLocal ? (area.cityName ?? "—") : `${area.fromCity ?? "—"} → ${area.toCity ?? "—"}`;
+  const dateLabel = isLocal
+    ? area.fromDate && area.toDate
+      ? `All dates: ${area.fromDate} to ${area.toDate}`
+      : "—"
+    : area.fromDate
+      ? `Starts: ${area.fromDate}`
+      : "—";
+  const timeOrPrice =
+    isLocal && area.startTime && area.endTime
+      ? `${area.startTime.slice(0, 5)}–${area.endTime.slice(0, 5)}`
+      : area.pricePerKmCents != null
+        ? `₹${(area.pricePerKmCents / 100).toFixed(2)}/km`
+        : area.baseFareCents != null
+          ? `₹${(area.baseFareCents / 100).toLocaleString("en-IN")}`
+          : "—";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+    >
+      <Card className="border-0 shadow-none rounded-2xl">
+        <CardContent className="p-5">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                <Car className="h-6 w-6 text-slate-600" />
+              </div>
+              <div className="min-w-0 flex-1">
+                {listingName && (
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    {listingName}
+                  </p>
+                )}
+                <p className="font-semibold text-foreground">{carName}</p>
+                <p className="text-sm text-muted-foreground mt-0.5 capitalize">
+                  {area.areaType || "local"} · {routeLabel}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">{dateLabel}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{timeOrPrice}</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
 }
 
 function formatTime(s: string): string {
@@ -776,12 +885,19 @@ export default function Bookings() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 
+  const [transportVehicleType, setTransportVehicleType] = useState<"bus" | "car">("bus");
   const [transportBuses, setTransportBuses] = useState<BusBookingCard[]>([]);
   const [transportLoading, setTransportLoading] = useState(false);
   const [transportError, setTransportError] = useState("");
+  const [carBookings, setCarBookings] = useState<CarBookingRow[]>([]);
+  const [carBookingsLoading, setCarBookingsLoading] = useState(false);
+  const [carBookingsError, setCarBookingsError] = useState("");
+  const [carBookingsActionId, setCarBookingsActionId] = useState<string | null>(null);
+  const [scheduledCars, setScheduledCars] = useState<ScheduledCar[]>([]);
+  const [scheduledCarsLoading, setScheduledCarsLoading] = useState(false);
 
   useEffect(() => {
-    if (selectedCategory !== "transport" || !dateFilter) return;
+    if (selectedCategory !== "transport" || !dateFilter || transportVehicleType !== "bus") return;
     let cancelled = false;
     setTransportLoading(true);
     setTransportError("");
@@ -804,7 +920,78 @@ export default function Bookings() {
     return () => {
       cancelled = true;
     };
-  }, [selectedCategory, dateFilter]);
+  }, [selectedCategory, dateFilter, transportVehicleType]);
+
+  // Fetch car bookings when Car tab is selected: get transport listings, then car-bookings per listing
+  useEffect(() => {
+    if (selectedCategory !== "transport" || transportVehicleType !== "car") return;
+    let cancelled = false;
+    setCarBookingsLoading(true);
+    setCarBookingsError("");
+    vendorFetch<{ listings: { id: string; name: string; type: string }[] }>("/api/listings")
+      .then((data) => {
+        if (cancelled) return;
+        const transportListings = (data.listings ?? []).filter((l) => (l.type || "").toLowerCase() === "transport");
+        return Promise.all(
+          transportListings.map((listing) =>
+            vendorFetch<{ bookings: CarBookingRow[] }>(`/api/listings/${listing.id}/car-bookings`).then((res) =>
+              (res.bookings ?? []).map((b) => ({ ...b, listingId: listing.id, listingName: listing.name }))
+            )
+          )
+        );
+      })
+      .then((arrays) => {
+        if (cancelled) return;
+        const merged = (arrays ?? []).flat();
+        setCarBookings(merged);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setCarBookings([]);
+          setCarBookingsError(err instanceof Error ? err.message : "Failed to load car bookings");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCarBookingsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCategory, dateFilter, transportVehicleType]);
+
+  // Fetch scheduled cars (availability) for the selected date when Car tab is selected
+  useEffect(() => {
+    if (selectedCategory !== "transport" || transportVehicleType !== "car" || !dateFilter) return;
+    let cancelled = false;
+    setScheduledCarsLoading(true);
+    vendorFetch<{ listings: { id: string; name: string; type: string }[] }>("/api/listings")
+      .then((data) => {
+        if (cancelled) return;
+        const transportListings = (data.listings ?? []).filter((l) => (l.type || "").toLowerCase() === "transport");
+        return Promise.all(
+          transportListings.map((listing) =>
+            vendorFetch<{ date: string; cars: ScheduledCar[] }>(
+              `/api/listings/${listing.id}/scheduled-cars?date=${encodeURIComponent(dateFilter)}`
+            ).then((res) =>
+              (res.cars ?? []).map((c) => ({ ...c, listingId: listing.id, listingName: listing.name }))
+            )
+          )
+        );
+      })
+      .then((arrays) => {
+        if (cancelled) return;
+        setScheduledCars((arrays ?? []).flat());
+      })
+      .catch(() => {
+        if (!cancelled) setScheduledCars([]);
+      })
+      .finally(() => {
+        if (!cancelled) setScheduledCarsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCategory, transportVehicleType, dateFilter]);
 
   const handleViewBusDetails = (bus: BusBookingCard) => {
     setSelectedBus(bus);
@@ -842,6 +1029,53 @@ export default function Bookings() {
     if (statusFilter !== "all" && bus.status !== statusFilter) return false;
     return true;
   });
+
+  const filteredCarBookings = carBookings.filter((b) => {
+    if (dateFilter && b.travelDate !== dateFilter) return false;
+    if (statusFilter !== "all" && b.status !== statusFilter) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const match =
+        (b.carName ?? "").toLowerCase().includes(q) ||
+        (b.bookingRef ?? "").toLowerCase().includes(q) ||
+        (b.city ?? "").toLowerCase().includes(q) ||
+        (b.pickupPoint ?? "").toLowerCase().includes(q) ||
+        (b.dropPoint ?? "").toLowerCase().includes(q) ||
+        (b.fromCity ?? "").toLowerCase().includes(q) ||
+        (b.toCity ?? "").toLowerCase().includes(q) ||
+        (b.listingName ?? "").toLowerCase().includes(q);
+      if (!match) return false;
+    }
+    return true;
+  });
+
+  const handleCarBookingAccept = async (listingId: string, bookingId: string) => {
+    setCarBookingsActionId(bookingId);
+    try {
+      await vendorFetch(`/api/listings/${listingId}/car-bookings/${bookingId}/accept`, { method: "PATCH" });
+      setCarBookings((prev) =>
+        prev.map((b) => (b.id === bookingId ? { ...b, status: "approved_awaiting_payment" } : b))
+      );
+    } catch (err) {
+      setCarBookingsError(err instanceof Error ? err.message : "Failed to accept");
+    } finally {
+      setCarBookingsActionId(null);
+    }
+  };
+
+  const handleCarBookingReject = async (listingId: string, bookingId: string) => {
+    setCarBookingsActionId(bookingId);
+    try {
+      await vendorFetch(`/api/listings/${listingId}/car-bookings/${bookingId}/reject`, { method: "PATCH", body: JSON.stringify({}) });
+      setCarBookings((prev) =>
+        prev.map((b) => (b.id === bookingId ? { ...b, status: "rejected" } : b))
+      );
+    } catch (err) {
+      setCarBookingsError(err instanceof Error ? err.message : "Failed to reject");
+    } finally {
+      setCarBookingsActionId(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -889,15 +1123,26 @@ export default function Bookings() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All status</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
+              {transportVehicleType === "car" ? (
+                <>
+                  <SelectItem value="pending_vendor">Pending</SelectItem>
+                  <SelectItem value="approved_awaiting_payment">Approved (await payment)</SelectItem>
+                  <SelectItem value="confirmed">Confirmed</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                </>
+              ) : (
+                <>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </>
+              )}
             </SelectContent>
           </Select>
           <div className="relative flex-1 min-w-[160px] max-w-[220px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input
-              placeholder="Search bus or customer..."
+              placeholder={transportVehicleType === "car" ? "Search car or booking…" : "Search bus or customer..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 rounded-xl h-9 text-sm"
@@ -943,35 +1188,217 @@ export default function Bookings() {
         </TabsList>
 
         <TabsContent value="transport" className="mt-6 space-y-6">
-          <div>
-            {transportError && (
-              <p className="text-sm text-destructive mb-4">{transportError}</p>
-            )}
-            {transportLoading ? (
-              <p className="text-sm text-muted-foreground py-8 text-center">
-                Loading buses for {dateFilter}…
-              </p>
-            ) : (
-              <>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {filteredBuses.map((bus) => (
-                    <BusBookingCard
-                      key={bus.busId}
-                      bus={bus}
-                      onViewDetails={() => handleViewBusDetails(bus)}
-                    />
-                  ))}
-                </div>
-                {filteredBuses.length === 0 && (
-                  <p className="text-sm text-muted-foreground py-8 text-center">
-                    {dateFilter
-                      ? "No buses have a schedule on this date. Try another date or add schedules in Manage Fleet → Bus detail → Schedules."
-                      : "Select a date above to see buses scheduled for that day."}
-                  </p>
-                )}
-              </>
-            )}
-          </div>
+          {/* Vehicle-type bar: Bus | Car */}
+          <Tabs
+            value={transportVehicleType}
+            onValueChange={(v) => setTransportVehicleType(v as "bus" | "car")}
+            className="w-full"
+          >
+            <TabsList className="bg-slate-100 p-1 rounded-xl border border-slate-200/80 w-full sm:w-auto flex-wrap h-auto gap-1">
+              <TabsTrigger
+                value="bus"
+                className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2"
+                onClick={() => setStatusFilter("all")}
+              >
+                <Bus className="h-4 w-4" />
+                Bus
+              </TabsTrigger>
+              <TabsTrigger
+                value="car"
+                className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2"
+                onClick={() => setStatusFilter("all")}
+              >
+                <Car className="h-4 w-4" />
+                Car
+              </TabsTrigger>
+            </TabsList>
+
+            <div className="mt-4">
+              {transportVehicleType === "bus" && (
+                <>
+                  {transportError && (
+                    <p className="text-sm text-destructive mb-4">{transportError}</p>
+                  )}
+                  {transportLoading ? (
+                    <p className="text-sm text-muted-foreground py-8 text-center">
+                      Loading buses for {dateFilter}…
+                    </p>
+                  ) : (
+                    <>
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {filteredBuses.map((bus) => (
+                          <BusBookingCard
+                            key={bus.busId}
+                            bus={bus}
+                            onViewDetails={() => handleViewBusDetails(bus)}
+                          />
+                        ))}
+                      </div>
+                      {filteredBuses.length === 0 && (
+                        <p className="text-sm text-muted-foreground py-8 text-center">
+                          {dateFilter
+                            ? "No buses have a schedule on this date. Try another date or add schedules in Manage Fleet → Bus detail → Schedules."
+                            : "Select a date above to see buses scheduled for that day."}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+              {transportVehicleType === "car" && (
+                <>
+                  {carBookingsError && (
+                    <p className="text-sm text-destructive mb-4">{carBookingsError}</p>
+                  )}
+                  {!dateFilter ? (
+                    <p className="text-sm text-muted-foreground py-8 text-center">
+                      Select a date above to see cars scheduled for that day and booking requests.
+                    </p>
+                  ) : (
+                    <div className="space-y-6">
+                      {/* Scheduled for [date] — cars that are available/scheduled for this day */}
+                      <div>
+                        <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                          <CalendarIcon className="h-4 w-4" />
+                          Scheduled for {dateFilter}
+                        </h3>
+                        <p className="text-xs text-muted-foreground mb-3">
+                          Cars with operating areas that cover this date (only dates are used; times are ignored). User requests appear below.
+                        </p>
+                        {scheduledCarsLoading ? (
+                          <p className="text-sm text-muted-foreground py-4">Loading scheduled cars…</p>
+                        ) : scheduledCars.length === 0 ? (
+                          <p className="text-sm text-muted-foreground py-4 rounded-xl bg-muted/50 px-4">
+                            No cars scheduled for this date. Add operating cities/routes and set From date–To date in Manage Fleet → Car → Operating cities & routes.
+                          </p>
+                        ) : (
+                          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                            {scheduledCars.flatMap((car) =>
+                              car.areas.map((area) => (
+                                <ScheduledCarCard
+                                  key={`${car.carId}-${area.areaId}`}
+                                  carName={car.carName}
+                                  listingName={car.listingName}
+                                  area={area}
+                                />
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Booking requests from users */}
+                      <div>
+                        <h3 className="text-sm font-semibold text-foreground mb-2">Booking requests</h3>
+                        <p className="text-xs text-muted-foreground mb-3">
+                          User requests for this date. Accept or Reject pending requests.
+                        </p>
+                        {carBookingsLoading ? (
+                          <p className="text-sm text-muted-foreground py-4">Loading booking requests…</p>
+                        ) : filteredCarBookings.length === 0 ? (
+                          <p className="text-sm text-muted-foreground py-4 rounded-xl bg-muted/50 px-4">
+                            No booking requests for this date yet. Requests will appear here when users book.
+                          </p>
+                        ) : (
+                          <div className="rounded-xl border border-slate-200 overflow-hidden">
+                            <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/50">
+                            <TableHead className="font-medium">Ref / Car</TableHead>
+                            <TableHead className="font-medium">Type</TableHead>
+                            <TableHead className="font-medium">Route / Details</TableHead>
+                            <TableHead className="font-medium">Date</TableHead>
+                            <TableHead className="font-medium">Passengers</TableHead>
+                            <TableHead className="font-medium">Amount</TableHead>
+                            <TableHead className="font-medium">Status</TableHead>
+                            <TableHead className="text-right font-medium w-32">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredCarBookings.map((b) => (
+                            <TableRow key={b.id} className="align-top">
+                              <TableCell className="py-3">
+                                <span className="font-mono text-xs">{b.bookingRef}</span>
+                                <p className="text-sm font-medium text-foreground mt-0.5">{b.carName ?? "—"}</p>
+                                {b.listingName && (
+                                  <p className="text-xs text-muted-foreground">{b.listingName}</p>
+                                )}
+                              </TableCell>
+                              <TableCell className="py-3">
+                                <span className="capitalize">{b.bookingType}</span>
+                              </TableCell>
+                              <TableCell className="py-3 text-sm">
+                                {b.bookingType === "local" ? (
+                                  <>
+                                    {b.city && <span>{b.city}</span>}
+                                    {(b.pickupPoint || b.dropPoint) && (
+                                      <p className="text-muted-foreground">
+                                        {b.pickupPoint ?? "—"} → {b.dropPoint ?? "—"}
+                                      </p>
+                                    )}
+                                    {b.travelTime && (
+                                      <p className="text-xs text-muted-foreground">Time: {b.travelTime}</p>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span>{b.fromCity ?? "—"} → {b.toCity ?? "—"}</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="py-3 text-sm">{b.travelDate}</TableCell>
+                              <TableCell className="py-3">{b.passengers}</TableCell>
+                              <TableCell className="py-3">
+                                {b.totalCents != null ? `₹ ${(b.totalCents / 100).toLocaleString("en-IN")}` : "—"}
+                              </TableCell>
+                              <TableCell className="py-3">
+                                <span
+                                  className={cn(
+                                    "inline-flex text-xs font-medium px-2 py-0.5 rounded-full capitalize",
+                                    b.status === "pending_vendor" && "bg-amber-100 text-amber-800",
+                                    b.status === "approved_awaiting_payment" && "bg-blue-100 text-blue-800",
+                                    b.status === "confirmed" && "bg-emerald-100 text-emerald-800",
+                                    b.status === "rejected" && "bg-red-100 text-red-800"
+                                  )}
+                                >
+                                  {b.status.replace(/_/g, " ")}
+                                </span>
+                              </TableCell>
+                              <TableCell className="py-3 text-right">
+                                {b.status === "pending_vendor" && b.listingId && (
+                                  <div className="flex items-center justify-end gap-1">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="rounded-lg gap-1 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                                      disabled={carBookingsActionId === b.id}
+                                      onClick={() => handleCarBookingAccept(b.listingId!, b.id)}
+                                    >
+                                      <CheckCircle2 className="h-3.5 w-3.5" /> Accept
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="rounded-lg gap-1 text-red-600 border-red-200 hover:bg-red-50"
+                                      disabled={carBookingsActionId === b.id}
+                                      onClick={() => handleCarBookingReject(b.listingId!, b.id)}
+                                    >
+                                      <XCircle className="h-3.5 w-3.5" /> Reject
+                                    </Button>
+                                  </div>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </Tabs>
         </TabsContent>
 
         <TabsContent value="restaurant" className="mt-6">

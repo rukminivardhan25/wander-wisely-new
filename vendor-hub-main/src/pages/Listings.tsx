@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Eye, Edit, Trash2, Bus } from "lucide-react";
+import { Edit, Trash2, Bus, Shield, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { vendorFetch } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface ListingRow {
   id: string;
@@ -13,12 +15,16 @@ interface ListingRow {
   description: string | null;
   cover_image_url: string | null;
   created_at: string;
+  verification_status?: string;
+  verification_token?: string | null;
 }
 
-const statusStyles: Record<string, string> = {
-  live: "bg-success/10 text-success",
-  pending_approval: "bg-warning/10 text-warning",
-  draft: "bg-muted text-muted-foreground",
+const verificationStatusConfig: Record<string, { label: string; className: string }> = {
+  no_request: { label: "No request", className: "bg-slate-200 text-slate-600 border-slate-300 font-medium" },
+  pending: { label: "Pending request", className: "bg-amber-500/20 text-amber-800 border-amber-300 font-medium" },
+  approved: { label: "Approved", className: "bg-emerald-500/20 text-emerald-800 border-emerald-300 font-medium" },
+  verified: { label: "Approved", className: "bg-emerald-500/20 text-emerald-800 border-emerald-300 font-medium" },
+  rejected: { label: "Rejected", className: "bg-red-500/20 text-red-800 border-red-300 font-medium" },
 };
 
 export default function Listings() {
@@ -27,7 +33,42 @@ export default function Listings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const redirectMessage = (location.state as { message?: string } | null)?.message;
+  const [verifyModalListing, setVerifyModalListing] = useState<ListingRow | null>(null);
+  const [verifyToken, setVerifyToken] = useState<string | null>(null);
+  const [generatingToken, setGeneratingToken] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyToken = () => {
+    const token = verifyToken ?? verifyModalListing?.verification_token;
+    if (!token) return;
+    navigator.clipboard.writeText(token).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  const locationState = location.state as { message?: string; success?: boolean } | null;
+  const redirectMessage = locationState?.message;
+  const isSuccessMessage = !!locationState?.success;
+
+  const openVerifyModal = (listing: ListingRow) => {
+    setVerifyModalListing(listing);
+    setVerifyToken(listing.verification_token ?? null);
+    setCopied(false);
+  };
+
+  const handleGenerateToken = async () => {
+    if (!verifyModalListing) return;
+    setGeneratingToken(true);
+    try {
+      const data = await vendorFetch<{ verification_token: string }>(`/api/listings/${verifyModalListing.id}/generate-verification-token`, { method: "POST" });
+      setVerifyToken(data.verification_token);
+      setListings((prev) => prev.map((l) => (l.id === verifyModalListing.id ? { ...l, verification_token: data.verification_token } : l)));
+    } catch {
+      setVerifyToken(null);
+    } finally {
+      setGeneratingToken(false);
+    }
+  };
 
   const loadListings = () => {
     setLoading(true);
@@ -61,7 +102,10 @@ export default function Listings() {
   return (
     <div className="space-y-6">
       {redirectMessage && (
-        <div className="rounded-xl bg-destructive/10 text-destructive border border-destructive/20 px-4 py-3 text-sm">
+        <div className={cn(
+          "rounded-xl px-4 py-3 text-sm border",
+          isSuccessMessage ? "bg-emerald-500/10 text-emerald-800 border-emerald-300" : "bg-destructive/10 text-destructive border-destructive/20"
+        )}>
           {redirectMessage}
         </div>
       )}
@@ -88,30 +132,33 @@ export default function Listings() {
               <span className="text-primary-foreground/40 text-sm font-medium">Cover Image</span>
             </div>
             <div className="p-5">
-              <div className="flex items-start justify-between">
+              <div className="flex items-start justify-between gap-2">
                 <div>
                   <h3 className="font-display font-semibold text-foreground">{l.name}</h3>
                   <p className="text-xs text-muted-foreground mt-0.5 capitalize">{l.type.replace("_", " ")}</p>
                 </div>
-                <span className={cn("text-xs font-medium px-2.5 py-1 rounded-full", statusStyles[l.status] ?? "bg-muted text-muted-foreground")}>
-                  {l.status.replace("_", " ")}
-                </span>
+                <Button type="button" variant="outline" size="sm" className="rounded-lg text-xs h-8 gap-1.5 shrink-0" onClick={() => openVerifyModal(l)}>
+                  <Shield className="h-3.5 w-3.5" /> Verify
+                </Button>
               </div>
               <div className="flex items-center gap-2 mt-4 pt-4 border-t border-border flex-wrap">
                 {l.type === "transport" && (
-                  <Link
-                    to={`/listings/${l.id}/transport`}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
-                  >
-                    <Bus size={14} /> Manage Fleet
-                  </Link>
+                  (l.verification_status === "approved" || l.verification_status === "verified") ? (
+                    <Link
+                      to={`/listings/${l.id}/transport`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+                    >
+                      <Bus size={14} /> Manage Fleet
+                    </Link>
+                  ) : (
+                    <span
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted text-muted-foreground cursor-not-allowed"
+                      title="Verify your company first to manage fleet"
+                    >
+                      <Bus size={14} /> Manage Fleet (verify first)
+                    </span>
+                  )
                 )}
-                <Link
-                  to={l.type === "transport" ? `/listings/${l.id}/transport?view=1` : `/listings/${l.id}`}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                >
-                  <Eye size={14} /> View
-                </Link>
                 <button type="button" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
                   <Edit size={14} /> Edit
                 </button>
@@ -131,6 +178,71 @@ export default function Listings() {
       {listings.length === 0 && (
         <p className="text-sm text-muted-foreground">No listings yet. Add one to get started.</p>
       )}
+
+      <Dialog open={!!verifyModalListing} onOpenChange={(open) => !open && setVerifyModalListing(null)}>
+        <DialogContent className="rounded-2xl max-w-md p-0 overflow-hidden">
+          {verifyModalListing && (
+            <>
+              <div className="bg-sidebar text-sidebar-foreground px-5 py-4">
+                <DialogHeader>
+                  <DialogTitle className="text-lg font-semibold">Company Verification</DialogTitle>
+                </DialogHeader>
+                <p className="text-sm text-sidebar-foreground/80 mt-0.5">Token and verification status for this listing.</p>
+              </div>
+              <div className="p-5 space-y-5">
+                <div>
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Token</h4>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    {!(verifyToken ?? verifyModalListing.verification_token) ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="rounded-lg gap-1.5 shrink-0"
+                        onClick={handleGenerateToken}
+                        disabled={generatingToken}
+                      >
+                        {generatingToken ? "Generating…" : "Generate token"}
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground shrink-0">Token generated (cannot be regenerated)</span>
+                    )}
+                    <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
+                      <span className="font-mono text-sm bg-muted/80 rounded-lg px-3 py-2 border border-border min-h-[2.5rem] inline-flex items-center truncate max-w-[180px]">
+                        {verifyToken ?? verifyModalListing.verification_token ?? "—"}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-lg gap-1.5 shrink-0"
+                        onClick={copyToken}
+                        disabled={!(verifyToken ?? verifyModalListing.verification_token)}
+                        title="Copy token"
+                      >
+                        {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                        {copied ? "Copied" : "Copy"}
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1.5">Each token is unique and fixed. Share it with admin to get the company verified. You can copy it again anytime after reopening this modal.</p>
+                </div>
+                <div>
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Status</h4>
+                  {(() => {
+                    const status = verifyModalListing.verification_status ?? "no_request";
+                    const config = verificationStatusConfig[status] ?? verificationStatusConfig.no_request;
+                    return (
+                      <span className={cn("inline-flex px-3 py-1.5 rounded-lg border text-sm", config.className)}>
+                        {config.label}
+                      </span>
+                    );
+                  })()}
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

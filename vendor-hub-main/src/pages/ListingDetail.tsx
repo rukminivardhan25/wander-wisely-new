@@ -16,6 +16,7 @@ interface Listing {
   registered_address: string | null;
   service_area: string | null;
   cover_image_url: string | null;
+  verification_status?: string;
 }
 
 const statusStyles: Record<string, string> = {
@@ -92,12 +93,18 @@ export default function ListingDetail() {
             </p>
           )}
           {listing.type === "transport" && (
-            <Link
-              to={`/listings/${listing.id}/transport`}
-              className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-lg text-sm font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
-            >
-              Manage Fleet (drivers, buses, routes)
-            </Link>
+            (listing.verification_status === "approved" || listing.verification_status === "verified") ? (
+              <Link
+                to={`/listings/${listing.id}/transport`}
+                className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-lg text-sm font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+              >
+                Manage Fleet (drivers, buses, routes)
+              </Link>
+            ) : (
+              <p className="mt-4 text-sm text-muted-foreground">
+                Manage Fleet (drivers, buses, routes) is available after your company is verified. Go to <Link to="/verification" className="text-primary hover:underline">Verification</Link> to submit your request.
+              </p>
+            )
           )}
         </div>
       </div>

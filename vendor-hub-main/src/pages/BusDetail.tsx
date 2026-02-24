@@ -58,6 +58,7 @@ interface BusDetailRow {
   total_seats: number;
   base_price_per_seat_cents: number;
   status: string;
+  verification_status?: string;
 }
 
 interface DriverRow {
@@ -150,6 +151,7 @@ export default function BusDetail() {
   const [amenitiesForm, setAmenitiesForm] = useState({ has_wifi: false, has_charging: false, has_entertainment: false, has_toilet: false });
   const [savingAmenities, setSavingAmenities] = useState(false);
 
+  const isVerified = bus?.verification_status === "approved";
   const busDrivers = drivers;
   const busRoutes = routes;
   const busRoutesDeduped = useMemo(() => {
@@ -162,6 +164,13 @@ export default function BusDetail() {
     });
   }, [busRoutes]);
 
+  const refreshBus = async () => {
+    if (!listingId || !busId) return;
+    try {
+      const next = await vendorFetch<BusDetailRow>(`/api/listings/${listingId}/buses/${busId}`);
+      setBus(next);
+    } catch (_) {}
+  };
   const refreshDrivers = async () => {
     if (!listingId || !busId) return;
     try {
@@ -186,6 +195,7 @@ export default function BusDetail() {
         body: JSON.stringify({ bus_id: busId }),
       });
       await refreshDrivers();
+      await refreshBus();
     } catch (_) {}
     setAssigningDriver(false);
   };
@@ -198,6 +208,7 @@ export default function BusDetail() {
         body: JSON.stringify({ bus_id: null }),
       });
       await refreshDrivers();
+      await refreshBus();
     } catch (_) {}
     setAssigningDriver(false);
   };
@@ -210,6 +221,7 @@ export default function BusDetail() {
         body: JSON.stringify({ bus_id: busId }),
       });
       await refreshRoutes();
+      await refreshBus();
     } catch (_) {}
     setAssigningRoute(null);
   };
@@ -222,6 +234,7 @@ export default function BusDetail() {
         body: JSON.stringify({ bus_id: null }),
       });
       await refreshRoutes();
+      await refreshBus();
     } catch (_) {}
     setAssigningRoute(null);
   };
@@ -274,8 +287,8 @@ export default function BusDetail() {
         has_entertainment: busEditForm.has_entertainment ?? bus.has_entertainment,
         has_toilet: busEditForm.has_toilet ?? bus.has_toilet,
       };
-      const updated = await vendorFetch<BusDetailRow>(`/api/listings/${listingId}/buses/${busId}`, { method: "PATCH", body: JSON.stringify(payload) });
-      setBus(updated);
+      await vendorFetch(`/api/listings/${listingId}/buses/${busId}`, { method: "PATCH", body: JSON.stringify(payload) });
+      await refreshBus();
       setEditingBusInfo(false);
     } catch (_) {}
     setSavingBusInfo(false);
@@ -294,6 +307,7 @@ export default function BusDetail() {
         body: JSON.stringify({ name: driverEditForm.name.trim() || null, phone: driverEditForm.phone.trim() || null, license_no: driverEditForm.license_no.trim() || null }),
       });
       await refreshDrivers();
+      await refreshBus();
       setEditingDriverId(null);
     } catch (_) {}
     setSavingDriverEdit(false);
@@ -324,6 +338,7 @@ export default function BusDetail() {
         }),
       });
       await refreshRoutes();
+      await refreshBus();
       setEditingRouteId(null);
     } catch (_) {}
     setSavingRouteEdit(false);
@@ -345,6 +360,7 @@ export default function BusDetail() {
         }),
       });
       await refreshRoutes();
+      await refreshBus();
       setNewRouteForm({ from_place: "", to_place: "", distance_km: "", duration_minutes: "", price_per_seat_rupees: "" });
     } catch (_) {}
     setAddingRoute(false);
@@ -358,7 +374,7 @@ export default function BusDetail() {
     if (!listingId || !busId || !bus) return;
     setSavingAmenities(true);
     try {
-      const updated = await vendorFetch<BusDetailRow>(`/api/listings/${listingId}/buses/${busId}`, {
+      await vendorFetch(`/api/listings/${listingId}/buses/${busId}`, {
         method: "PATCH",
         body: JSON.stringify({
           has_wifi: amenitiesForm.has_wifi,
@@ -367,7 +383,7 @@ export default function BusDetail() {
           has_toilet: amenitiesForm.has_toilet,
         }),
       });
-      setBus(updated);
+      await refreshBus();
       setEditingAmenities(false);
     } catch (_) {}
     setSavingAmenities(false);
@@ -462,13 +478,14 @@ export default function BusDetail() {
   const handleToggleStatus = async () => {
     if (!listingId || !busId || !bus) return;
     setToggling(true);
+    setError("");
     try {
       const next = bus.status === "active" ? "inactive" : "active";
       await vendorFetch(`/api/listings/${listingId}/buses/${busId}`, {
         method: "PATCH",
         body: JSON.stringify({ status: next }),
       });
-      setBus((b) => (b ? { ...b, status: next } : null));
+      await refreshBus();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update status");
     } finally {
@@ -512,7 +529,7 @@ export default function BusDetail() {
     return (
       <div className="space-y-4 p-6">
         <Button variant="ghost" size="icon" asChild>
-          <Link to={`/listings/${listingId}/transport?view=1`}><ArrowLeft className="h-4 w-4" /></Link>
+          <Link to="/listings"><ArrowLeft className="h-4 w-4" /></Link>
         </Button>
         <p className="text-destructive">{error}</p>
       </div>
@@ -533,7 +550,7 @@ export default function BusDetail() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" asChild>
-            <Link to={`/listings/${listingId}/transport?view=1`}><ArrowLeft className="h-4 w-4" /></Link>
+            <Link to="/listings"><ArrowLeft className="h-4 w-4" /></Link>
           </Button>
           <div>
             <h1 className="text-2xl font-semibold text-foreground">{bus.name}</h1>
@@ -714,8 +731,14 @@ export default function BusDetail() {
               <CardTitle className="text-base font-semibold">Quick actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {!isVerified && (
+                <p className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  Verify this bus to use quick actions (Verification → Vehicles → Buses).
+                </p>
+              )}
               <Button
                 className="w-full rounded-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white h-10"
+                disabled={!isVerified}
                 onClick={() => setScheduleDrawerOpen(true)}
               >
                 <Plus className="h-4 w-4 mr-2" /> Add Schedule
@@ -723,14 +746,14 @@ export default function BusDetail() {
               <Button
                 variant="outline"
                 className="w-full rounded-full border-[#E5E7EB] h-10"
-                disabled={toggling}
+                disabled={!isVerified || toggling}
                 onClick={handleToggleStatus}
               >
                 {toggling ? "Updating…" : bus.status === "active" ? "Set Inactive" : "Set Active"}
               </Button>
               <Button
                 className="w-full rounded-full bg-amber-500 hover:bg-amber-600 text-white h-10"
-                disabled={deleting}
+                disabled={!isVerified || deleting}
                 onClick={handleDeleteBus}
               >
                 <Trash2 className="h-4 w-4 mr-2" /> Delete bus

@@ -12,6 +12,8 @@ import Dashboard from "./pages/Dashboard";
 import Listings from "./pages/Listings";
 import TransportListing from "./pages/TransportListing";
 import BusDetail from "./pages/BusDetail";
+import CarDetail from "./pages/CarDetail";
+import VehiclePlaceholder from "./pages/VehiclePlaceholder";
 import ListingDetail from "./pages/ListingDetail";
 import AddListing from "./pages/AddListing";
 import Bookings from "./pages/Bookings";
@@ -44,6 +46,8 @@ const App = () => (
                 <Route path="/listings" element={<Listings />} />
                 <Route path="/listings/:listingId/transport" element={<TransportListing />} />
                 <Route path="/listings/:listingId/transport/bus/:busId" element={<BusDetail />} />
+                <Route path="/listings/:listingId/transport/car/:carId" element={<CarDetail />} />
+                <Route path="/listings/:listingId/transport/vehicle/:vehicleType" element={<VehiclePlaceholder />} />
                 <Route path="/listings/:listingId" element={<ListingDetail />} />
                 <Route path="/add-listing" element={<AddListing />} />
                 <Route path="/bookings" element={<Bookings />} />

@@ -40,22 +40,32 @@ async function vendorOwnsListing(listingId: string, vendorId: string): Promise<b
   }
 }
 
-// List my listings (vendor can have multiple listings). Uses vendor_listings if present, else listings.vendor_id.
+// List my listings (vendor can have multiple listings). Uses vendor_listings if present, else listings.vendor_id. Includes verification_token/verification_status when columns exist.
 router.get("/", async (req: Request, res: Response): Promise<void> => {
   try {
     const vendorId = req.vendorId!;
-    type Row = { id: string; vendor_id: string; type: string; name: string; tagline: string | null; description: string | null; registered_address: string | null; service_area: string | null; address: string | null; city: string | null; cover_image_url: string | null; status: string; created_at: string; updated_at: string };
+    type Row = { id: string; vendor_id: string; type: string; name: string; tagline: string | null; description: string | null; registered_address: string | null; service_area: string | null; address: string | null; city: string | null; cover_image_url: string | null; status: string; created_at: string; updated_at: string; verification_token?: string | null; verification_status?: string | null };
     let result: { rows: Row[] };
     try {
-      result = await query<Row>(`select id, vendor_id, type, name, tagline, description, registered_address, service_area, address, city, cover_image_url, status, created_at, updated_at from listings where vendor_id = $1 order by created_at desc`, [vendorId]);
-    } catch {
-      try {
-        result = await query<Row & { vendor_id?: string }>(
-          `select l.id, $1::uuid as vendor_id, l.type, l.name, l.tagline, l.description, l.registered_address, l.service_area, l.address, l.city, l.cover_image_url, l.status, l.created_at, l.updated_at from listings l inner join vendor_listings vl on vl.listing_id = l.id and vl.vendor_id = $1 order by l.created_at desc`,
-          [vendorId]
-        );
-      } catch {
-        result = { rows: [] };
+      result = await query<Row>(`select id, vendor_id, type, name, tagline, description, registered_address, service_area, address, city, cover_image_url, status, created_at, updated_at, verification_token, verification_status from listings where vendor_id = $1 order by created_at desc`, [vendorId]);
+    } catch (e) {
+      const code = e && typeof e === "object" && "code" in e ? String((e as { code: string }).code) : "";
+      if (code === "42703") {
+        try {
+          const fallback = await query<Omit<Row, "verification_token" | "verification_status">>(`select id, vendor_id, type, name, tagline, description, registered_address, service_area, address, city, cover_image_url, status, created_at, updated_at from listings where vendor_id = $1 order by created_at desc`, [vendorId]);
+          result = { rows: fallback.rows.map((r) => ({ ...r, verification_token: null, verification_status: null })) as Row[] };
+        } catch {
+          result = { rows: [] };
+        }
+      } else {
+        try {
+          result = await query<Row & { vendor_id?: string }>(
+            `select l.id, $1::uuid as vendor_id, l.type, l.name, l.tagline, l.description, l.registered_address, l.service_area, l.address, l.city, l.cover_image_url, l.status, l.created_at, l.updated_at, l.verification_token, l.verification_status from listings l inner join vendor_listings vl on vl.listing_id = l.id and vl.vendor_id = $1 order by l.created_at desc`,
+            [vendorId]
+          );
+        } catch {
+          result = { rows: [] };
+        }
       }
     }
     res.json({ listings: result.rows });
@@ -65,21 +75,27 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-// Get one listing (supports vendor_listings and listings.vendor_id)
+// Get one listing (supports vendor_listings and listings.vendor_id). Includes verification_token/verification_status when columns exist.
 router.get("/:id", async (req: Request, res: Response): Promise<void> => {
   try {
     const vendorId = req.vendorId!;
     const { id } = req.params;
-    type Row = { id: string; vendor_id: string; type: string; name: string; tagline: string | null; description: string | null; registered_address: string | null; service_area: string | null; address: string | null; city: string | null; cover_image_url: string | null; status: string; created_at: string; updated_at: string };
+    type Row = { id: string; vendor_id: string; type: string; name: string; tagline: string | null; description: string | null; registered_address: string | null; service_area: string | null; address: string | null; city: string | null; cover_image_url: string | null; status: string; created_at: string; updated_at: string; verification_token?: string | null; verification_status?: string | null };
     let result: { rows: Row[] };
     try {
-      result = await query<Row>(`select id, vendor_id, type, name, tagline, description, registered_address, service_area, address, city, cover_image_url, status, created_at, updated_at from listings where id = $1 and vendor_id = $2`, [id, vendorId]);
-    } catch {
-      try {
-        const r = await query<Row & { vendor_id?: string }>(`select l.id, $2::uuid as vendor_id, l.type, l.name, l.tagline, l.description, l.registered_address, l.service_area, l.address, l.city, l.cover_image_url, l.status, l.created_at, l.updated_at from listings l inner join vendor_listings vl on vl.listing_id = l.id and vl.vendor_id = $2 where l.id = $1`, [id, vendorId]);
-        result = { rows: r.rows as Row[] };
-      } catch {
-        result = { rows: [] };
+      result = await query<Row>(`select id, vendor_id, type, name, tagline, description, registered_address, service_area, address, city, cover_image_url, status, created_at, updated_at, verification_token, verification_status from listings where id = $1 and vendor_id = $2`, [id, vendorId]);
+    } catch (e) {
+      const code = e && typeof e === "object" && "code" in e ? String((e as { code: string }).code) : "";
+      if (code === "42703") {
+        const r = await query<Omit<Row, "verification_token" | "verification_status">>(`select id, vendor_id, type, name, tagline, description, registered_address, service_area, address, city, cover_image_url, status, created_at, updated_at from listings where id = $1 and vendor_id = $2`, [id, vendorId]);
+        result = { rows: r.rows.map((row) => ({ ...row, verification_token: null, verification_status: null })) as Row[] };
+      } else {
+        try {
+          const r = await query<Row & { vendor_id?: string }>(`select l.id, $2::uuid as vendor_id, l.type, l.name, l.tagline, l.description, l.registered_address, l.service_area, l.address, l.city, l.cover_image_url, l.status, l.created_at, l.updated_at, l.verification_token, l.verification_status from listings l inner join vendor_listings vl on vl.listing_id = l.id and vl.vendor_id = $2 where l.id = $1`, [id, vendorId]);
+          result = { rows: r.rows as Row[] };
+        } catch {
+          result = { rows: [] };
+        }
       }
     }
     if (result.rows.length === 0) {
@@ -191,6 +207,55 @@ router.patch("/:id", async (req: Request, res: Response): Promise<void> => {
   } catch (err) {
     console.error("Update listing error:", err);
     res.status(500).json({ error: "Failed to update listing" });
+  }
+});
+
+// Generate or return verification token for this listing (belongs to this listing only).
+router.post("/:id/generate-verification-token", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const vendorId = req.vendorId!;
+    const listingId = req.params.id;
+    const owns = await vendorOwnsListing(listingId, vendorId);
+    if (!owns) {
+      res.status(404).json({ error: "Listing not found" });
+      return;
+    }
+    const row = await query<{ verification_token: string | null; verification_status: string | null }>(
+      "select verification_token, verification_status from listings where id = $1",
+      [listingId]
+    );
+    if (row.rows.length === 0) {
+      res.status(404).json({ error: "Listing not found" });
+      return;
+    }
+    let token = row.rows[0].verification_token;
+    const currentStatus = row.rows[0].verification_status ?? "no_request";
+    if (token) {
+      return void res.json({ verification_token: token, verification_status: currentStatus });
+    }
+    const slug = () => Math.random().toString(36).slice(2, 6).toUpperCase();
+    token = `CMP-${slug()}-${slug()}`;
+    try {
+      await query(
+        "update listings set verification_token = $1, updated_at = now() where id = $2",
+        [token, listingId]
+      );
+    } catch (err) {
+      const msg = String(err instanceof Error ? err.message : err);
+      if (msg.includes("unique") || msg.includes("duplicate")) {
+        const retry = await query<{ verification_token: string | null }>("select verification_token from listings where id = $1", [listingId]);
+        token = retry.rows[0]?.verification_token ?? token;
+      } else throw err;
+    }
+    res.json({ verification_token: token, verification_status: "no_request" });
+  } catch (err: unknown) {
+    console.error("Generate verification token error:", err);
+    const code = err && typeof err === "object" && "code" in err ? String((err as { code: string }).code) : "";
+    if (code === "42703") {
+      res.status(503).json({ error: "Verification not configured. Run migration: npx tsx scripts/run-one-schema.ts 022_verification_listings_buses.sql" });
+      return;
+    }
+    res.status(500).json({ error: "Failed to generate token" });
   }
 });
 

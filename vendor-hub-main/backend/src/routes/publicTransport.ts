@@ -52,7 +52,8 @@ router.get("/available-buses", async (req: Request, res: Response): Promise<void
        join bus_schedules s on s.bus_id = b.id
        left join routes r on r.id = s.route_id
        where lower(trim(l.type)) = 'transport'
-         and (b.status is null or b.status = 'active')
+         and b.status = 'active'
+         and coalesce(b.verification_status, 'no_request') = 'approved'
          and s.start_date is not null
          and (s.start_date)::date = ($1)::date
          and coalesce(s.status, 'active') = 'active'

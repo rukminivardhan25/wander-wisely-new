@@ -18,6 +18,8 @@ import {
   Tv,
   Droplets,
   Snowflake,
+  Clock,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,7 +95,27 @@ function dateToYYYYMMDD(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/** API response for GET /api/transport/available-cars */
+type ApiCarOption = {
+  listingId: string;
+  listingName: string;
+  carId: string;
+  carName: string;
+  registrationNumber: string | null;
+  carType: string;
+  seats: number;
+  acType: string | null;
+  areaId: string;
+  baseFareCents: number | null;
+  pricePerKmCents: number | null;
+  minimumFareCents: number | null;
+  estimatedDurationMinutes?: number | null;
+};
+
 const todayDate = () => new Date();
+
+/** Fallback cities for Car Local ride when API returns none (static UI). */
+const CAR_LOCAL_CITIES_FALLBACK = ["Hyderabad", "Bangalore", "Chennai", "Mumbai", "Delhi", "Pune", "Kolkata"];
 
 function formatBusType(t: string | null | undefined): string {
   if (!t) return "";
@@ -130,6 +152,26 @@ const BookingMarketplace = () => {
   const [filterNonAc, setFilterNonAc] = useState(false);
   const [filterSleeper, setFilterSleeper] = useState(false);
   const [filterSeater, setFilterSeater] = useState(false);
+  // Car Rental (static flow): Local | Intercity
+  const [carRideType, setCarRideType] = useState<"local" | "intercity" | null>(null);
+  const [carLocalCity, setCarLocalCity] = useState("");
+  const [carLocalPickup, setCarLocalPickup] = useState("");
+  const [carLocalDrop, setCarLocalDrop] = useState("");
+  const [carIntercityFrom, setCarIntercityFrom] = useState("");
+  const [carIntercityTo, setCarIntercityTo] = useState("");
+  const [carDate, setCarDate] = useState<Date | undefined>(todayDate);
+  const [carTime, setCarTime] = useState("10:00");
+  const [carPassengers, setCarPassengers] = useState(1);
+  const [carSearchDone, setCarSearchDone] = useState(false);
+  const [carRequestSent, setCarRequestSent] = useState(false);
+  const [carRequestedName, setCarRequestedName] = useState<string | null>(null);
+  const [carVendorAccepted, setCarVendorAccepted] = useState(false);
+  const [carPaymentDone, setCarPaymentDone] = useState(false);
+  const [carBookingOtp, setCarBookingOtp] = useState<string | null>(null);
+  const [carList, setCarList] = useState<ApiCarOption[]>([]);
+  const [carLoading, setCarLoading] = useState(false);
+  const [carError, setCarError] = useState("");
+  const [carBookingId, setCarBookingId] = useState<string | null>(null);
   const { token } = useAuth();
   const navigate = useNavigate();
 
@@ -147,9 +189,9 @@ const BookingMarketplace = () => {
     });
   }, [token]);
 
-  // Load cities for From/To dropdowns when Bus is selected
+  // Load cities for From/To dropdowns when Bus or Car is selected
   useEffect(() => {
-    if (selectedCategory !== "bus") return;
+    if (selectedCategory !== "bus" && selectedCategory !== "car") return;
     apiFetch<{ cities: string[] }>("/api/transport/cities").then(({ data }) => {
       const list = data?.cities ?? [];
       setCities(list);
@@ -166,6 +208,118 @@ const BookingMarketplace = () => {
       });
     });
   }, [selectedCategory]);
+
+  // Reset Car Rental flow when user switches to another category
+  useEffect(() => {
+    if (selectedCategory !== "car") {
+      setCarRideType(null);
+      setCarLocalCity("");
+      setCarSearchDone(false);
+      setCarRequestSent(false);
+      setCarRequestedName(null);
+      setCarVendorAccepted(false);
+      setCarPaymentDone(false);
+      setCarBookingOtp(null);
+      setCarList([]);
+      setCarError("");
+      setCarBookingId(null);
+    }
+  }, [selectedCategory]);
+
+  const runCarSearch = async () => {
+    setCarError("");
+    setCarLoading(true);
+    setCarSearchDone(false);
+    try {
+      if (carRideType === "local") {
+        if (!carLocalCity.trim()) {
+          setCarError("Please select a city.");
+          return;
+        }
+        const { data, error } = await apiFetch<{ type: string; date: string; cars: ApiCarOption[] }>(
+          `/api/transport/available-cars?type=local&city=${encodeURIComponent(carLocalCity.trim())}&passengers=${carPassengers}`
+        );
+        if (error) {
+          setCarError(error || "Failed to load cars");
+          setCarList([]);
+          return;
+        }
+        setCarList(data?.cars ?? []);
+      } else {
+        const fromCity = carIntercityFrom.trim();
+        const toCity = carIntercityTo.trim();
+        const travelDate = carDate ? dateToYYYYMMDD(carDate) : "";
+        if (!fromCity || !toCity || !travelDate) {
+          setCarError("Please enter from city, to city, and date.");
+          return;
+        }
+        const { data, error } = await apiFetch<{ type: string; date: string; cars: ApiCarOption[] }>(
+          `/api/transport/available-cars?type=intercity&from=${encodeURIComponent(fromCity)}&to=${encodeURIComponent(toCity)}&date=${travelDate}&passengers=${carPassengers}`
+        );
+        if (error) {
+          setCarError(error || "Failed to load cars");
+          setCarList([]);
+          return;
+        }
+        setCarList(data?.cars ?? []);
+      }
+      setCarSearchDone(true);
+    } finally {
+      setCarLoading(false);
+    }
+  };
+
+  const handleCarBook = async (car: ApiCarOption) => {
+    if (!token) return;
+    setCarError("");
+    const travelDate = carRideType === "local" ? dateToYYYYMMDD(new Date()) : (carDate ? dateToYYYYMMDD(carDate) : "");
+    const now = new Date();
+    const travelTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const body = {
+      listingId: car.listingId,
+      carId: car.carId,
+      areaId: car.areaId,
+      bookingType: carRideType!,
+      travelDate,
+      passengers: carPassengers,
+      totalCents: car.baseFareCents ?? undefined,
+      ...(carRideType === "local"
+        ? { city: carLocalCity.trim() || undefined, pickupPoint: carLocalPickup.trim() || undefined, dropPoint: carLocalDrop.trim() || undefined, travelTime }
+        : { fromCity: carIntercityFrom.trim() || undefined, toCity: carIntercityTo.trim() || undefined }),
+    };
+    const { data, error } = await apiFetch<{ id: string; bookingRef: string; status: string }>("/api/car-bookings", {
+      method: "POST",
+      body,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (error || !data?.id) {
+      setCarError(error || "Failed to send booking request");
+      return;
+    }
+    setCarBookingId(data.id);
+    setCarRequestedName(car.carName);
+    setCarRequestSent(true);
+  };
+
+  const handleCarCheckStatus = async () => {
+    if (!carBookingId || !token) return;
+    const { data } = await apiFetch<{ status: string }>(`/api/car-bookings/${carBookingId}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (data?.status === "approved_awaiting_payment") setCarVendorAccepted(true);
+  };
+
+  const handleCarPayNow = async () => {
+    if (!carBookingId || !token) return;
+    const { data, error } = await apiFetch<{ ok: boolean; status: string; otp: string }>(`/api/car-bookings/${carBookingId}/pay`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (error || !data?.otp) {
+      setCarError(error || "Payment failed");
+      return;
+    }
+    setCarPaymentDone(true);
+    setCarBookingOtp(data.otp);
+  };
 
   /** Parse "HH:MM" to minutes since midnight; invalid returns -1. */
   const departureMinutes = (bus: ApiBusOption): number => {
@@ -335,8 +489,8 @@ const BookingMarketplace = () => {
             </div>
           </div>
 
-          {/* Search bookings - only after selecting a transport type */}
-          {selectedCategory && ["bus", "flight", "train", "car", "bike"].includes(selectedCategory) && (
+          {/* Search bookings - only for bus / flight / train / bike (car has its own form below) */}
+          {selectedCategory && ["bus", "flight", "train", "bike"].includes(selectedCategory) && (
             <div className="bg-white rounded-2xl shadow-md border border-slate-200 p-4 sm:p-6 mb-8">
               <h2 className="text-lg font-semibold text-foreground mb-4">Search bookings</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -621,8 +775,343 @@ const BookingMarketplace = () => {
             </div>
           )}
 
-          {/* Placeholder for other categories */}
-          {selectedCategory && selectedCategory !== "bus" && (
+          {/* Car Rental — static flow: Local | Intercity → form → results → request sent */}
+          {selectedCategory === "car" && (
+            <div className="space-y-6">
+              {/* Step 1: Choose ride type */}
+              {carRideType === null && (
+                <div className="bg-white rounded-2xl border border-slate-200 p-6">
+                  <h2 className="text-lg font-semibold text-foreground mb-2">Choose your ride type</h2>
+                  <p className="text-sm text-muted-foreground mb-4">Within the same city or between cities?</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setCarRideType("local")}
+                      className="flex flex-col items-center gap-3 p-6 rounded-2xl border-2 border-slate-200 bg-white hover:border-accent hover:bg-accent/5 transition-all text-left"
+                    >
+                      <MapPin className="h-10 w-10 text-accent" />
+                      <div>
+                        <p className="font-semibold text-foreground">Local Ride</p>
+                        <p className="text-xs text-muted-foreground mt-1">Pickup → Drop within one city. Price by distance.</p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCarRideType("intercity")}
+                      className="flex flex-col items-center gap-3 p-6 rounded-2xl border-2 border-slate-200 bg-white hover:border-accent hover:bg-accent/5 transition-all text-left"
+                    >
+                      <Car className="h-10 w-10 text-accent" />
+                      <div>
+                        <p className="font-semibold text-foreground">Intercity Ride</p>
+                        <p className="text-xs text-muted-foreground mt-1">From one city to another. Fixed route & fare.</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 2: Form + optional results */}
+              {carRideType !== null && !carRequestSent && (
+                <>
+                  <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCarRideType(null);
+                          setCarSearchDone(false);
+                          setCarRequestSent(false);
+                          setCarRequestedName(null);
+                        }}
+                        className="text-sm text-muted-foreground hover:text-foreground"
+                      >
+                        ← Change ride type
+                      </button>
+                    </div>
+                    <h2 className="text-lg font-semibold text-foreground mb-4">
+                      {carRideType === "local" ? "Search local ride" : "Search intercity ride"}
+                    </h2>
+                    {carRideType === "local" ? (
+                      <div className="space-y-4">
+                        <p className="text-sm text-muted-foreground">Select your city first, then pickup and drop points within the city.</p>
+                        <p className="text-xs text-amber-700 bg-amber-50 dark:bg-amber-950/30 dark:text-amber-200 rounded-lg px-3 py-2">
+                          Local rides are for <strong>today only</strong> at <strong>current time</strong>. No date or time selection.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                          <div>
+                            <Label className="text-xs">City</Label>
+                            <Select value={carLocalCity || "_"} onValueChange={(v) => setCarLocalCity(v === "_" ? "" : v)}>
+                              <SelectTrigger className="mt-1 rounded-xl">
+                                <SelectValue placeholder="Select city" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="_">Select city</SelectItem>
+                                {(cities.length > 0 ? cities : CAR_LOCAL_CITIES_FALLBACK).map((city) => (
+                                  <SelectItem key={city} value={city}>
+                                    {city}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs">Pickup point</Label>
+                            <Input
+                              placeholder="e.g. Gachibowli"
+                              value={carLocalPickup}
+                              onChange={(e) => setCarLocalPickup(e.target.value)}
+                              className="mt-1 rounded-xl"
+                              disabled={!carLocalCity}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Drop / destination</Label>
+                            <Input
+                              placeholder="e.g. Secunderabad"
+                              value={carLocalDrop}
+                              onChange={(e) => setCarLocalDrop(e.target.value)}
+                              className="mt-1 rounded-xl"
+                              disabled={!carLocalCity}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Passengers</Label>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={9}
+                              value={carPassengers}
+                              onChange={(e) => setCarPassengers(Math.max(1, Number(e.target.value) || 1))}
+                              className="mt-1 rounded-xl"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                          <Label className="text-xs">From city</Label>
+                          <Input
+                            placeholder="e.g. Hyderabad"
+                            value={carIntercityFrom}
+                            onChange={(e) => setCarIntercityFrom(e.target.value)}
+                            className="mt-1 rounded-xl"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">To city</Label>
+                          <Input
+                            placeholder="e.g. Bangalore"
+                            value={carIntercityTo}
+                            onChange={(e) => setCarIntercityTo(e.target.value)}
+                            className="mt-1 rounded-xl"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Date</Label>
+                          <Input
+                            type="date"
+                            value={carDate ? dateToYYYYMMDD(carDate) : ""}
+                            onChange={(e) => setCarDate(e.target.value ? new Date(e.target.value + "T12:00:00") : undefined)}
+                            className="mt-1 rounded-xl"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Passengers</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={9}
+                            value={carPassengers}
+                            onChange={(e) => setCarPassengers(Math.max(1, Number(e.target.value) || 1))}
+                            className="mt-1 rounded-xl"
+                          />
+                        </div>
+                      </div>
+                    )}
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <Button
+                        className="rounded-xl gap-2"
+                        size="lg"
+                        onClick={runCarSearch}
+                        disabled={carLoading}
+                      >
+                        <Search className="h-4 w-4" /> {carLoading ? "Searching…" : "Search"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {carError && (
+                    <p className="text-sm text-destructive rounded-xl bg-destructive/10 px-4 py-2">{carError}</p>
+                  )}
+
+                  {/* Results after Search */}
+                  {carSearchDone && (
+                    <div className="space-y-4">
+                      {carRideType === "local" && (
+                        <div className="bg-white rounded-2xl border border-slate-200 p-4">
+                          <h3 className="font-semibold text-foreground mb-2">Route & estimated fare</h3>
+                          <p className="text-xs text-muted-foreground mb-2">
+                            Ride for: <strong>Today</strong>, {new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })} (local ride – today & current time only)
+                          </p>
+                          <div className="h-32 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-sm text-muted-foreground">
+                            Map placeholder — {carLocalCity ? `${carLocalCity}: ` : ""}{carLocalPickup || "Pickup"} → {carLocalDrop || "Drop"} · Distance-based fare
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-2">Estimated fare will be calculated from distance. Final fare subject to vendor confirmation.</p>
+                        </div>
+                      )}
+                      <h3 className="font-semibold text-foreground">Available cars</h3>
+                      {carList.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-6 text-center">
+                          No cars available for this search. Try another city/route or date, or add cars and schedules in the vendor hub.
+                        </p>
+                      ) : (
+                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                          {carList.map((car) => {
+                            const fareCents = car.baseFareCents ?? 0;
+                            const fareStr = fareCents > 0 ? `₹ ${(fareCents / 100).toLocaleString("en-IN")}` : "—";
+                            const desc = carRideType === "local" ? "Estimated" : "Fixed";
+                            return (
+                              <div
+                                key={car.carId + car.areaId}
+                                className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col"
+                              >
+                                <p className="font-semibold text-foreground">{car.carName}</p>
+                                <p className="text-xs text-muted-foreground mt-1">{car.carType} · {car.seats} seats</p>
+                                <div className="mt-3 flex items-end justify-between gap-2">
+                                  <div>
+                                    <p className="text-lg font-semibold text-foreground">{fareStr}</p>
+                                    <p className="text-xs text-muted-foreground">{desc}</p>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="hero"
+                                    className="rounded-xl shrink-0"
+                                    onClick={() => handleCarBook(car)}
+                                  >
+                                    Book
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Step 3a: Booking request sent – pending vendor acceptance */}
+              {carRequestSent && !carVendorAccepted && !carPaymentDone && (
+                <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
+                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-amber-100 text-amber-600 mb-4">
+                    <Clock className="h-7 w-7" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-foreground mb-2">Booking request sent</h3>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    Your request for <strong>{carRequestedName ?? "this car"}</strong> is now pending vendor approval.
+                  </p>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    No payment yet. When the vendor accepts, you will see a &quot;Pay now&quot; button. After payment you will get your ticket with a booking OTP.
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <Button
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={() => {
+                        setCarRequestSent(false);
+                        setCarRequestedName(null);
+                        setCarSearchDone(false);
+                        setCarBookingId(null);
+                      }}
+                    >
+                      Search again
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="rounded-xl"
+                      onClick={handleCarCheckStatus}
+                    >
+                      Check status
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={() => setCarVendorAccepted(true)}
+                    >
+                      Simulate vendor accepted
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 3b: Vendor accepted – Pay now */}
+              {carRequestSent && carVendorAccepted && !carPaymentDone && (
+                <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
+                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 mb-4">
+                    <CheckCircle2 className="h-7 w-7" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-foreground mb-2">Vendor accepted – Pay now</h3>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    Your request for <strong>{carRequestedName ?? "this car"}</strong> has been accepted. Complete payment to get your ticket with OTP.
+                  </p>
+                  <p className="text-xs text-muted-foreground mb-6">After payment, your ride will be confirmed and you will receive a booking OTP for the driver.</p>
+                  <Button
+                    className="rounded-xl gap-2"
+                    size="lg"
+                    onClick={handleCarPayNow}
+                  >
+                    Pay now
+                  </Button>
+                </div>
+              )}
+
+              {/* Step 3c: Payment done – Ticket with OTP */}
+              {carRequestSent && carPaymentDone && (
+                <div className="bg-white rounded-2xl border border-slate-200 p-8">
+                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 mb-4 mx-auto flex">
+                    <CheckCircle2 className="h-7 w-7" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-foreground mb-2 text-center">Booking confirmed</h3>
+                  <p className="text-sm text-muted-foreground mb-6 text-center">Your ticket is below. Share the OTP with the driver at pickup.</p>
+                  <div className="max-w-sm mx-auto border-2 border-dashed border-slate-300 rounded-2xl p-6 bg-slate-50/50">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Booking OTP</p>
+                    <p className="text-3xl font-mono font-bold text-foreground tracking-[0.3em] text-center">{carBookingOtp ?? "——"}</p>
+                    <p className="text-xs text-muted-foreground mt-3 text-center">Show this to the driver when you board</p>
+                    <div className="mt-4 pt-4 border-t border-slate-200 space-y-1 text-sm">
+                      <p><span className="text-muted-foreground">Car:</span> <strong>{carRequestedName ?? "—"}</strong></p>
+                      <p><span className="text-muted-foreground">Ride:</span> {carRideType === "local"
+                        ? `${carLocalCity || "—"} · ${carLocalPickup || "—"} → ${carLocalDrop || "—"} (Today, current time)`
+                        : `${carIntercityFrom || "—"} → ${carIntercityTo || "—"} · ${carDate ? dateToYYYYMMDD(carDate) : "—"}`}
+                      </p>
+                      <p><span className="text-muted-foreground">Passengers:</span> {carPassengers}</p>
+                    </div>
+                  </div>
+                  <div className="mt-6 text-center">
+                    <Button
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={() => {
+                        setCarRequestSent(false);
+                        setCarRequestedName(null);
+                        setCarSearchDone(false);
+                        setCarVendorAccepted(false);
+                        setCarPaymentDone(false);
+                        setCarBookingOtp(null);
+                        setCarBookingId(null);
+                      }}
+                    >
+                      Book another ride
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Placeholder for other categories (flight, train, hotel, etc.) */}
+          {selectedCategory && selectedCategory !== "bus" && selectedCategory !== "car" && (
             <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-muted-foreground">
               <p>{CATEGORIES.find((c) => c.id === selectedCategory)?.label} booking coming soon.</p>
               <p className="text-sm mt-2">Use the categories above or go back to My Trip.</p>
