@@ -1,12 +1,13 @@
 import { useEffect, useState, useRef } from "react";
 import { motion } from "framer-motion";
-import { Upload, CheckCircle, XCircle, Send, AlertCircle, Building2, Bus, Car, Plane, Train } from "lucide-react";
+import { Upload, CheckCircle, XCircle, Send, AlertCircle, Building2, Bus, Car, Plane, Train, Bed } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { vendorFetch } from "@/lib/api";
 
 const VERIFICATION_CATEGORIES = [
   { id: "company", label: "Company", icon: Building2 },
   { id: "vehicles", label: "Vehicles", icon: Bus },
+  { id: "hotel_branch", label: "Hotel Branch", icon: Bed },
 ] as const;
 
 const VEHICLE_TYPES = [
@@ -52,6 +53,21 @@ const EXPERIENCE_DOCUMENT_TYPES = [
   { label: "Digital Declaration", type: "digital_declaration" },
 ] as const;
 
+const HOTEL_DOCUMENT_TYPES = [
+  { label: "Business Registration Certificate", type: "business_registration_certificate" },
+  { label: "Government Trade License", type: "government_trade_license" },
+  { label: "Tax Registration Proof", type: "tax_registration_proof" },
+  { label: "Bank Account Proof", type: "bank_account_proof" },
+  { label: "Authorized Person ID", type: "authorized_person_id" },
+] as const;
+
+const HOTEL_BRANCH_DOCUMENT_TYPES = [
+  { label: "Local Trade License for this property", type: "local_trade_license" },
+  { label: "Property Ownership / Rental Agreement", type: "property_ownership" },
+  { label: "Fire Safety Certificate", type: "fire_safety" },
+  { label: "Hotel Operating License", type: "hotel_operating_license" },
+] as const;
+
 const BUS_DOCUMENT_TYPES = [
   { label: "Insurance", type: "insurance" },
   { label: "Other document", type: "other" },
@@ -95,7 +111,8 @@ type Doc = {
 };
 
 function typeLabel(t: string) {
-  return t.charAt(0).toUpperCase() + t.slice(1);
+  if (t === "hotel_branch") return "Hotel Branch";
+  return t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 type ResolvedBus = {
@@ -125,11 +142,20 @@ type ResolvedFlight = {
   verification_status: string;
 };
 
+type ResolvedHotelBranch = {
+  hotel_branch_id: string;
+  listing_id: string;
+  name: string;
+  verification_status: string;
+};
+
 export default function Verification() {
-  const [category, setCategory] = useState<"company" | "vehicles">("company");
+  const [category, setCategory] = useState<"company" | "vehicles" | "hotel_branch">("company");
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [tokenInput, setTokenInput] = useState("");
+  const [hotelBranchTokenInput, setHotelBranchTokenInput] = useState("");
   const [resolvedListing, setResolvedListing] = useState<ResolvedListing | null>(null);
+  const [resolvedHotelBranch, setResolvedHotelBranch] = useState<ResolvedHotelBranch | null>(null);
   const [documents, setDocuments] = useState<Doc[]>([]);
   const [validating, setValidating] = useState(false);
   const [sending, setSending] = useState(false);
@@ -162,34 +188,54 @@ export default function Verification() {
   const [flightUploadingType, setFlightUploadingType] = useState<string | null>(null);
   const flightFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  const listingId = resolvedListing?.listing_id ?? null;
-  const verificationStatus = resolvedListing?.verification_status ?? "no_request";
-  const canSendRequest = !!resolvedListing && (verificationStatus === "no_request" || verificationStatus === "rejected") && !!resolvedListing.listing_id;
+  const listingId = (category === "hotel_branch" ? resolvedHotelBranch?.listing_id : resolvedListing?.listing_id) ?? null;
+  const hotelBranchId = resolvedHotelBranch?.hotel_branch_id ?? null;
+  const verificationStatus = (category === "hotel_branch" ? resolvedHotelBranch?.verification_status : resolvedListing?.verification_status) ?? "no_request";
+  const resolvedForCompany = category === "hotel_branch" ? !!resolvedHotelBranch : !!resolvedListing;
+  const resolvedName = (category === "hotel_branch" ? resolvedHotelBranch?.name : resolvedListing?.name) ?? "";
+  const canSendRequest = resolvedForCompany && (verificationStatus === "no_request" || verificationStatus === "rejected") && (category === "hotel_branch" ? !!hotelBranchId : !!resolvedListing?.listing_id);
   const companyDocTypes =
-    selectedType === "experience"
-      ? EXPERIENCE_DOCUMENT_TYPES
-      : selectedType === "event"
-        ? EVENT_DOCUMENT_TYPES
-        : DOCUMENT_TYPES;
+    category === "hotel_branch"
+      ? HOTEL_BRANCH_DOCUMENT_TYPES
+      : selectedType === "experience"
+        ? EXPERIENCE_DOCUMENT_TYPES
+        : selectedType === "event"
+          ? EVENT_DOCUMENT_TYPES
+          : selectedType === "hotel"
+            ? HOTEL_DOCUMENT_TYPES
+            : DOCUMENT_TYPES;
   const uploadedCount = documents.length;
   const progress = companyDocTypes.length ? (uploadedCount / companyDocTypes.length) * 100 : 0;
 
   useEffect(() => {
-    if (!listingId) {
-      setDocuments([]);
-      return;
+    if (category === "hotel_branch" && hotelBranchId && listingId) {
+      let cancelled = false;
+      (async () => {
+        try {
+          const data = await vendorFetch<{ documents: Doc[] }>(
+            `/api/verification/hotel-branch-documents/${hotelBranchId}?listing_id=${encodeURIComponent(listingId)}`
+          );
+          if (!cancelled) setDocuments(data.documents || []);
+        } catch {
+          if (!cancelled) setDocuments([]);
+        }
+      })();
+      return () => { cancelled = true; };
     }
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await vendorFetch<{ documents: Doc[] }>(`/api/verification/documents/${listingId}`);
-        if (!cancelled) setDocuments(data.documents || []);
-      } catch {
-        if (!cancelled) setDocuments([]);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [listingId]);
+    if (category === "company" && listingId) {
+      let cancelled = false;
+      (async () => {
+        try {
+          const data = await vendorFetch<{ documents: Doc[] }>(`/api/verification/documents/${listingId}`);
+          if (!cancelled) setDocuments(data.documents || []);
+        } catch {
+          if (!cancelled) setDocuments([]);
+        }
+      })();
+      return () => { cancelled = true; };
+    }
+    setDocuments([]);
+  }, [category, hotelBranchId, listingId]);
 
   useEffect(() => {
     if (!resolvedBus?.bus_id || !resolvedBus?.listing_id) {
@@ -327,11 +373,82 @@ export default function Verification() {
     }
   };
 
+  const handleValidateHotelBranchToken = async () => {
+    const token = hotelBranchTokenInput.trim();
+    if (!token) {
+      setMessage({ type: "error", text: "Paste your hotel branch verification token." });
+      return;
+    }
+    setValidating(true);
+    setMessage(null);
+    setResolvedHotelBranch(null);
+    try {
+      const data = await vendorFetch<ResolvedHotelBranch>(`/api/verification/resolve-hotel-branch-token?token=${encodeURIComponent(token)}`);
+      setResolvedHotelBranch(data);
+      setMessage({ type: "success", text: `Token valid for hotel branch "${data.name}". Upload documents and send request below.` });
+    } catch (err) {
+      setMessage({ type: "error", text: (err as Error).message });
+    } finally {
+      setValidating(false);
+    }
+  };
+
   const getDocByType = (type: string) => documents.find((d) => d.document_type === type);
 
   const handleFileChange = async (documentType: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !listingId) return;
+    if (!file) return;
+    if (category === "hotel_branch") {
+      if (!resolvedHotelBranch) return;
+      const isImage = file.type.startsWith("image/");
+      const isPdf = file.type === "application/pdf";
+      if (!isImage && !isPdf) {
+        setMessage({ type: "error", text: "Please upload an image (JPEG, PNG, etc.) or PDF (max 10MB)." });
+        return;
+      }
+      setMessage(null);
+      setUploadingType(documentType);
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const dataUrl = reader.result as string;
+        try {
+          const payload = isImage ? { image: dataUrl } : { file: dataUrl };
+          const { url } = await vendorFetch<{ url: string }>("/api/upload", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          await vendorFetch("/api/verification/hotel-branch-documents", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              hotel_branch_id: resolvedHotelBranch.hotel_branch_id,
+              listing_id: resolvedHotelBranch.listing_id,
+              document_type: documentType,
+              file_name: file.name,
+              file_url: url,
+            }),
+          });
+          const data = await vendorFetch<{ documents: Doc[] }>(
+            `/api/verification/hotel-branch-documents/${resolvedHotelBranch.hotel_branch_id}?listing_id=${encodeURIComponent(resolvedHotelBranch.listing_id)}`
+          );
+          setDocuments(data.documents || []);
+          setMessage({ type: "success", text: "Document uploaded." });
+        } catch (err) {
+          setMessage({ type: "error", text: (err as Error).message });
+        } finally {
+          setUploadingType(null);
+        }
+      };
+      reader.onerror = () => {
+        setMessage({ type: "error", text: "Failed to read file." });
+        setUploadingType(null);
+      };
+      reader.readAsDataURL(file);
+      e.target.value = "";
+      return;
+    }
+    if (!listingId) return;
     const isImage = file.type.startsWith("image/");
     const isPdf = file.type === "application/pdf";
     if (!isImage && !isPdf) {
@@ -378,17 +495,31 @@ export default function Verification() {
   };
 
   const handleSendRequest = async () => {
-    if (!canSendRequest || !tokenInput.trim()) return;
+    if (!canSendRequest) return;
     setSending(true);
     setMessage(null);
     try {
-      const data = await vendorFetch<{ message: string; verification_status: string }>("/api/verification/send-request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: tokenInput.trim() }),
-      });
-      setResolvedListing((prev) => (prev ? { ...prev, verification_status: "pending" } : null));
-      setMessage({ type: "success", text: data?.message ?? "Verification request sent. Admin will review and respond." });
+      if (category === "hotel_branch" && resolvedHotelBranch) {
+        const data = await vendorFetch<{ message: string; verification_status: string }>("/api/verification/send-hotel-branch-request", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            hotel_branch_id: resolvedHotelBranch.hotel_branch_id,
+            listing_id: resolvedHotelBranch.listing_id,
+          }),
+        });
+        setResolvedHotelBranch((prev) => (prev ? { ...prev, verification_status: "pending" } : null));
+        setMessage({ type: "success", text: data?.message ?? "Verification request sent. Admin will review and respond." });
+      } else {
+        if (category === "company" && !tokenInput.trim()) return;
+        const data = await vendorFetch<{ message: string; verification_status: string }>("/api/verification/send-request", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: tokenInput.trim() }),
+        });
+        setResolvedListing((prev) => (prev ? { ...prev, verification_status: "pending" } : null));
+        setMessage({ type: "success", text: data?.message ?? "Verification request sent. Admin will review and respond." });
+      }
     } catch (err) {
       setMessage({ type: "error", text: (err as Error).message });
     } finally {
@@ -638,6 +769,7 @@ export default function Verification() {
                 setCategory(c.id);
                 setMessage(null);
                 setResolvedListing(null);
+                setResolvedHotelBranch(null);
                 setResolvedBus(null);
                 setSelectedVehicleType(null);
               }}
@@ -676,6 +808,7 @@ export default function Verification() {
                 setSelectedType(t);
                 setTokenInput("");
                 setResolvedListing(null);
+                setResolvedHotelBranch(null);
                 setMessage(null);
               }}
               className={cn(
@@ -721,11 +854,57 @@ export default function Verification() {
         </div>
       )}
 
-      {resolvedListing && (
+      {selectedType && !resolvedForCompany && !validating && tokenInput.trim() && (
+        <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/30 p-4 text-amber-700 dark:text-amber-400">
+          <AlertCircle size={20} />
+          <span>Paste your token and click <strong>Validate token</strong> to continue.</span>
+        </div>
+      )}
+        </>
+      )}
+
+      {category === "hotel_branch" && (
+        <>
+          <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6 space-y-4">
+            <label className="block text-sm font-medium text-foreground">Paste verification token</label>
+            <p className="text-xs text-muted-foreground">
+              Generate a token in <strong>My Listings</strong> → open your hotel company → <strong>Your hotels</strong> → <strong>Verify</strong> → <strong>Generate token</strong>, then copy and paste it here.
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              <input
+                type="text"
+                placeholder="e.g. HBR-XXXX-XXXX"
+                className="flex-1 min-w-[200px] rounded-lg border border-border bg-background px-3 py-2 text-foreground font-mono placeholder:text-muted-foreground"
+                value={hotelBranchTokenInput}
+                onChange={(e) => {
+                  setHotelBranchTokenInput(e.target.value);
+                  setResolvedHotelBranch(null);
+                }}
+              />
+              <button
+                type="button"
+                disabled={validating || !hotelBranchTokenInput.trim()}
+                onClick={handleValidateHotelBranchToken}
+                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {validating ? "Validating…" : "Validate token"}
+              </button>
+            </div>
+          </div>
+          {!resolvedForCompany && !validating && hotelBranchTokenInput.trim() && (
+            <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/30 p-4 text-amber-700 dark:text-amber-400">
+              <AlertCircle size={20} />
+              <span>Click <strong>Validate token</strong> to continue.</span>
+            </div>
+          )}
+        </>
+      )}
+
+      {(category === "company" || category === "hotel_branch") && resolvedForCompany && (
         <>
           <div className="flex items-center gap-2 rounded-lg bg-muted/50 border border-border p-4">
             <CheckCircle size={20} className="text-success" />
-            <span className="text-sm font-medium">Verified for: <strong>{resolvedListing.name}</strong> ({typeLabel(resolvedListing.type)})</span>
+            <span className="text-sm font-medium">Verified for: <strong>{resolvedName}</strong> ({category === "hotel_branch" ? "Hotel Branch" : typeLabel(selectedType || "")})</span>
           </div>
 
           {/* Status: Make request (before sending), Pending, Approved, or Rejected */}
@@ -759,7 +938,7 @@ export default function Verification() {
               <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium text-foreground">
-                    {selectedType === "event" ? "Documents for this event" : "Documents for this company"}
+                    {category === "hotel_branch" ? "Documents for this hotel branch" : selectedType === "event" ? "Documents for this event" : selectedType === "hotel" ? "Documents for this hotel company" : "Documents for this company"}
                   </p>
                   <p className="text-sm font-semibold text-accent">{Math.round(progress)}%</p>
                 </div>
@@ -827,9 +1006,13 @@ export default function Verification() {
               {/* Send verification request */}
               <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6">
                 <p className="text-sm text-muted-foreground mb-4">
-                  {selectedType === "event"
-                    ? "Upload the event-related documents above (Government NOC, venue authorization, insurance, etc.), then send the verification request to admin. They will review and approve or reject."
-                    : "Upload the related documents for this company above, then send the verification request to admin. They will review and approve or reject."}
+                  {category === "hotel_branch"
+                    ? "Upload the hotel branch documents above (Local Trade License, Property Ownership, Fire Safety, Hotel Operating License), then send the verification request to admin. Once approved, this branch will be visible to users."
+                    : selectedType === "event"
+                      ? "Upload the event-related documents above (Government NOC, venue authorization, insurance, etc.), then send the verification request to admin. They will review and approve or reject."
+                      : selectedType === "hotel"
+                        ? "Upload the hotel company documents above (Business Registration, Trade License, Tax Proof, Bank Proof, Authorized Person ID), then send the verification request to admin. Once approved, you can add hotels from My Listings."
+                        : "Upload the related documents for this company above, then send the verification request to admin. They will review and approve or reject."}
                 </p>
                 <button
                   type="button"
@@ -843,15 +1026,6 @@ export default function Verification() {
               </div>
             </>
           )}
-        </>
-      )}
-
-      {selectedType && !resolvedListing && !validating && tokenInput.trim() && (
-        <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/30 p-4 text-amber-700 dark:text-amber-400">
-          <AlertCircle size={20} />
-          <span>Paste your token and click <strong>Validate token</strong> to continue.</span>
-        </div>
-      )}
         </>
       )}
 

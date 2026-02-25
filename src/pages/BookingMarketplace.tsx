@@ -314,6 +314,28 @@ const BookingMarketplace = () => {
   const [eventBookingId, setEventBookingId] = useState<string | null>(null);
   const [eventPaymentDone, setEventPaymentDone] = useState(false);
   const [eventPayLoading, setEventPayLoading] = useState(false);
+  // Hotel: city → list → select hotel → dates, guest details, requirements, docs → submit
+  type ApiHotelCard = { id: string; name: string; city: string | null; areaLocality: string | null; fullAddress: string | null; description: string | null; listingId: string; listingName: string };
+  type HotelRoomType = { name: string; maxOccupancy?: string; pricePerNight?: string; totalRooms?: string; amenities?: string; cancellationPolicy?: string };
+  type ApiHotelDetail = ApiHotelCard & { pincode: string | null; landmark: string | null; contactNumber: string | null; email: string | null; roomTypes: HotelRoomType[] };
+  const [hotelCity, setHotelCity] = useState("");
+  const [hotelList, setHotelList] = useState<ApiHotelCard[]>([]);
+  const [hotelLoading, setHotelLoading] = useState(false);
+  const [hotelError, setHotelError] = useState("");
+  const [hotelDetailOpen, setHotelDetailOpen] = useState(false);
+  const [selectedHotel, setSelectedHotel] = useState<ApiHotelDetail | null>(null);
+  const [hotelCheckIn, setHotelCheckIn] = useState("");
+  const [hotelNights, setHotelNights] = useState(1);
+  const [hotelGuestName, setHotelGuestName] = useState("");
+  const [hotelGuestPhone, setHotelGuestPhone] = useState("");
+  const [hotelGuestEmail, setHotelGuestEmail] = useState("");
+  const [hotelRequirements, setHotelRequirements] = useState("");
+  const [hotelDocUrls, setHotelDocUrls] = useState<{ label: string; url: string }[]>([]);
+  const [hotelSelectedRoomType, setHotelSelectedRoomType] = useState<HotelRoomType | null>(null);
+  const [hotelBookOpen, setHotelBookOpen] = useState(false);
+  const [hotelSubmitLoading, setHotelSubmitLoading] = useState(false);
+  const [hotelSubmitError, setHotelSubmitError] = useState("");
+  const [hotelBookingId, setHotelBookingId] = useState<string | null>(null);
   const { token } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -350,6 +372,15 @@ const BookingMarketplace = () => {
         setCarBookingOtp(data.otp ?? null);
       }
     }).catch(() => {});
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [token, location.state, location.pathname, navigate]);
+
+  // Restore hotel booking when navigating from My Trip with hotelBookingId in state
+  useEffect(() => {
+    const id = (location.state as { hotelBookingId?: string } | null)?.hotelBookingId;
+    if (!id || !token) return;
+    setHotelBookingId(id);
+    setSelectedCategory("hotel");
     navigate(location.pathname, { replace: true, state: {} });
   }, [token, location.state, location.pathname, navigate]);
 
@@ -859,6 +890,132 @@ const BookingMarketplace = () => {
         setBusList(data?.buses ?? []);
       })
       .finally(() => setBusLoading(false));
+  };
+
+  /** Map API hotel row (snake_case) to ApiHotelCard */
+  const mapHotelRow = (r: { id: string; name: string; city: string | null; area_locality: string | null; full_address: string | null; description: string | null; listing_id: string; listing_name: string }) => ({
+    id: r.id,
+    name: r.name,
+    city: r.city,
+    areaLocality: r.area_locality,
+    fullAddress: r.full_address,
+    description: r.description,
+    listingId: r.listing_id,
+    listingName: r.listing_name,
+  });
+
+  const runHotelSearch = () => {
+    const city = hotelCity.trim();
+    if (!city) {
+      setHotelError("Enter a city to search.");
+      return;
+    }
+    setHotelLoading(true);
+    setHotelError("");
+    apiFetch<{ hotels: { id: string; name: string; city: string | null; area_locality: string | null; full_address: string | null; description: string | null; listing_id: string; listing_name: string }[] }>(
+      `/api/hotels?city=${encodeURIComponent(city)}`
+    )
+      .then(({ data, error }) => {
+        if (error) {
+          setHotelList([]);
+          setHotelError(error);
+          return;
+        }
+        setHotelList((data?.hotels ?? []).map(mapHotelRow));
+      })
+      .finally(() => setHotelLoading(false));
+  };
+
+  const openHotelDetail = (hotel: ApiHotelCard) => {
+    setHotelError("");
+    apiFetch<{ id: string; name: string; city: string | null; area_locality: string | null; full_address: string | null; pincode: string | null; landmark: string | null; contact_number: string | null; email: string | null; description: string | null; listing_id: string; listing_name: string; extra_details?: { room_types?: HotelRoomType[] } }>(
+      `/api/hotels/${hotel.id}`,
+      {}
+    ).then(({ data, error }) => {
+      if (error || !data) {
+        setHotelError(error || "Could not load hotel details.");
+        return;
+      }
+      const extra = data.extra_details as { room_types?: HotelRoomType[] } | undefined;
+      const roomTypes = Array.isArray(extra?.room_types) ? extra.room_types : [];
+      setSelectedHotel({
+        ...mapHotelRow(data),
+        pincode: data.pincode ?? null,
+        landmark: data.landmark ?? null,
+        contactNumber: data.contact_number ?? null,
+        email: data.email ?? null,
+        roomTypes,
+      });
+      setHotelDetailOpen(true);
+    });
+  };
+
+  const openHotelBook = () => {
+    setHotelDetailOpen(false);
+    setHotelCheckIn(hotelCheckIn || dateToYYYYMMDD(new Date()));
+    setHotelSelectedRoomType(null);
+    setHotelBookOpen(true);
+  };
+
+  const addDays = (dateStr: string, days: number): string => {
+    const d = new Date(dateStr + "T12:00:00");
+    d.setDate(d.getDate() + days);
+    return dateToYYYYMMDD(d);
+  };
+
+  const submitHotelBooking = () => {
+    if (!selectedHotel || !token) return;
+    const checkIn = hotelCheckIn || dateToYYYYMMDD(new Date());
+    const checkOut = addDays(checkIn, hotelNights);
+    if (!hotelGuestName.trim()) {
+      setHotelSubmitError("Guest name is required.");
+      return;
+    }
+    const roomTypes = selectedHotel.roomTypes ?? [];
+    if (roomTypes.length > 0 && !hotelSelectedRoomType) {
+      setHotelSubmitError("Please select a room type.");
+      return;
+    }
+    const pricePerNight = hotelSelectedRoomType?.pricePerNight ? parseFloat(hotelSelectedRoomType.pricePerNight) : NaN;
+    const totalCents = !Number.isNaN(pricePerNight) && pricePerNight >= 0 ? Math.round(pricePerNight * hotelNights * 100) : undefined;
+    setHotelSubmitLoading(true);
+    setHotelSubmitError("");
+    apiFetch<{ id: string; bookingRef: string; status: string }>("/api/hotel-bookings", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: {
+        hotelBranchId: selectedHotel.id,
+        listingId: selectedHotel.listingId,
+        checkIn,
+        checkOut,
+        nights: hotelNights,
+        guestName: hotelGuestName.trim(),
+        guestPhone: hotelGuestPhone.trim() || null,
+        guestEmail: hotelGuestEmail.trim() || null,
+        requirementsText: hotelRequirements.trim() || null,
+        documentUrls: hotelDocUrls.filter((d) => d.label.trim() && d.url.trim()),
+        roomType: hotelSelectedRoomType?.name?.trim() || null,
+        totalCents: totalCents ?? null,
+      },
+    })
+      .then(({ data, error }) => {
+        if (error) {
+          setHotelSubmitError(error);
+          return;
+        }
+        if (data?.id) {
+          setHotelBookingId(data.id);
+          setHotelBookOpen(false);
+          setSelectedHotel(null);
+          setHotelSelectedRoomType(null);
+          setHotelGuestName("");
+          setHotelGuestPhone("");
+          setHotelGuestEmail("");
+          setHotelRequirements("");
+          setHotelDocUrls([]);
+        }
+      })
+      .finally(() => setHotelSubmitLoading(false));
   };
 
   const toggleSeat = (n: number) => {
@@ -1770,8 +1927,68 @@ const BookingMarketplace = () => {
             </div>
           )}
 
-          {/* Placeholder for other categories (train, hotel, bike) */}
-          {selectedCategory && selectedCategory !== "bus" && selectedCategory !== "car" && selectedCategory !== "flight" && selectedCategory !== "experience" && selectedCategory !== "events" && (
+          {/* Hotel: location → list → select hotel → dates, guest details, requirements → submit */}
+          {selectedCategory === "hotel" && (
+            <div className="space-y-6">
+              <div className="flex flex-wrap items-center gap-3">
+                <Label className="text-foreground font-medium">City / Location</Label>
+                <Input
+                  placeholder="e.g. Hyderabad"
+                  className="w-[200px] rounded-xl min-w-[160px]"
+                  value={hotelCity}
+                  onChange={(e) => setHotelCity(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), runHotelSearch())}
+                />
+                <Button type="button" onClick={runHotelSearch} disabled={hotelLoading} className="rounded-xl">
+                  {hotelLoading ? "Searching…" : "Search hotels"}
+                </Button>
+              </div>
+              {hotelError && <p className="text-sm text-destructive">{hotelError}</p>}
+              {hotelBookingId && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between flex-wrap gap-3">
+                  <p className="text-foreground font-medium">Request sent. The hotel will confirm and allot a room. There is no bill yet — you’ll see your bill and can pay once they approve.</p>
+                  <Button asChild className="rounded-xl bg-emerald-600 hover:bg-emerald-700">
+                    <Link to="/my-trip">Check status on My Trip</Link>
+                  </Button>
+                </div>
+              )}
+              {!hotelLoading && hotelList.length === 0 && hotelCity.trim() && (
+                <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-muted-foreground">
+                  <p>No verified hotels found in this city. Try another city or add hotels in VendorHub and get them verified.</p>
+                </div>
+              )}
+              {!hotelLoading && hotelList.length > 0 && (
+                <>
+                  <p className="text-sm text-muted-foreground">Select a hotel to view details and submit a booking request. The hotel will approve and allot a room.</p>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {hotelList.map((h) => (
+                      <div
+                        key={h.id}
+                        className="bg-white rounded-2xl border border-slate-200 p-4 text-left hover:border-amber-400 hover:shadow-md transition-all flex flex-col"
+                      >
+                        <button type="button" onClick={() => openHotelDetail(h)} className="text-left flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Hotel className="h-6 w-6 text-amber-600" />
+                            <h3 className="font-semibold text-foreground">{h.name}</h3>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{h.listingName}</p>
+                          {h.areaLocality && <p className="text-xs text-foreground mt-1 flex items-center gap-1"><MapPin size={12} /> {h.areaLocality}</p>}
+                          {h.city && <p className="text-xs text-foreground">{h.city}</p>}
+                          {h.description && <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{h.description}</p>}
+                        </button>
+                        <Button type="button" className="w-full rounded-xl mt-3 bg-amber-600 hover:bg-amber-700" onClick={() => openHotelDetail(h)}>
+                          View details & Book
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Placeholder for other categories (train, bike) */}
+          {selectedCategory && selectedCategory !== "bus" && selectedCategory !== "car" && selectedCategory !== "flight" && selectedCategory !== "experience" && selectedCategory !== "events" && selectedCategory !== "hotel" && (
             <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-muted-foreground">
               <p>{CATEGORIES.find((c) => c.id === selectedCategory)?.label} booking coming soon.</p>
               <p className="text-sm mt-2">Use the categories above or go back to My Trip.</p>
@@ -1842,6 +2059,146 @@ const BookingMarketplace = () => {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Hotel detail + proceed to book */}
+      <Sheet open={hotelDetailOpen} onOpenChange={(o) => !o && (setHotelDetailOpen(false), setSelectedHotel(null))}>
+        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto rounded-l-2xl">
+          <SheetHeader>
+            <SheetTitle className="text-lg font-semibold flex items-center gap-2">
+              <Hotel className="h-5 w-5 text-amber-600" /> Hotel details
+            </SheetTitle>
+          </SheetHeader>
+          {selectedHotel && (
+            <div className="mt-6 space-y-4">
+              <div>
+                <h3 className="font-semibold text-foreground">{selectedHotel.name}</h3>
+                <p className="text-sm text-muted-foreground">{selectedHotel.listingName}</p>
+                {selectedHotel.fullAddress && <p className="text-sm text-foreground mt-1 flex items-center gap-1"><MapPin size={12} /> {selectedHotel.fullAddress}</p>}
+                {selectedHotel.areaLocality && selectedHotel.fullAddress !== selectedHotel.areaLocality && <p className="text-xs text-muted-foreground">{selectedHotel.areaLocality}</p>}
+                {selectedHotel.city && <p className="text-xs text-foreground">{selectedHotel.city}</p>}
+                {selectedHotel.landmark && <p className="text-xs text-foreground">Landmark: {selectedHotel.landmark}</p>}
+                {selectedHotel.contactNumber && <p className="text-xs text-foreground">Contact: {selectedHotel.contactNumber}</p>}
+                {selectedHotel.email && <p className="text-xs text-foreground">Email: {selectedHotel.email}</p>}
+                {selectedHotel.description && <p className="text-sm text-muted-foreground mt-2">{selectedHotel.description}</p>}
+              </div>
+              <Button type="button" className="w-full rounded-xl bg-amber-600 hover:bg-amber-700" onClick={openHotelBook}>
+                Proceed to book (dates, guest details & requirements)
+              </Button>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Hotel book: dates, guest details, requirements, document links → submit */}
+      <Dialog open={hotelBookOpen} onOpenChange={(o) => !o && (setHotelBookOpen(false), setHotelSubmitError(""))}>
+        <DialogContent className="rounded-2xl max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Hotel className="h-5 w-5 text-amber-600" /> Hotel booking request</DialogTitle>
+            <DialogDescription>
+              {selectedHotel && <>Request a stay at {selectedHotel.name}. Enter dates, your details and any requirements. The hotel will approve and allot a room.</>}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedHotel && (
+            <div className="space-y-4 mt-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-foreground">Check-in date</Label>
+                  <Input type="date" className="rounded-xl mt-1" value={hotelCheckIn || dateToYYYYMMDD(new Date())} onChange={(e) => setHotelCheckIn(e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-foreground">Nights</Label>
+                  <Input type="number" min={1} max={90} className="rounded-xl mt-1" value={hotelNights} onChange={(e) => setHotelNights(Math.max(1, parseInt(e.target.value, 10) || 1))} />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">Check-out: {hotelCheckIn ? addDays(hotelCheckIn, hotelNights) : "—"}</p>
+              {/* Room type selection (from hotel's configured room types) */}
+              {(selectedHotel.roomTypes?.length ?? 0) > 0 ? (
+                <div>
+                  <Label className="text-foreground">Room type *</Label>
+                  <p className="text-xs text-muted-foreground mt-1">Select the type of room you want. Price is per night.</p>
+                  <div className="space-y-2 mt-2 max-h-48 overflow-y-auto">
+                    {selectedHotel.roomTypes.map((room) => {
+                      const price = room.pricePerNight ? parseFloat(room.pricePerNight) : NaN;
+                      const total = !Number.isNaN(price) && price >= 0 ? price * hotelNights : null;
+                      const isSelected = hotelSelectedRoomType?.name === room.name;
+                      return (
+                        <button
+                          key={room.name}
+                          type="button"
+                          onClick={() => setHotelSelectedRoomType(room)}
+                          className={`w-full text-left rounded-xl border p-3 transition-colors ${isSelected ? "border-amber-500 bg-amber-50 ring-1 ring-amber-500" : "border-slate-200 hover:border-slate-300 bg-white"}`}
+                        >
+                          <div className="flex justify-between items-start gap-2">
+                            <div>
+                              <p className="font-medium text-foreground">{room.name}</p>
+                              {room.maxOccupancy && <p className="text-xs text-muted-foreground">Max occupancy: {room.maxOccupancy}</p>}
+                              {room.amenities && <p className="text-xs text-muted-foreground mt-0.5">{room.amenities}</p>}
+                            </div>
+                            <div className="shrink-0 text-right">
+                              {!Number.isNaN(price) && price >= 0 && (
+                                <>
+                                  <p className="text-sm font-medium text-foreground">₹{price.toLocaleString("en-IN")}/night</p>
+                                  {total != null && <p className="text-xs text-muted-foreground">₹{total.toLocaleString("en-IN")} for {hotelNights} night(s)</p>}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {hotelSelectedRoomType && hotelSelectedRoomType.pricePerNight && (
+                    <p className="text-sm font-medium text-foreground mt-2">
+                      Total: ₹{(parseFloat(hotelSelectedRoomType.pricePerNight) * hotelNights).toLocaleString("en-IN")} for {hotelNights} night(s)
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No room types added by this hotel yet. You can still send a request and the hotel will confirm.</p>
+              )}
+              <div>
+                <Label className="text-foreground">Guest name *</Label>
+                <Input className="rounded-xl mt-1" placeholder="Full name" value={hotelGuestName} onChange={(e) => setHotelGuestName(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-foreground">Phone</Label>
+                <Input className="rounded-xl mt-1" placeholder="Contact number" value={hotelGuestPhone} onChange={(e) => setHotelGuestPhone(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-foreground">Email</Label>
+                <Input type="email" className="rounded-xl mt-1" placeholder="Email" value={hotelGuestEmail} onChange={(e) => setHotelGuestEmail(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-foreground">Requirements / special requests</Label>
+                <textarea className="w-full min-h-[80px] rounded-xl border border-input bg-background px-3 py-2 text-sm mt-1 resize-y" placeholder="e.g. early check-in, accessibility, diet" value={hotelRequirements} onChange={(e) => setHotelRequirements(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-foreground flex items-center gap-1"><FileText className="h-4 w-4" /> Document links (if hotel asked for ID, etc.)</Label>
+                <p className="text-xs text-muted-foreground mt-1">Add label and URL for each document (e.g. upload elsewhere and paste link).</p>
+                <div className="space-y-2 mt-2">
+                  {hotelDocUrls.map((d, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <Input className="rounded-xl flex-1" placeholder="Label" value={d.label} onChange={(e) => setHotelDocUrls((prev) => prev.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} />
+                      <Input className="rounded-xl flex-1" placeholder="URL" value={d.url} onChange={(e) => setHotelDocUrls((prev) => prev.map((x, j) => j === i ? { ...x, url: e.target.value } : x))} />
+                      <Button type="button" variant="ghost" size="sm" className="shrink-0" onClick={() => setHotelDocUrls((prev) => prev.filter((_, j) => j !== i))}>Remove</Button>
+                    </div>
+                  ))}
+                  <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => setHotelDocUrls((prev) => [...prev, { label: "", url: "" }])}>
+                    <Upload className="h-4 w-4 mr-1" /> Add document link
+                  </Button>
+                </div>
+              </div>
+              {hotelSubmitError && <p className="text-sm text-destructive">{hotelSubmitError}</p>}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setHotelBookOpen(false)} className="rounded-xl">Cancel</Button>
+                <Button type="button" className="rounded-xl bg-amber-600 hover:bg-amber-700" onClick={submitHotelBooking} disabled={hotelSubmitLoading || !token}>
+                  {!token ? "Sign in to send request" : hotelSubmitLoading ? "Sending…" : "Send booking request"}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Event detail + ticket selection */}
       <Sheet open={eventDetailOpen} onOpenChange={(o) => !o && (setEventDetailOpen(false), setSelectedEvent(null), setEventTicketSelections({}))}>

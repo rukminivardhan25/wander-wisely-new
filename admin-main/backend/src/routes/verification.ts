@@ -580,4 +580,139 @@ router.post("/flight/:id/reject", async (req: Request, res: Response): Promise<v
   }
 });
 
+// ----- Hotel Branch verification -----
+
+/** List hotel branches awaiting verification (have a token; status no_request or pending). */
+router.get("/pending-hotel-branches", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await query<{
+      id: string;
+      name: string;
+      city: string | null;
+      listing_id: string;
+      listing_name: string;
+      verification_token: string | null;
+      verification_status: string | null;
+      updated_at: string;
+    }>(
+      `SELECT hb.id, hb.name, hb.city, hb.listing_id, hb.verification_token, hb.verification_status, hb.updated_at,
+        l.name AS listing_name
+       FROM hotel_branches hb
+       JOIN listings l ON l.id = hb.listing_id
+       WHERE hb.verification_token IS NOT NULL
+         AND (hb.verification_status IS NULL OR hb.verification_status IN ('no_request', 'pending'))
+       ORDER BY hb.updated_at DESC NULLS LAST`
+    );
+    res.json({ branches: result.rows });
+  } catch (err) {
+    console.error("Verification pending hotel branches error:", err);
+    const e = err as { code?: string };
+    if (e.code === "42P01") {
+      res.json({ branches: [] });
+      return;
+    }
+    res.status(500).json({ error: "Failed to fetch pending hotel branches" });
+  }
+});
+
+/** Get one hotel branch detail for admin (branch + listing + vendor + documents). */
+router.get("/hotel-branch/:id", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const branch = await query<{
+      id: string;
+      name: string;
+      city: string | null;
+      full_address: string | null;
+      listing_id: string;
+      verification_token: string | null;
+      verification_status: string | null;
+      updated_at: string;
+      listing_name: string | null;
+      vendor_name: string | null;
+      vendor_email: string | null;
+    }>(
+      `SELECT hb.id, hb.name, hb.city, hb.full_address, hb.listing_id, hb.verification_token, hb.verification_status, hb.updated_at,
+        l.name AS listing_name, v.name AS vendor_name, v.email AS vendor_email
+       FROM hotel_branches hb
+       JOIN listings l ON l.id = hb.listing_id
+       LEFT JOIN vendors v ON v.id = l.vendor_id
+       WHERE hb.id = $1`,
+      [id]
+    );
+    if (branch.rows.length === 0) {
+      res.status(404).json({ error: "Hotel branch not found" });
+      return;
+    }
+    const row = branch.rows[0];
+    let documents: { document_type: string; file_name: string; file_url: string }[] = [];
+    try {
+      const docRows = await query<{ document_type: string; file_name: string; file_url: string }>(
+        "SELECT document_type, file_name, file_url FROM verification_hotel_branch_documents WHERE hotel_branch_id = $1 ORDER BY created_at",
+        [id]
+      );
+      const adminBase = process.env.ADMIN_API_BASE_URL ?? `http://localhost:${process.env.PORT ?? 3003}`;
+      const base = adminBase.replace(/\/$/, "");
+      const docTypeLabel: Record<string, string> = {
+        local_trade_license: "Local Trade License",
+        property_ownership: "Property Ownership / Rental Agreement",
+        fire_safety: "Fire Safety Certificate",
+        hotel_operating_license: "Hotel Operating License",
+      };
+      documents = docRows.rows.map((d) => {
+        const filename = (d.file_url || "").split("/").filter(Boolean).pop() || d.file_url;
+        const url = `${base}/api/verification/uploads/${filename}`;
+        return {
+          document_type: docTypeLabel[d.document_type] || d.document_type,
+          file_name: d.file_name,
+          file_url: url,
+        };
+      });
+    } catch {
+      // verification_hotel_branch_documents may not exist
+    }
+    res.json({
+      id: row.id,
+      name: row.name,
+      city: row.city,
+      full_address: row.full_address,
+      listingId: row.listing_id,
+      listingName: row.listing_name,
+      verification_token: row.verification_token,
+      verification_status: row.verification_status,
+      updated_at: row.updated_at,
+      ownerName: row.vendor_name || null,
+      ownerEmail: row.vendor_email || null,
+      documents,
+    });
+  } catch (err) {
+    console.error("Verification hotel branch detail error:", err);
+    res.status(500).json({ error: "Failed to fetch hotel branch" });
+  }
+});
+
+/** Approve a hotel branch */
+router.post("/hotel-branch/:id/approve", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    await query("UPDATE hotel_branches SET verification_status = 'approved' WHERE id = $1", [id]);
+    res.json({ message: "Approved", verification_status: "approved" });
+  } catch (err) {
+    console.error("Verification hotel branch approve error:", err);
+    res.status(500).json({ error: "Failed to approve" });
+  }
+});
+
+/** Reject a hotel branch */
+router.post("/hotel-branch/:id/reject", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    await query("UPDATE hotel_branches SET verification_status = 'rejected' WHERE id = $1", [id]);
+    res.json({ message: "Rejected", verification_status: "rejected" });
+  } catch (err) {
+    console.error("Verification hotel branch reject error:", err);
+    res.status(500).json({ error: "Failed to reject" });
+  }
+});
+
 export default router;

@@ -15,8 +15,8 @@ import experiencesRoutes from "./routes/experiences.js";
 import experienceBookingsRoutes from "./routes/experienceBookings.js";
 import eventsRoutes from "./routes/events.js";
 import eventBookingsRoutes from "./routes/eventBookings.js";
-import eventsRoutes from "./routes/events.js";
-import eventBookingsRoutes from "./routes/eventBookings.js";
+import hotelsRoutes from "./routes/hotels.js";
+import hotelBookingsRoutes from "./routes/hotelBookings.js";
 
 /** Log DATABASE_URL (password redacted) so you can confirm main app and vendor hub use the same DB. */
 function logDbUrl(label: string, url: string): void {
@@ -66,8 +66,8 @@ app.use("/api/experiences", experiencesRoutes);
 app.use("/api/experience-bookings", experienceBookingsRoutes);
 app.use("/api/events", eventsRoutes);
 app.use("/api/event-bookings", eventBookingsRoutes);
-app.use("/api/events", eventsRoutes);
-app.use("/api/event-bookings", eventBookingsRoutes);
+app.use("/api/hotels", hotelsRoutes);
+app.use("/api/hotel-bookings", hotelBookingsRoutes);
 
 app.listen(PORT, () => {
   const dbUrl = process.env.DATABASE_URL ?? "";

@@ -1467,15 +1467,363 @@ function RestaurantBookingsSection() {
   );
 }
 
-function HotelBookingsSection() {
+/** Hotel booking row from GET /api/listings/:listingId/hotel-bookings */
+type HotelBookingRow = {
+  id: string;
+  bookingRef: string;
+  userId: string;
+  hotelBranchId: string;
+  branchName?: string;
+  checkIn: string;
+  checkOut: string;
+  nights: number;
+  guestName: string;
+  guestPhone?: string;
+  guestEmail?: string;
+  requirementsText?: string;
+  documentUrls: { label?: string; url?: string }[] | string[];
+  status: string;
+  roomType?: string;
+  roomNumber?: string;
+  totalCents?: number;
+  createdAt: string;
+};
+
+function HotelBookingsSection({ dateFilter }: { dateFilter: string }) {
+  const [listings, setListings] = useState<{ id: string; name: string; type: string }[]>([]);
+  const [bookingsByListing, setBookingsByListing] = useState<Record<string, { listingName: string; bookings: HotelBookingRow[] }>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState<(HotelBookingRow & { listingId: string; listingName: string }) | null>(null);
+  const [approveOpen, setApproveOpen] = useState(false);
+  const [approveRoomNumber, setApproveRoomNumber] = useState("");
+  const [approveVendorNotes, setApproveVendorNotes] = useState("");
+  const [approveLoading, setApproveLoading] = useState(false);
+  const [approveError, setApproveError] = useState("");
+  const [rejectLoading, setRejectLoading] = useState(false);
+
+  const loadHotelBookings = useCallback(() => {
+    setLoading(true);
+    setError("");
+    vendorFetch<{ listings: { id: string; name: string; type: string }[] }>("/api/listings")
+      .then((data) => {
+        const hotelListings = (data.listings ?? []).filter((l) => (l.type || "").toLowerCase() === "hotel");
+        setListings(hotelListings);
+        if (hotelListings.length === 0) {
+          setBookingsByListing({});
+          return;
+        }
+        return Promise.all(
+          hotelListings.map((listing) =>
+            vendorFetch<{ bookings: HotelBookingRow[] }>(`/api/listings/${listing.id}/hotel-bookings`)
+              .then((res) => ({ listing, bookings: res.bookings ?? [] }))
+              .catch(() => ({ listing, bookings: [] as HotelBookingRow[] }))
+          )
+        );
+      })
+      .then((results) => {
+        if (!results) return;
+        const byListing: Record<string, { listingName: string; bookings: HotelBookingRow[] }> = {};
+        results.forEach((r: { listing: { id: string; name: string }; bookings: HotelBookingRow[] }) => {
+          byListing[r.listing.id] = { listingName: r.listing.name, bookings: r.bookings };
+        });
+        setBookingsByListing(byListing);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load hotel bookings"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    loadHotelBookings();
+  }, [loadHotelBookings]);
+
+  const allHotelBookingsRaw = Object.entries(bookingsByListing).flatMap(([listingId, { listingName, bookings }]) =>
+    bookings.map((b) => ({ listingId, listingName, ...b }))
+  );
+  // Filter by date: show bookings where the selected date falls within stay (check-in <= date <= check-out)
+  const allHotelBookings = dateFilter
+    ? allHotelBookingsRaw.filter((b) => b.checkIn <= dateFilter && b.checkOut >= dateFilter)
+    : allHotelBookingsRaw;
+  const pendingCount = allHotelBookings.filter((b) => b.status === "pending_vendor").length;
+
+  const openDetail = (b: HotelBookingRow & { listingId: string; listingName: string }) => {
+    setSelectedBooking(b);
+    setDetailOpen(true);
+  };
+
+  const openApprove = () => {
+    if (!selectedBooking) return;
+    setApproveRoomNumber(selectedBooking.roomNumber ?? "");
+    setApproveVendorNotes("");
+    setApproveError("");
+    setApproveOpen(true);
+  };
+
+  const handleApprove = async () => {
+    if (!selectedBooking || !approveRoomNumber.trim()) {
+      setApproveError("Room number is required.");
+      return;
+    }
+    setApproveLoading(true);
+    setApproveError("");
+    try {
+      await vendorFetch(`/api/listings/${selectedBooking.listingId}/hotel-bookings/${selectedBooking.id}/approve`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomNumber: approveRoomNumber.trim(),
+          vendorNotes: approveVendorNotes.trim() || undefined,
+        }),
+      });
+      setApproveOpen(false);
+      setDetailOpen(false);
+      setSelectedBooking(null);
+      loadHotelBookings();
+    } catch (err) {
+      setApproveError(err instanceof Error ? err.message : "Failed to approve");
+    } finally {
+      setApproveLoading(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!selectedBooking) return;
+    if (!confirm("Reject this booking request? The guest will see the booking as rejected.")) return;
+    setRejectLoading(true);
+    try {
+      await vendorFetch(`/api/listings/${selectedBooking.listingId}/hotel-bookings/${selectedBooking.id}/reject`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      setDetailOpen(false);
+      setSelectedBooking(null);
+      loadHotelBookings();
+    } catch {
+      // ignore
+    } finally {
+      setRejectLoading(false);
+    }
+  };
+
+  const docUrls = (b: HotelBookingRow): { label?: string; url?: string }[] => {
+    const d = b.documentUrls;
+    if (Array.isArray(d) && d.length > 0 && typeof d[0] === "object" && d[0] !== null) return d as { label?: string; url?: string }[];
+    return [];
+  };
+
+  if (loading) {
+    return (
+      <Card className="rounded-2xl border border-slate-200/80 shadow-sm">
+        <CardContent className="p-8 text-center">
+          <p className="text-sm text-muted-foreground">Loading hotel bookings…</p>
+        </CardContent>
+      </Card>
+    );
+  }
+  if (error) {
+    return (
+      <Card className="rounded-2xl border border-slate-200/80 shadow-sm">
+        <CardContent className="p-8 text-center">
+          <p className="text-sm text-destructive">{error}</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <Card className="rounded-2xl border border-slate-200/80 shadow-sm">
-      <CardContent className="p-12 text-center">
-        <Hotel className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-        <p className="font-medium text-foreground">Hotel bookings</p>
-        <p className="text-sm text-muted-foreground mt-1">Coming soon.</p>
-      </CardContent>
-    </Card>
+    <>
+      <div className="space-y-6">
+        <Card className="rounded-2xl border border-slate-200/80 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-display font-semibold flex items-center gap-2">
+              <Hotel className="h-5 w-5 text-amber-600" />
+              Hotel booking requests
+            </CardTitle>
+            <p className="text-sm text-muted-foreground font-normal">
+              {dateFilter
+                ? `Bookings for ${new Date(dateFilter + "T12:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} (stays that include this date). `
+                : ""}
+              {listings.length === 0
+                ? "Add a hotel listing and get it verified to receive bookings."
+                : pendingCount > 0
+                  ? `${pendingCount} pending request(s). Allot room number to approve — the guest already saw the price when they selected the room.`
+                  : "View requests below. Approve with room number so the guest gets their receipt."}
+            </p>
+          </CardHeader>
+          <CardContent>
+            {listings.length === 0 ? (
+              <p className="text-sm text-muted-foreground">You have no hotel listings. Add one from My Listings → Hotel.</p>
+            ) : allHotelBookings.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No hotel booking requests yet.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-9">Details</TableHead>
+                    <TableHead>Ref</TableHead>
+                    <TableHead>Hotel / Branch</TableHead>
+                    <TableHead>Guest</TableHead>
+                    <TableHead>Check-in</TableHead>
+                    <TableHead>Nights</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Room / Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {allHotelBookings.map((b) => (
+                    <TableRow key={b.id}>
+                      <TableCell className="w-9 p-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 rounded-lg text-slate-600 hover:bg-slate-100"
+                          title="View details"
+                          onClick={() => openDetail(b)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{b.bookingRef}</TableCell>
+                      <TableCell>
+                        <span className="font-medium">{b.listingName}</span>
+                        {b.branchName && <span className="text-muted-foreground text-xs block">{b.branchName}</span>}
+                      </TableCell>
+                      <TableCell>{b.guestName}</TableCell>
+                      <TableCell>{b.checkIn}</TableCell>
+                      <TableCell>{b.nights}</TableCell>
+                      <TableCell>
+                        <span
+                          className={cn(
+                            b.status === "pending_vendor" && "text-amber-600 font-medium",
+                            b.status === "approved" && "text-emerald-600",
+                            b.status === "rejected" && "text-red-600"
+                          )}
+                        >
+                          {b.status === "pending_vendor" ? "Pending" : b.status === "approved" ? "Approved" : "Rejected"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        {b.roomNumber && <span className="font-mono">{b.roomNumber}</span>}
+                        {b.roomNumber && b.totalCents != null && " · "}
+                        {b.totalCents != null && `₹${(b.totalCents / 100).toFixed(0)}`}
+                        {!b.roomNumber && !b.totalCents && "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Detail sheet */}
+      <Sheet open={detailOpen} onOpenChange={(o) => !o && (setDetailOpen(false), setSelectedBooking(null))}>
+        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto rounded-l-2xl">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <Hotel className="h-5 w-5 text-amber-600" /> Hotel booking
+            </SheetTitle>
+          </SheetHeader>
+          {selectedBooking && (
+            <div className="mt-6 space-y-4">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Booking ref</p>
+                <p className="font-mono font-semibold text-foreground mt-0.5">{selectedBooking.bookingRef}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Listing / Branch</p>
+                <p className="text-foreground mt-0.5">{selectedBooking.listingName}</p>
+                {selectedBooking.branchName && <p className="text-sm text-muted-foreground">{selectedBooking.branchName}</p>}
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Guest</p>
+                <p className="text-foreground mt-0.5">{selectedBooking.guestName}</p>
+                {selectedBooking.guestPhone && <p className="text-sm text-muted-foreground">{selectedBooking.guestPhone}</p>}
+                {selectedBooking.guestEmail && <p className="text-sm text-muted-foreground">{selectedBooking.guestEmail}</p>}
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Stay</p>
+                <p className="text-foreground mt-0.5">{selectedBooking.checkIn} → {selectedBooking.checkOut} ({selectedBooking.nights} night(s))</p>
+                {selectedBooking.roomType && <p className="text-sm text-foreground mt-0.5">Room type requested: <strong>{selectedBooking.roomType}</strong></p>}
+              </div>
+              {selectedBooking.requirementsText && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Requirements</p>
+                  <p className="text-sm text-foreground mt-0.5">{selectedBooking.requirementsText}</p>
+                </div>
+              )}
+              {docUrls(selectedBooking).length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Documents</p>
+                  <ul className="text-sm mt-0.5 space-y-0.5">
+                    {docUrls(selectedBooking).map((d, i) => (
+                      <li key={i}>
+                        {d.label && <span>{d.label}: </span>}
+                        {d.url ? <a href={d.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">{d.url}</a> : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</p>
+                <p className={cn(
+                  "mt-0.5 font-medium",
+                  selectedBooking.status === "pending_vendor" && "text-amber-600",
+                  selectedBooking.status === "approved" && "text-emerald-600",
+                  selectedBooking.status === "rejected" && "text-red-600"
+                )}>
+                  {selectedBooking.status === "pending_vendor" ? "Pending" : selectedBooking.status === "approved" ? "Approved" : "Rejected"}
+                </p>
+                {selectedBooking.roomNumber && <p className="text-sm text-foreground mt-1">Room: {selectedBooking.roomNumber}</p>}
+                {selectedBooking.totalCents != null && <p className="text-sm text-foreground">Total: ₹{(selectedBooking.totalCents / 100).toFixed(2)}</p>}
+              </div>
+              {selectedBooking.status === "pending_vendor" && (
+                <div className="flex gap-2 pt-2 border-t border-slate-200">
+                  <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={handleReject} disabled={rejectLoading}>
+                    {rejectLoading ? "Rejecting…" : "Reject"}
+                  </Button>
+                  <Button type="button" className="rounded-xl bg-amber-600 hover:bg-amber-700" onClick={openApprove}>
+                    Allot room & approve
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Approve dialog: room number, total, notes */}
+      <Dialog open={approveOpen} onOpenChange={(o) => !o && (setApproveOpen(false), setApproveError(""))}>
+        <DialogContent className="rounded-2xl max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Allot room & approve</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">The guest already saw the price when they selected the room type. Enter the allotted room number; they will see it on their receipt and can pay at check-in.</p>
+          <div className="space-y-3 mt-4">
+            <div>
+              <label className="text-sm font-medium text-foreground">Room number *</label>
+              <Input className="rounded-xl mt-1" value={approveRoomNumber} onChange={(e) => setApproveRoomNumber(e.target.value)} placeholder="e.g. 101" />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground">Message to guest (optional)</label>
+              <Input className="rounded-xl mt-1" value={approveVendorNotes} onChange={(e) => setApproveVendorNotes(e.target.value)} placeholder="e.g. Early check-in arranged" />
+            </div>
+          </div>
+          {approveError && <p className="text-sm text-destructive">{approveError}</p>}
+          <DialogFooter className="mt-4">
+            <Button type="button" variant="outline" onClick={() => setApproveOpen(false)} className="rounded-xl">Cancel</Button>
+            <Button type="button" className="rounded-xl bg-amber-600 hover:bg-amber-700" onClick={handleApprove} disabled={approveLoading}>
+              {approveLoading ? "Saving…" : "Approve & send room number"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -3082,7 +3430,7 @@ export default function Bookings() {
           <RestaurantBookingsSection />
         </TabsContent>
         <TabsContent value="hotel" className="mt-6">
-          <HotelBookingsSection />
+          <HotelBookingsSection dateFilter={dateFilter} />
         </TabsContent>
         <TabsContent value="experience" className="mt-6">
           <ExperienceBookingsSection dateFilter={dateFilter} />

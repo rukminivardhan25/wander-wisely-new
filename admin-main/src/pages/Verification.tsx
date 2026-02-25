@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Building2, Bus, Car, Plane, ChevronDown, ShieldCheck, Check, X, Eye, FileText, User, MapPin } from "lucide-react";
+import { Building2, Bus, Car, Plane, ChevronDown, ShieldCheck, Check, X, Eye, FileText, User, MapPin, Bed } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { adminFetch } from "@/lib/api";
 
 const CATEGORIES = [
   { id: "company", label: "Company", icon: Building2 },
   { id: "vehicles", label: "Vehicles", icon: Bus },
+  { id: "hotel_branch", label: "Hotel Branch", icon: Bed },
 ] as const;
 
 const COMPANY_TYPES = [
@@ -83,6 +84,19 @@ type FlightRequestRow = {
   documents?: { document_type: string; file_name: string; file_url: string }[];
 };
 
+type HotelBranchRequestRow = {
+  id: string;
+  name: string;
+  city: string | null;
+  listingName: string;
+  token: string;
+  requestedAt: string;
+  status: string;
+  ownerName?: string;
+  ownerEmail?: string;
+  documents?: { document_type: string; file_name: string; file_url: string }[];
+};
+
 function formatRequestedAt(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" });
@@ -111,6 +125,9 @@ export function Verification() {
   const [flightRequests, setFlightRequests] = useState<FlightRequestRow[]>([]);
   const [viewFlightRequest, setViewFlightRequest] = useState<FlightRequestRow | null>(null);
   const [flightRequestDetail, setFlightRequestDetail] = useState<FlightRequestRow | null>(null);
+  const [hotelBranchRequests, setHotelBranchRequests] = useState<HotelBranchRequestRow[]>([]);
+  const [viewHotelBranchRequest, setViewHotelBranchRequest] = useState<HotelBranchRequestRow | null>(null);
+  const [hotelBranchRequestDetail, setHotelBranchRequestDetail] = useState<HotelBranchRequestRow | null>(null);
 
   const fetchPending = async () => {
     setLoading(true);
@@ -191,6 +208,30 @@ export function Verification() {
         setBusRequests([]);
         setCarRequests([]);
         setFlightRequests([]);
+      } else if (category === "hotel_branch") {
+        setBusRequests([]);
+        setCarRequests([]);
+        setFlightRequests([]);
+        try {
+          const data = await adminFetch<{ branches: { id: string; name: string; city: string | null; listing_name: string; verification_token: string | null; verification_status: string | null; updated_at: string }[] }>(
+            "/api/verification/pending-hotel-branches"
+          );
+          setHotelBranchRequests(
+            (data.branches || []).map((b) => ({
+              id: b.id,
+              name: b.name,
+              city: b.city,
+              listingName: b.listing_name || "—",
+              token: b.verification_token || "—",
+              requestedAt: formatRequestedAt(b.updated_at),
+              status: b.verification_status || "Pending",
+            }))
+          );
+        } catch {
+          setHotelBranchRequests([]);
+        }
+      } else {
+        setHotelBranchRequests([]);
       }
     } catch {
       if (category === "company") setRequests([]);
@@ -198,6 +239,7 @@ export function Verification() {
         setBusRequests([]);
         if (vehicleType === "Flights") setFlightRequests([]);
       }
+      if (category === "hotel_branch") setHotelBranchRequests([]);
     } finally {
       setLoading(false);
     }
@@ -336,6 +378,28 @@ export function Verification() {
     }
   };
 
+  const handleApproveHotelBranch = async (id: string) => {
+    setActionLoading(id);
+    try {
+      await adminFetch(`/api/verification/hotel-branch/${id}/approve`, { method: "POST" });
+      await fetchPending();
+      if (viewHotelBranchRequest?.id === id) setViewHotelBranchRequest(null);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRejectHotelBranch = async (id: string) => {
+    setActionLoading(id);
+    try {
+      await adminFetch(`/api/verification/hotel-branch/${id}/reject`, { method: "POST" });
+      await fetchPending();
+      if (viewHotelBranchRequest?.id === id) setViewHotelBranchRequest(null);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   useEffect(() => {
     if (!viewBusRequest || category !== "vehicles") {
       setBusRequestDetail(null);
@@ -458,11 +522,49 @@ export function Verification() {
     };
   }, [viewFlightRequest?.id, category]);
 
+  useEffect(() => {
+    if (!viewHotelBranchRequest || category !== "hotel_branch") {
+      setHotelBranchRequestDetail(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const detail = await adminFetch<{
+          id: string;
+          name: string;
+          city: string | null;
+          full_address: string | null;
+          listingName: string | null;
+          ownerName: string | null;
+          ownerEmail: string | null;
+          updated_at: string;
+          documents?: { document_type: string; file_name: string; file_url: string }[];
+        }>(`/api/verification/hotel-branch/${viewHotelBranchRequest.id}`);
+        if (!cancelled) {
+          setHotelBranchRequestDetail({
+            ...viewHotelBranchRequest,
+            ownerName: detail.ownerName ?? undefined,
+            ownerEmail: detail.ownerEmail ?? undefined,
+            requestedAt: formatRequestedAt(detail.updated_at),
+            documents: detail.documents ?? [],
+          });
+        }
+      } catch {
+        if (!cancelled) setHotelBranchRequestDetail({ ...viewHotelBranchRequest });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [viewHotelBranchRequest?.id, category]);
+
   const filteredRequests = category === "company" ? requests : [];
   const displayDetail = listingDetail ?? viewRequest;
   const displayBusDetail = busRequestDetail ?? viewBusRequest;
   const displayCarDetail = carRequestDetail ?? viewCarRequest;
   const displayFlightDetail = flightRequestDetail ?? viewFlightRequest;
+  const displayHotelBranchDetail = hotelBranchRequestDetail ?? viewHotelBranchRequest;
 
   return (
     <div className="space-y-6">
@@ -615,13 +717,16 @@ export function Verification() {
       <div className="bg-card rounded-2xl border border-forest-200 overflow-hidden shadow-card">
         <div className="px-6 py-4 border-b border-forest-200 flex items-center justify-between">
           <h2 className="font-semibold text-foreground">
-            {category === "company" ? "Company requests" : category === "vehicles" ? (vehicleType ? `${vehicleType} requests` : "Vehicle requests") : ""}
+            {category === "company" ? "Company requests" : category === "vehicles" ? (vehicleType ? `${vehicleType} requests` : "Vehicle requests") : category === "hotel_branch" ? "Hotel Branch requests" : ""}
           </h2>
           {category === "company" && companyType && (
             <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-forest-100 text-forest-700">{companyType}</span>
           )}
           {category === "vehicles" && vehicleType && (
             <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-forest-100 text-forest-700">{vehicleType}</span>
+          )}
+          {category === "hotel_branch" && (
+            <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-forest-100 text-forest-700">Hotel Branch</span>
           )}
         </div>
 
@@ -687,6 +792,86 @@ export function Verification() {
                           <button
                             type="button"
                             onClick={() => handleReject(req.id)}
+                            disabled={!!actionLoading}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-forest-300 text-forest-700 text-xs font-medium hover:bg-forest-100 disabled:opacity-60 transition-colors"
+                          >
+                            <X size={14} />
+                            Reject
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {category === "hotel_branch" && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-forest-200 bg-forest-50/50">
+                  <th className="text-left px-6 py-3 font-medium text-muted-foreground">Branch / Name</th>
+                  <th className="text-left px-6 py-3 font-medium text-muted-foreground">City</th>
+                  <th className="text-left px-6 py-3 font-medium text-muted-foreground">Company (listing)</th>
+                  <th className="text-left px-6 py-3 font-medium text-muted-foreground">Token</th>
+                  <th className="text-left px-6 py-3 font-medium text-muted-foreground">Requested</th>
+                  <th className="text-left px-6 py-3 font-medium text-muted-foreground">Status</th>
+                  <th className="text-right px-6 py-3 font-medium text-muted-foreground">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">
+                      Loading…
+                    </td>
+                  </tr>
+                ) : hotelBranchRequests.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">
+                      No requests match the selected filters.
+                    </td>
+                  </tr>
+                ) : (
+                  hotelBranchRequests.map((req) => (
+                    <tr key={req.id} className="border-b border-forest-200/70 hover:bg-forest-50/30 transition-colors">
+                      <td className="px-6 py-3.5 font-medium text-foreground">{req.name}</td>
+                      <td className="px-6 py-3.5 text-foreground">{req.city ?? "—"}</td>
+                      <td className="px-6 py-3.5 text-muted-foreground">{req.listingName}</td>
+                      <td className="px-6 py-3.5 font-mono text-xs text-muted-foreground">{req.token}</td>
+                      <td className="px-6 py-3.5 text-muted-foreground">{req.requestedAt}</td>
+                      <td className="px-6 py-3.5">
+                        <span className="inline-flex items-center gap-1.5 text-amber-700 bg-amber-100 px-2.5 py-1 rounded-full text-xs font-medium">
+                          <ShieldCheck size={12} />
+                          {req.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setViewHotelBranchRequest(req)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-forest-300 text-forest-700 text-xs font-medium hover:bg-forest-100 transition-colors"
+                            title="View details & documents"
+                          >
+                            <Eye size={14} />
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleApproveHotelBranch(req.id)}
+                            disabled={!!actionLoading}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-forest-600 text-white text-xs font-medium hover:bg-forest-700 disabled:opacity-60 transition-colors"
+                          >
+                            <Check size={14} />
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRejectHotelBranch(req.id)}
                             disabled={!!actionLoading}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-forest-300 text-forest-700 text-xs font-medium hover:bg-forest-100 disabled:opacity-60 transition-colors"
                           >
@@ -1367,6 +1552,85 @@ export function Verification() {
                 <Check size={16} /> Approve
               </button>
               <button type="button" onClick={() => viewFlightRequest && handleRejectFlight(viewFlightRequest.id)} disabled={!!actionLoading} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-100 disabled:opacity-60">
+                <X size={16} /> Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View hotel branch details modal */}
+      {viewHotelBranchRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" aria-hidden onClick={() => setViewHotelBranchRequest(null)} />
+          <div className="relative z-10 w-full max-w-lg max-h-[90vh] overflow-auto bg-card rounded-2xl border border-forest-200 shadow-xl">
+            <div className="sticky top-0 bg-card border-b border-forest-200 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-foreground">Hotel Branch verification</h3>
+              <button type="button" onClick={() => setViewHotelBranchRequest(null)} className="p-2 rounded-lg hover:bg-forest-100 text-muted-foreground hover:text-foreground" aria-label="Close">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <section>
+                <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><Bed size={18} className="text-forest-600" /> Branch & company</h4>
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <dt className="text-muted-foreground">Branch name</dt>
+                    <dd className="font-medium text-foreground mt-0.5">{viewHotelBranchRequest.name}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">City</dt>
+                    <dd className="text-foreground mt-0.5">{viewHotelBranchRequest.city ?? "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Company (listing)</dt>
+                    <dd className="text-foreground mt-0.5">{viewHotelBranchRequest.listingName}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Token</dt>
+                    <dd className="font-mono text-foreground mt-0.5">{viewHotelBranchRequest.token}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Requested</dt>
+                    <dd className="text-foreground mt-0.5">{displayHotelBranchDetail?.requestedAt ?? viewHotelBranchRequest.requestedAt}</dd>
+                  </div>
+                  {displayHotelBranchDetail?.ownerName != null && (
+                    <div className="sm:col-span-2 flex items-start gap-2">
+                      <User size={18} className="text-forest-600 shrink-0 mt-0.5" />
+                      <div>
+                        <dt className="text-muted-foreground">Vendor</dt>
+                        <dd className="font-medium text-foreground mt-0.5">{displayHotelBranchDetail.ownerName}</dd>
+                        {displayHotelBranchDetail.ownerEmail && <dd className="text-muted-foreground text-xs mt-0.5">{displayHotelBranchDetail.ownerEmail}</dd>}
+                      </div>
+                    </div>
+                  )}
+                </dl>
+              </section>
+
+              {(displayHotelBranchDetail?.documents?.length ?? 0) > 0 && (
+                <section>
+                  <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><FileText size={18} className="text-forest-600" /> Documents</h4>
+                  <ul className="space-y-2 text-sm">
+                    {displayHotelBranchDetail!.documents!.map((doc, i) => (
+                      <li key={i} className="flex items-center gap-2 rounded-lg border border-forest-200 p-3">
+                        <span className="text-muted-foreground">{doc.document_type}</span>
+                        <span className="text-foreground truncate flex-1">{doc.file_name}</span>
+                        <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="shrink-0 px-2 py-1 rounded bg-forest-100 text-forest-700 text-xs font-medium hover:bg-forest-200">Open</a>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              {displayHotelBranchDetail?.documents?.length === 0 && !viewHotelBranchRequest.documents?.length && (
+                <p className="text-sm text-muted-foreground py-4">No documents submitted.</p>
+              )}
+            </div>
+            <div className="sticky bottom-0 border-t border-forest-200 px-6 py-4 bg-card flex justify-end gap-2">
+              <button type="button" onClick={() => setViewHotelBranchRequest(null)} className="px-4 py-2 rounded-lg border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-100">Close</button>
+              <button type="button" onClick={() => viewHotelBranchRequest && handleApproveHotelBranch(viewHotelBranchRequest.id)} disabled={!!actionLoading} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-60">
+                <Check size={16} /> Approve
+              </button>
+              <button type="button" onClick={() => viewHotelBranchRequest && handleRejectHotelBranch(viewHotelBranchRequest.id)} disabled={!!actionLoading} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-100 disabled:opacity-60">
                 <X size={16} /> Reject
               </button>
             </div>

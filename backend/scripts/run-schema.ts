@@ -19,7 +19,7 @@ const pool = new pg.Pool({
 
 async function run() {
   const schemaDir = join(__dirname, "..", "schema");
-  const files = ["001_users.sql", "002_trips_itineraries.sql", "003_active_trip.sql", "004_expenses.sql", "005_trip_start_date.sql", "006_trip_budget_amount.sql", "007_transport_bookings.sql", "008_transport_bookings_bus_id.sql"];
+  const files = ["001_users.sql", "002_trips_itineraries.sql", "003_active_trip.sql", "004_expenses.sql", "005_trip_start_date.sql", "006_trip_budget_amount.sql", "007_transport_bookings.sql", "008_transport_bookings_bus_id.sql", "013_hotel_bookings.sql", "014_hotel_bookings_room_type.sql"];
 
   try {
     for (const file of files) {

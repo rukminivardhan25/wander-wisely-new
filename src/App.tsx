@@ -9,6 +9,7 @@ import Explore from "./pages/Explore";
 import PlanTrip from "./pages/PlanTrip";
 import MyTrip from "./pages/MyTrip";
 import BookingMarketplace from "./pages/BookingMarketplace";
+import HotelReceipt from "./pages/HotelReceipt";
 import PaymentPage from "./pages/PaymentPage";
 import BookingSuccessPage from "./pages/BookingSuccessPage";
 import ActivityDetail from "./pages/ActivityDetail";
@@ -35,6 +36,7 @@ const App = () => (
             <Route path="/plan-trip/activity" element={<ActivityDetail />} />
             <Route path="/my-trip" element={<MyTrip />} />
             <Route path="/my-trip/book" element={<BookingMarketplace />} />
+            <Route path="/my-trip/hotel-booking/:id" element={<HotelReceipt />} />
             <Route path="/my-trip/payment" element={<PaymentPage />} />
             <Route path="/my-trip/booking-success" element={<BookingSuccessPage />} />
             <Route path="/book/transport" element={<TransportBook />} />

@@ -106,6 +106,20 @@ export default function ListingDetail() {
               </p>
             )
           )}
+          {listing.type === "hotel" && (
+            (listing.verification_status === "approved" || listing.verification_status === "verified") ? (
+              <Link
+                to={`/listings/${listing.id}/hotel`}
+                className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-lg text-sm font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 transition-colors"
+              >
+                Manage Hotels (add branches)
+              </Link>
+            ) : (
+              <p className="mt-4 text-sm text-muted-foreground">
+                Manage Hotels (add branches) is available after your company is verified. Go to <Link to="/verification" className="text-primary hover:underline">Verification</Link> to submit your request.
+              </p>
+            )
+          )}
         </div>
       </div>
     </div>

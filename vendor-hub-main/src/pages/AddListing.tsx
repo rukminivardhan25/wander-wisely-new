@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  UtensilsCrossed, Building2, ShoppingBag, Bus, Compass, Key, PartyPopper,
+  UtensilsCrossed, Building2, ShoppingBag, Bus, Compass, PartyPopper,
   ChevronRight, ChevronLeft, Upload, X, Check
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -14,11 +14,10 @@ const businessTypes = [
   { id: "shop", label: "Shop", icon: ShoppingBag },
   { id: "transport", label: "Transport", icon: Bus },
   { id: "experience", label: "Experience", icon: Compass },
-  { id: "rental", label: "Rental", icon: Key },
   { id: "event", label: "Event", icon: PartyPopper },
 ];
 
-const steps = ["Business Type", "Basic Info", "Location", "Photos", "Publish"];
+const steps = ["Business Type", "Basic Info", "Photos", "Publish"];
 
 export default function AddListing() {
   const navigate = useNavigate();
@@ -36,6 +35,10 @@ export default function AddListing() {
     }
     if (currentStep === 0 && selectedType === "event") {
       navigate("/add-listing/event");
+      return;
+    }
+    if (currentStep === 0 && selectedType === "hotel") {
+      navigate("/add-listing/hotel");
       return;
     }
     setCurrentStep((s) => Math.min(s + 1, steps.length - 1));
@@ -132,6 +135,15 @@ export default function AddListing() {
                   </div>
                 </div>
               )}
+              {selectedType === "hotel" && (
+                <div className="mt-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-3">
+                  <Building2 className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="text-sm text-foreground">
+                    <p className="font-medium mb-1">Hotel selected</p>
+                    <p className="text-muted-foreground">Register your hotel company first (one-time), then add individual hotels. Each hotel is verified separately.</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -157,41 +169,6 @@ export default function AddListing() {
 
           {currentStep === 2 && (
             <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6 space-y-5">
-              <h2 className="font-display font-semibold text-lg text-foreground">
-                {selectedType === "transport" ? "Location & service area" : "Location"}
-              </h2>
-              {selectedType === "transport" ? (
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">Transport operates on routes, not a single address. Add your registered/head office if needed and where you operate.</p>
-                  <div>
-                    <label className="text-sm font-medium text-foreground block mb-1.5">Registered address / Head office (optional)</label>
-                    <input className="w-full px-4 py-2.5 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-accent/50" placeholder="e.g. 123 Depot Road, Hyderabad" />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground block mb-1.5">Service area / Operating region</label>
-                    <input className="w-full px-4 py-2.5 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-accent/50" placeholder="e.g. Pan-India, or Hyderabad–Chennai–Bangalore" />
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-foreground block mb-1.5">Full Address</label>
-                    <input className="w-full px-4 py-2.5 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-accent/50" placeholder="123 Main Street" />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground block mb-1.5">City</label>
-                    <input className="w-full px-4 py-2.5 rounded-xl bg-muted border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-accent/50" placeholder="New York" />
-                  </div>
-                  <div className="w-full h-48 rounded-xl bg-muted border border-border flex items-center justify-center">
-                    <span className="text-sm text-muted-foreground">Map Placeholder</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {currentStep === 3 && (
-            <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6 space-y-5">
               <h2 className="font-display font-semibold text-lg text-foreground">Photo Gallery</h2>
               <p className="text-sm text-muted-foreground">Upload 3–20 high-resolution images. Landscape preferred.</p>
               <div className="border-2 border-dashed border-border rounded-xl p-12 flex flex-col items-center gap-3 hover:border-accent/50 transition-colors cursor-pointer">
@@ -213,7 +190,7 @@ export default function AddListing() {
             </div>
           )}
 
-          {currentStep === 4 && (
+          {currentStep === 3 && (
             <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6 space-y-5 text-center">
               <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto">
                 <Check size={32} className="text-success" />

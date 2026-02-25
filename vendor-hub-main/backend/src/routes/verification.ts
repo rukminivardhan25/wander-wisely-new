@@ -17,6 +17,21 @@ const EVENT_DOCUMENT_TYPES = [
   "other",
 ] as const;
 
+const HOTEL_DOCUMENT_TYPES = [
+  "business_registration_certificate",
+  "government_trade_license",
+  "tax_registration_proof",
+  "bank_account_proof",
+  "authorized_person_id",
+] as const;
+
+const HOTEL_BRANCH_DOCUMENT_TYPES = [
+  "local_trade_license",
+  "property_ownership",
+  "fire_safety",
+  "hotel_operating_license",
+] as const;
+
 /** Check if vendor owns the listing */
 async function vendorOwnsListing(listingId: string, vendorId: string): Promise<boolean> {
   try {
@@ -119,6 +134,55 @@ router.get("/resolve-bus-token", async (req: Request, res: Response): Promise<vo
     });
   } catch (err) {
     console.error("Resolve bus token error:", err);
+    res.status(500).json({ error: "Failed to resolve token" });
+  }
+});
+
+/** Resolve hotel branch verification token. Query: ?token=HBR-XXXX-XXXX. Returns branch info if token matches a branch in vendor's listing. */
+router.get("/resolve-hotel-branch-token", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const vendorId = req.vendorId!;
+    const token = (req.query.token as string)?.trim();
+    if (!token) {
+      res.status(400).json({ error: "Missing token query" });
+      return;
+    }
+    let result: { rows: { hotel_branch_id: string; listing_id: string; name: string; verification_status: string | null }[] };
+    try {
+      result = await query(
+        `SELECT hb.id AS hotel_branch_id, hb.listing_id, hb.name, hb.verification_status
+         FROM hotel_branches hb
+         JOIN listings l ON l.id = hb.listing_id AND l.vendor_id = $2
+         WHERE hb.verification_token = $1`,
+        [token, vendorId]
+      );
+    } catch {
+      try {
+        result = await query(
+          `SELECT hb.id AS hotel_branch_id, hb.listing_id, hb.name, hb.verification_status
+           FROM hotel_branches hb
+           JOIN vendor_listings vl ON vl.listing_id = hb.listing_id AND vl.vendor_id = $2
+           WHERE hb.verification_token = $1`,
+          [token, vendorId]
+        );
+      } catch {
+        result = { rows: [] };
+      }
+    }
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: "Invalid token or hotel branch does not belong to you" });
+      return;
+    }
+    const row = result.rows[0];
+    res.json({
+      listing_id: row.listing_id,
+      hotel_branch_id: row.hotel_branch_id,
+      name: row.name,
+      type: "hotel_branch",
+      verification_status: row.verification_status ?? "no_request",
+    });
+  } catch (err) {
+    console.error("Resolve hotel branch token error:", err);
     res.status(500).json({ error: "Failed to resolve token" });
   }
 });
@@ -253,14 +317,22 @@ router.post("/documents", async (req: Request, res: Response): Promise<void> => 
         ? [...EXPERIENCE_DOCUMENT_TYPES]
         : listingType === "event"
           ? [...EVENT_DOCUMENT_TYPES]
-          : [...DOCUMENT_TYPES];
+          : listingType === "hotel"
+            ? [...HOTEL_DOCUMENT_TYPES]
+            : listingType === "hotel_branch"
+              ? [...HOTEL_BRANCH_DOCUMENT_TYPES]
+              : [...DOCUMENT_TYPES];
     if (!(allowedTypes as readonly string[]).includes(document_type)) {
       const msg =
         listingType === "experience"
           ? "Invalid document_type for experience. Use: " + EXPERIENCE_DOCUMENT_TYPES.join(", ")
           : listingType === "event"
             ? "Invalid document_type for event. Use: " + EVENT_DOCUMENT_TYPES.join(", ")
-            : "Invalid document_type. Use: " + DOCUMENT_TYPES.join(", ");
+            : listingType === "hotel"
+              ? "Invalid document_type for hotel. Use: " + HOTEL_DOCUMENT_TYPES.join(", ")
+              : listingType === "hotel_branch"
+                ? "Invalid document_type for hotel branch. Use: " + HOTEL_BRANCH_DOCUMENT_TYPES.join(", ")
+                : "Invalid document_type. Use: " + DOCUMENT_TYPES.join(", ");
       res.status(400).json({ error: msg });
       return;
     }
@@ -470,6 +542,131 @@ router.post("/send-bus-request", async (req: Request, res: Response): Promise<vo
   } catch (err) {
     console.error("Verification send-bus-request error:", err);
     res.status(500).json({ error: "Failed to send bus verification request" });
+  }
+});
+
+/** List documents for a hotel branch. Query: ?listing_id= (required to verify ownership). */
+router.get("/hotel-branch-documents/:branchId", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const vendorId = req.vendorId!;
+    const { branchId } = req.params;
+    const listingId = (req.query.listing_id as string)?.trim();
+    if (!listingId || !branchId) {
+      res.status(400).json({ error: "Missing branchId or listing_id" });
+      return;
+    }
+    const owns = await vendorOwnsListing(listingId, vendorId);
+    if (!owns) {
+      res.status(404).json({ error: "Listing not found" });
+      return;
+    }
+    const branchCheck = await query<{ id: string }>("SELECT id FROM hotel_branches WHERE id = $1 AND listing_id = $2", [branchId, listingId]);
+    if (branchCheck.rows.length === 0) {
+      res.status(404).json({ error: "Hotel branch not found" });
+      return;
+    }
+    let docs: { id: string; document_type: string; file_name: string; file_url: string; created_at: string }[] = [];
+    try {
+      const result = await query<{ id: string; document_type: string; file_name: string; file_url: string; created_at: string }>(
+        "SELECT id, document_type, file_name, file_url, created_at FROM verification_hotel_branch_documents WHERE hotel_branch_id = $1 ORDER BY created_at",
+        [branchId]
+      );
+      docs = result.rows;
+    } catch {
+      //
+    }
+    res.json({ documents: docs });
+  } catch (err) {
+    console.error("Hotel branch documents list error:", err);
+    res.status(500).json({ error: "Failed to fetch documents" });
+  }
+});
+
+/** Add a document for a hotel branch. Body: { hotel_branch_id, listing_id, document_type, file_name, file_url }. */
+router.post("/hotel-branch-documents", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const vendorId = req.vendorId!;
+    const body = req.body as { hotel_branch_id?: string; listing_id?: string; document_type?: string; file_name?: string; file_url?: string };
+    const { hotel_branch_id, listing_id, document_type, file_name, file_url } = body;
+    if (!hotel_branch_id || !listing_id || !document_type || !file_name || !file_url) {
+      res.status(400).json({ error: "Missing hotel_branch_id, listing_id, document_type, file_name, or file_url" });
+      return;
+    }
+    const owns = await vendorOwnsListing(listing_id, vendorId);
+    if (!owns) {
+      res.status(404).json({ error: "Listing not found" });
+      return;
+    }
+    const branchCheck = await query<{ id: string }>("SELECT id FROM hotel_branches WHERE id = $1 AND listing_id = $2", [hotel_branch_id, listing_id]);
+    if (branchCheck.rows.length === 0) {
+      res.status(404).json({ error: "Hotel branch not found" });
+      return;
+    }
+    if (!(HOTEL_BRANCH_DOCUMENT_TYPES as readonly string[]).includes(document_type)) {
+      res.status(400).json({ error: "Invalid document_type for hotel branch. Use: " + HOTEL_BRANCH_DOCUMENT_TYPES.join(", ") });
+      return;
+    }
+    try {
+      await query(
+        "INSERT INTO verification_hotel_branch_documents (hotel_branch_id, listing_id, document_type, file_name, file_url) VALUES ($1, $2, $3, $4, $5)",
+        [hotel_branch_id, listing_id, document_type, file_name, file_url]
+      );
+    } catch (e) {
+      const err = e as { code?: string; message?: string };
+      if (err.code === "42P01" || (err.message && String(err.message).includes("verification_hotel_branch_documents"))) {
+        res.status(503).json({ error: "Hotel branch verification documents not set up. Run schema 045_verification_hotel_branch_documents.sql" });
+        return;
+      }
+      throw e;
+    }
+    res.status(201).json({ ok: true });
+  } catch (err) {
+    console.error("Hotel branch document add error:", err);
+    res.status(500).json({ error: "Failed to add document" });
+  }
+});
+
+/** Send verification request for a hotel branch. Body: { hotel_branch_id, listing_id }. */
+router.post("/send-hotel-branch-request", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const vendorId = req.vendorId!;
+    const body = req.body as { hotel_branch_id?: string; listing_id?: string };
+    const { hotel_branch_id, listing_id } = body;
+    if (!hotel_branch_id || !listing_id) {
+      res.status(400).json({ error: "Missing hotel_branch_id or listing_id" });
+      return;
+    }
+    const owns = await vendorOwnsListing(listing_id, vendorId);
+    if (!owns) {
+      res.status(404).json({ error: "Listing not found" });
+      return;
+    }
+    const row = await query<{ verification_token: string | null; verification_status: string | null }>(
+      "SELECT verification_token, verification_status FROM hotel_branches WHERE id = $1 AND listing_id = $2",
+      [hotel_branch_id, listing_id]
+    );
+    if (row.rows.length === 0) {
+      res.status(404).json({ error: "Hotel branch not found" });
+      return;
+    }
+    if (!row.rows[0].verification_token) {
+      res.status(400).json({ error: "Generate a verification token for this hotel branch first (Your hotels → Verify)" });
+      return;
+    }
+    const status = row.rows[0].verification_status ?? "no_request";
+    if (status === "pending") {
+      res.json({ message: "Verification request already sent", verification_status: "pending" });
+      return;
+    }
+    if (status === "approved" || status === "verified") {
+      res.status(400).json({ error: "This hotel branch is already approved" });
+      return;
+    }
+    await query("UPDATE hotel_branches SET verification_status = 'pending', updated_at = now() WHERE id = $1 AND listing_id = $2", [hotel_branch_id, listing_id]);
+    res.json({ message: status === "rejected" ? "Re-verification request sent" : "Verification request sent", verification_status: "pending" });
+  } catch (err) {
+    console.error("Send hotel branch request error:", err);
+    res.status(500).json({ error: "Failed to send hotel branch verification request" });
   }
 });
 

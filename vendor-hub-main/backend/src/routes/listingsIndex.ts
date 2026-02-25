@@ -10,6 +10,8 @@ import flightsRoutes from "./flights.js";
 import flightBookingsRoutes from "./flightBookings.js";
 import experiencesRoutes from "./experiences.js";
 import eventsRoutes from "./events.js";
+import hotelBranchesRoutes from "./hotelBranches.js";
+import hotelBookingsRoutes from "./hotelBookings.js";
 
 const router = Router();
 
@@ -27,6 +29,8 @@ nestedRouter.use("/flights", flightsRoutes);
 nestedRouter.use("/flight-bookings", flightBookingsRoutes);
 nestedRouter.use("/experience", experiencesRoutes);
 nestedRouter.use("/event", eventsRoutes);
+nestedRouter.use("/hotel-branches", hotelBranchesRoutes);
+nestedRouter.use("/hotel-bookings", hotelBookingsRoutes);
 nestedRouter.use("/drivers", driversRoutes);
 nestedRouter.use("/routes", transportRoutes);
 

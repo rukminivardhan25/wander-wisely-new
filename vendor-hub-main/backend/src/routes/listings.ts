@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
-import { query } from "../config/db.js";
+import { query, pool } from "../config/db.js";
 import { authMiddleware } from "../middleware/auth.js";
 
 const router = Router();
@@ -20,6 +20,23 @@ const createSchema = z.object({
   address: z.string().optional().nullable(),
   city: z.string().optional().nullable(),
   cover_image_url: z.string().url().optional().nullable(),
+  hotel_company: z
+    .object({
+      company_name: z.string().min(1),
+      legal_business_name: z.string().optional().nullable(),
+      business_reg_number: z.string().optional().nullable(),
+      gst_tax_id: z.string().optional().nullable(),
+      company_email: z.string().optional().nullable(),
+      company_phone: z.string().optional().nullable(),
+      head_office_address: z.string().optional().nullable(),
+      company_description: z.string().optional().nullable(),
+      company_logo_url: z.string().url().optional().nullable(),
+      authorized_person_name: z.string().optional().nullable(),
+      authorized_person_dob: z.string().optional().nullable(),
+      authorized_person_designation: z.string().optional().nullable(),
+      authorized_person_phone: z.string().optional().nullable(),
+    })
+    .optional(),
 });
 
 const updateSchema = createSchema.partial();
@@ -110,6 +127,7 @@ router.get("/:id", async (req: Request, res: Response): Promise<void> => {
 });
 
 // Create listing (all five steps: business type, basic info, location, photos, publish)
+// When type is "hotel" and hotel_company is provided, also inserts into hotel_companies.
 router.post("/", async (req: Request, res: Response): Promise<void> => {
   try {
     const vendorId = req.vendorId!;
@@ -119,16 +137,65 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
       return;
     }
-    const { name, type, status, tagline, description, registered_address, service_area, address, city, cover_image_url } = parsed.data;
-    const insertResult = await query<{ id: string; vendor_id: string; name: string; type: string; status: string }>(
-      `insert into listings (vendor_id, name, type, status, tagline, description, registered_address, service_area, address, city, cover_image_url)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-       returning id, vendor_id, name, type, status`,
-      [vendorId, name, type, status ?? "draft", tagline ?? null, description ?? null, registered_address ?? null, service_area ?? null, address ?? null, city ?? null, cover_image_url ?? null]
-    );
-    const row = insertResult.rows[0];
-    console.log("[Create listing] Created:", { id: row.id, vendor_id: row.vendor_id, type: row.type });
-    res.status(201).json({ id: row.id, name: row.name, type: row.type, status: row.status });
+    const { name, type, status, tagline, description, registered_address, service_area, address, city, cover_image_url, hotel_company } = parsed.data;
+
+    const isHotelWithCompany = type === "hotel" && hotel_company && String(hotel_company.company_name || "").trim().length > 0;
+    const client = isHotelWithCompany ? await pool.connect() : null;
+
+    try {
+      if (client) await client.query("BEGIN");
+
+      const insertResult = await (client ? client.query.bind(client) : query)<{ id: string; vendor_id: string; name: string; type: string; status: string }>(
+        `insert into listings (vendor_id, name, type, status, tagline, description, registered_address, service_area, address, city, cover_image_url)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         returning id, vendor_id, name, type, status`,
+        [vendorId, name, type, status ?? "draft", tagline ?? null, description ?? null, registered_address ?? null, service_area ?? null, address ?? null, city ?? null, cover_image_url ?? null]
+      );
+      const row = insertResult.rows[0];
+
+      if (isHotelWithCompany && hotel_company && row && client) {
+        const c = hotel_company;
+        const dob = c.authorized_person_dob && /^\d{4}-\d{2}-\d{2}$/.test(c.authorized_person_dob) ? c.authorized_person_dob : null;
+        await client.query(
+          `insert into hotel_companies (
+            listing_id, company_name, legal_business_name, business_reg_number, gst_tax_id,
+            company_email, company_phone, head_office_address, company_description, company_logo_url,
+            authorized_person_name, authorized_person_dob, authorized_person_designation, authorized_person_phone
+          ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+          [
+            row.id,
+            (c.company_name || "").trim(),
+            (c.legal_business_name || "").trim() || null,
+            (c.business_reg_number || "").trim() || null,
+            (c.gst_tax_id || "").trim() || null,
+            (c.company_email || "").trim() || null,
+            (c.company_phone || "").trim() || null,
+            (c.head_office_address || "").trim() || null,
+            (c.company_description || "").trim() || null,
+            c.company_logo_url || null,
+            (c.authorized_person_name || "").trim() || null,
+            dob,
+            (c.authorized_person_designation || "").trim() || null,
+            (c.authorized_person_phone || "").trim() || null,
+          ]
+        );
+      }
+
+      if (client) await client.query("COMMIT");
+      console.log("[Create listing] Created:", { id: row.id, vendor_id: row.vendor_id, type: row.type });
+      res.status(201).json({ id: row.id, name: row.name, type: row.type, status: row.status });
+    } catch (txErr) {
+      if (client) {
+        try {
+          await client.query("ROLLBACK");
+        } catch {
+          // ignore
+        }
+      }
+      throw txErr;
+    } finally {
+      client?.release();
+    }
   } catch (err) {
     console.error("Create listing error:", err);
     res.status(500).json({ error: "Failed to create listing" });
@@ -293,6 +360,7 @@ router.delete("/:id", async (req: Request, res: Response): Promise<void> => {
     await runIfExists("DELETE FROM event_ticket_types WHERE event_id IN (SELECT id FROM events WHERE listing_id = $1)", [listingId]);
     await runIfExists("DELETE FROM event_media WHERE event_id IN (SELECT id FROM events WHERE listing_id = $1)", [listingId]);
     await runIfExists("DELETE FROM events WHERE listing_id = $1", [listingId]);
+    await runIfExists("DELETE FROM hotel_companies WHERE listing_id = $1", [listingId]);
     await runIfExists("DELETE FROM vendor_listings WHERE listing_id = $1", [listingId]);
     const result = await query("DELETE FROM listings WHERE id = $1 RETURNING id", [listingId]);
     if (result.rowCount === 0) {

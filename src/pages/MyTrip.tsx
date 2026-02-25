@@ -25,6 +25,7 @@ import {
   Stethoscope,
   Phone,
   Building2,
+  Hotel,
   Play,
   Eye,
   Trash2,
@@ -108,6 +109,22 @@ type EventBookingItem = {
   endDate: string;
   startTime: string;
   endTime: string;
+};
+
+/** Hotel booking from GET /api/hotel-bookings */
+type HotelBookingItem = {
+  id: string;
+  bookingRef: string;
+  hotelBranchId: string;
+  listingId: string;
+  checkIn: string;
+  checkOut: string;
+  nights: number;
+  guestName: string;
+  status: string;
+  roomNumber?: string;
+  totalCents?: number;
+  createdAt: string;
 };
 
 const CATEGORY_CONFIG: Record<ActivityType, { label: string; icon: JSX.Element; color: string; bg: string }> = {
@@ -242,6 +259,7 @@ const MyTrip = () => {
   const [flightBookings, setFlightBookings] = useState<FlightBookingItem[]>([]);
   const [experienceBookings, setExperienceBookings] = useState<ExperienceBookingItem[]>([]);
   const [eventBookings, setEventBookings] = useState<EventBookingItem[]>([]);
+  const [hotelBookings, setHotelBookings] = useState<HotelBookingItem[]>([]);
   const [flightSeatModalOpen, setFlightSeatModalOpen] = useState(false);
   const [flightSeatBookingId, setFlightSeatBookingId] = useState<string | null>(null);
   const [flightSeatMap, setFlightSeatMap] = useState<{
@@ -287,6 +305,9 @@ const MyTrip = () => {
   const filteredCarBookings = bookingsFilterDateNorm
     ? carBookings.filter((b) => normDate(b.travelDate) === bookingsFilterDateNorm)
     : carBookings;
+  const filteredHotelBookings = bookingsFilterDateNorm
+    ? hotelBookings.filter((b) => normDate(b.checkIn) <= bookingsFilterDateNorm && normDate(b.checkOut) >= bookingsFilterDateNorm)
+    : hotelBookings;
   const filteredStoredBusBookings = bookingsFilterDateNorm
     ? storedBusBookings.filter((b) => normDate(b.travelDate) === bookingsFilterDateNorm)
     : storedBusBookings;
@@ -358,12 +379,18 @@ const MyTrip = () => {
       }).then(({ data }) => {
         if (data?.bookings) setEventBookings(data.bookings);
       }).catch(() => setEventBookings([]));
+      apiFetch<{ bookings: HotelBookingItem[] }>("/api/hotel-bookings", {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(({ data }) => {
+        if (data?.bookings) setHotelBookings(data.bookings);
+      }).catch(() => setHotelBookings([]));
     } else {
       setStoredBusBookings(getStoredBusBookings());
       setCarBookings([]);
       setFlightBookings([]);
       setExperienceBookings([]);
       setEventBookings([]);
+      setHotelBookings([]);
     }
   }, [token]);
 
@@ -1412,9 +1439,46 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                         </div>
                       );
                     })}
-                    {filteredStoredBusBookings.length === 0 && filteredCarBookings.length === 0 && filteredFlightBookings.length === 0 && filteredExperienceBookings.length === 0 && filteredEventBookings.length === 0 && (
+                    {filteredHotelBookings.map((b) => {
+                      const statusLabel =
+                        b.status === "pending_vendor"
+                          ? "Pending approval"
+                          : b.status === "approved"
+                            ? "Approved — pay at hotel"
+                            : b.status === "rejected"
+                              ? "Rejected"
+                              : b.status;
+                      return (
+                        <div key={b.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3">
+                          <div className="w-14 h-14 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                            <Hotel className="h-6 w-6 text-amber-600" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-foreground truncate">Hotel stay</p>
+                            <p className="text-xs text-muted-foreground">Hotel · {b.checkIn} – {b.checkOut} · {b.nights} night{b.nights !== 1 ? "s" : ""}</p>
+                            <p className={`text-xs mt-1 flex items-center gap-1 ${b.status === "approved" ? "text-emerald-600" : b.status === "rejected" ? "text-red-600" : "text-amber-600"}`}>
+                              {b.status === "approved" && <CheckCircle className="h-3.5 w-3.5 shrink-0" />}
+                              {statusLabel}
+                            </p>
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {b.status === "pending_vendor" && (
+                                <Button asChild size="sm" variant="outline" className="rounded-lg text-xs">
+                                  <Link to={`/my-trip/hotel-booking/${b.id}`}>View request</Link>
+                                </Button>
+                              )}
+                              {b.status === "approved" && (
+                                <Button asChild size="sm" variant="hero" className="rounded-lg text-xs">
+                                  <Link to={`/my-trip/hotel-booking/${b.id}`}>View receipt / bill</Link>
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {filteredStoredBusBookings.length === 0 && filteredCarBookings.length === 0 && filteredFlightBookings.length === 0 && filteredExperienceBookings.length === 0 && filteredEventBookings.length === 0 && filteredHotelBookings.length === 0 && (
                       <p className="text-sm text-muted-foreground col-span-full">
-                        {bookingsFilterDateNorm ? `No bookings for ${bookingsFilterDateNorm}. Try another date or clear the filter.` : "No bookings yet. Book transport, experiences, or events to see your tickets here."}
+                        {bookingsFilterDateNorm ? `No bookings for ${bookingsFilterDateNorm}. Try another date or clear the filter.` : "No bookings yet. Book transport, hotel, experiences, or events to see your tickets here."}
                       </p>
                     )}
                   </div>

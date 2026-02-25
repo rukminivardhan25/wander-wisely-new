@@ -20,6 +20,10 @@ import ListingDetail from "./pages/ListingDetail";
 import AddListing from "./pages/AddListing";
 import AddExperience from "./pages/AddExperience";
 import AddEvent from "./pages/AddEvent";
+import AddHotel from "./pages/AddHotel";
+import AddHotelBranch from "./pages/AddHotelBranch";
+import HotelListing from "./pages/HotelListing";
+import HotelBranchDetail from "./pages/HotelBranchDetail";
 import ExperienceManage from "./pages/ExperienceManage";
 import EditExperience from "./pages/EditExperience";
 import EventManage from "./pages/EventManage";
@@ -66,6 +70,10 @@ const App = () => (
                 <Route path="/add-listing" element={<AddListing />} />
                 <Route path="/add-listing/experience" element={<AddExperience />} />
                 <Route path="/add-listing/event" element={<AddEvent />} />
+                <Route path="/add-listing/hotel" element={<AddHotel />} />
+                <Route path="/listings/:listingId/hotel" element={<HotelListing />} />
+                <Route path="/listings/:listingId/hotel/branch/:branchId" element={<HotelBranchDetail />} />
+                <Route path="/listings/:listingId/hotel/add" element={<AddHotelBranch />} />
                 <Route path="/bookings" element={<Bookings />} />
                 <Route path="/customers" element={<Customers />} />
                 <Route path="/messages" element={<Messages />} />
