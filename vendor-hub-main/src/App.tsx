@@ -13,9 +13,17 @@ import Listings from "./pages/Listings";
 import TransportListing from "./pages/TransportListing";
 import BusDetail from "./pages/BusDetail";
 import CarDetail from "./pages/CarDetail";
+import FlightListing from "./pages/FlightListing";
+import FlightDetail from "./pages/FlightDetail";
 import VehiclePlaceholder from "./pages/VehiclePlaceholder";
 import ListingDetail from "./pages/ListingDetail";
 import AddListing from "./pages/AddListing";
+import AddExperience from "./pages/AddExperience";
+import AddEvent from "./pages/AddEvent";
+import ExperienceManage from "./pages/ExperienceManage";
+import EditExperience from "./pages/EditExperience";
+import EventManage from "./pages/EventManage";
+import EditEvent from "./pages/EditEvent";
 import Bookings from "./pages/Bookings";
 import Customers from "./pages/Customers";
 import Messages from "./pages/Messages";
@@ -47,9 +55,17 @@ const App = () => (
                 <Route path="/listings/:listingId/transport" element={<TransportListing />} />
                 <Route path="/listings/:listingId/transport/bus/:busId" element={<BusDetail />} />
                 <Route path="/listings/:listingId/transport/car/:carId" element={<CarDetail />} />
+                <Route path="/listings/:listingId/transport/flight" element={<FlightListing />} />
+                <Route path="/listings/:listingId/transport/flight/:flightId" element={<FlightDetail />} />
                 <Route path="/listings/:listingId/transport/vehicle/:vehicleType" element={<VehiclePlaceholder />} />
                 <Route path="/listings/:listingId" element={<ListingDetail />} />
+                <Route path="/listings/:listingId/experience" element={<ExperienceManage />} />
+                <Route path="/listings/:listingId/experience/edit" element={<EditExperience />} />
+                <Route path="/listings/:listingId/event" element={<EventManage />} />
+                <Route path="/listings/:listingId/event/edit" element={<EditEvent />} />
                 <Route path="/add-listing" element={<AddListing />} />
+                <Route path="/add-listing/experience" element={<AddExperience />} />
+                <Route path="/add-listing/event" element={<AddEvent />} />
                 <Route path="/bookings" element={<Bookings />} />
                 <Route path="/customers" element={<Customers />} />
                 <Route path="/messages" element={<Messages />} />

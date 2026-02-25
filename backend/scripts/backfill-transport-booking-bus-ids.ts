@@ -1,34 +1,26 @@
 /**
  * Backfill bus_id and listing_id on transport_bookings rows that have them null.
- * Matches by listing_name + bus_name to buses/listings in the transport DB (TRANSPORT_DATABASE_URL).
+ * Matches by listing_name + bus_name to buses/listings in the same database.
  * Run from backend/: npx tsx scripts/backfill-transport-booking-bus-ids.ts
- * Requires: DATABASE_URL (main app), TRANSPORT_DATABASE_URL (vendor/transport DB).
+ * Requires: DATABASE_URL (single database for app and transport).
  */
 import "dotenv/config";
 import pg from "pg";
 
-const mainUrl = process.env.DATABASE_URL;
-const transportUrl = process.env.TRANSPORT_DATABASE_URL;
+const connectionString = process.env.DATABASE_URL;
 
-if (!mainUrl) {
+if (!connectionString) {
   console.error("Missing DATABASE_URL");
   process.exit(1);
 }
 
-const mainPool = new pg.Pool({
-  connectionString: mainUrl,
-  ssl: mainUrl.includes("localhost") ? false : { rejectUnauthorized: false },
+const pool = new pg.Pool({
+  connectionString,
+  ssl: connectionString.includes("localhost") ? false : { rejectUnauthorized: false },
 });
 
-const transportPool = transportUrl
-  ? new pg.Pool({
-      connectionString: transportUrl,
-      ssl: transportUrl.includes("localhost") ? false : { rejectUnauthorized: false },
-    })
-  : mainPool;
-
 async function run() {
-  const needBackfill = await mainPool.query<{
+  const needBackfill = await pool.query<{
     id: string;
     booking_id: string;
     listing_name: string | null;
@@ -44,9 +36,9 @@ async function run() {
     return;
   }
 
-  console.log(`Found ${needBackfill.rows.length} booking(s) with bus_id null. Looking up bus_id from transport DB...`);
+  console.log(`Found ${needBackfill.rows.length} booking(s) with bus_id null. Looking up bus_id...`);
 
-  const busesByKey = await transportPool.query<{ bus_id: string; listing_id: string; listing_name: string; bus_name: string }>(
+  const busesByKey = await pool.query<{ bus_id: string; listing_id: string; listing_name: string; bus_name: string }>(
     `select b.id as bus_id, b.listing_id, l.name as listing_name, b.name as bus_name
      from buses b
      join listings l on l.id = b.listing_id`
@@ -68,7 +60,7 @@ async function run() {
       console.log(`  Skip ${row.booking_id}: no bus found for listing="${listingName}" bus="${busName}"`);
       continue;
     }
-    await mainPool.query(
+    await pool.query(
       `update transport_bookings set bus_id = $1, listing_id = $2 where id = $3`,
       [match.bus_id, match.listing_id, row.id]
     );
@@ -85,6 +77,5 @@ run()
     process.exit(1);
   })
   .finally(() => {
-    mainPool.end();
-    if (transportPool !== mainPool) transportPool.end();
+    pool.end();
   });

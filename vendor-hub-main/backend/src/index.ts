@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
+import { pool } from "./config/db.js";
 import authRoutes from "./routes/auth.js";
 import listingsIndexRoutes from "./routes/listingsIndex.js";
 import uploadRoutes from "./routes/upload.js";
@@ -37,6 +38,23 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", message: "Vendor Hub API" });
 });
 
+/** Debug: return ALL car_bookings (no filters). Uses same DB as DATABASE_URL (single DB). */
+app.get("/api/debug/all-car-bookings", async (_req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT id, booking_ref, listing_id, car_id, user_id, travel_date, status, created_at FROM car_bookings ORDER BY created_at DESC LIMIT 50"
+    );
+    res.json({
+      message: "All car_bookings (max 50), no filters (single DATABASE_URL)",
+      count: result.rows.length,
+      rows: result.rows,
+    });
+  } catch (err) {
+    console.error("Debug all-car-bookings error:", err);
+    res.status(500).json({ error: err instanceof Error ? err.message : "Query failed" });
+  }
+});
+
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/api/auth", authRoutes);
 app.use("/api/listings", listingsIndexRoutes);
@@ -56,6 +74,19 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   res.status(500).json({ error: "Internal server error" });
 });
 
+function logDbUrl(label: string, url: string): void {
+  try {
+    const u = new URL(url);
+    if (u.password) u.password = "***";
+    console.log(`[DB] ${label} ${u.toString().replace(/:[^:@]+@/, ":***@")}`);
+  } catch {
+    console.log(`[DB] ${label} (url parse skipped)`);
+  }
+}
+
 app.listen(Number(PORT), "0.0.0.0", () => {
+  const dbUrl = process.env.DATABASE_URL ?? "";
+  if (dbUrl) logDbUrl("Vendor hub DATABASE_URL", dbUrl);
+  console.log("[DB] Car bookings use DATABASE_URL (single DB, same as bus/listings).");
   console.log(`Vendor Hub API running at http://localhost:${PORT}`);
 });

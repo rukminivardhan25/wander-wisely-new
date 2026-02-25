@@ -2,27 +2,29 @@ import pg from "pg";
 
 const { Pool } = pg;
 
+/** Add uselibpqcompat=true to avoid pg v9 SSL mode warning when URL has sslmode=require. */
+function normalizeConnectionString(url: string): string {
+  const u = url.trim();
+  if (!u) return u;
+  if (/[?&]uselibpqcompat=true/.test(u)) return u;
+  if (/[?&]sslmode=(require|prefer|verify-ca)/.test(u)) {
+    return u.includes("?") ? `${u}&uselibpqcompat=true` : `${u}?uselibpqcompat=true`;
+  }
+  return u;
+}
+
 const connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
   throw new Error("DATABASE_URL environment variable is not set");
 }
 
+const normalizedDbUrl = normalizeConnectionString(connectionString);
+
 export const pool = new Pool({
-  connectionString,
+  connectionString: normalizedDbUrl,
   ssl: connectionString.includes("localhost") ? false : { rejectUnauthorized: false },
 });
-
-/** Optional second pool for transport/vendor data. Set TRANSPORT_DATABASE_URL to the DB that has listings, buses, bus_schedules, routes (same as vendor hub DB) so bus search works without running the vendor hub. */
-const transportConnectionString = process.env.TRANSPORT_DATABASE_URL;
-export const transportPool =
-  transportConnectionString &&
-  transportConnectionString.trim() !== ""
-    ? new Pool({
-        connectionString: transportConnectionString.trim(),
-        ssl: transportConnectionString.includes("localhost") ? false : { rejectUnauthorized: false },
-      })
-    : null;
 
 export async function query<T = pg.QueryResultRow>(
   text: string,
@@ -31,7 +33,7 @@ export async function query<T = pg.QueryResultRow>(
   return pool.query<T>(text, params);
 }
 
-/** Use for transport queries. Uses TRANSPORT_DATABASE_URL pool if set, otherwise main pool (for single-DB setups). */
+/** Use for transport queries (flights, buses, cars, bookings). Same DB as DATABASE_URL (single database). */
 export function getTransportPool(): pg.Pool {
-  return transportPool ?? pool;
+  return pool;
 }

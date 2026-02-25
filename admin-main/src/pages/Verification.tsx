@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Building2, Bus, Car, ChevronDown, ShieldCheck, Check, X, Eye, FileText, User, MapPin } from "lucide-react";
+import { Building2, Bus, Car, Plane, ChevronDown, ShieldCheck, Check, X, Eye, FileText, User, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { adminFetch } from "@/lib/api";
 
@@ -20,7 +20,7 @@ const COMPANY_TYPES = [
   "Emergency",
 ] as const;
 
-const VEHICLE_TYPES = ["Buses", "Cars"] as const;
+const VEHICLE_TYPES = ["Buses", "Cars", "Flights"] as const;
 
 type RequestRow = {
   id: string;
@@ -33,6 +33,7 @@ type RequestRow = {
   ownerEmail?: string;
   address?: string;
   documents?: { type: string; fileName: string; url?: string }[];
+  experienceInfo?: { category: string; city: string; duration_text: string; price_per_person_cents: number; cancellation_policy: string | null };
 };
 
 type BusRequestRow = {
@@ -67,6 +68,21 @@ type CarRequestRow = {
   documents?: { document_type: string; file_name: string; file_url: string }[];
 };
 
+type FlightRequestRow = {
+  id: string;
+  flight_number: string;
+  airline_name: string;
+  listingName: string;
+  token: string;
+  requestedAt: string;
+  status: string;
+  ownerName?: string;
+  ownerEmail?: string;
+  aircraft_type?: string;
+  routes?: { id: string; from_place: string; to_place: string; fare_cents: number }[];
+  documents?: { document_type: string; file_name: string; file_url: string }[];
+};
+
 function formatRequestedAt(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" });
@@ -92,6 +108,9 @@ export function Verification() {
   const [carRequests, setCarRequests] = useState<CarRequestRow[]>([]);
   const [viewCarRequest, setViewCarRequest] = useState<CarRequestRow | null>(null);
   const [carRequestDetail, setCarRequestDetail] = useState<CarRequestRow | null>(null);
+  const [flightRequests, setFlightRequests] = useState<FlightRequestRow[]>([]);
+  const [viewFlightRequest, setViewFlightRequest] = useState<FlightRequestRow | null>(null);
+  const [flightRequestDetail, setFlightRequestDetail] = useState<FlightRequestRow | null>(null);
 
   const fetchPending = async () => {
     setLoading(true);
@@ -113,6 +132,7 @@ export function Verification() {
         );
       } else if (category === "vehicles" && (vehicleType === "Buses" || !vehicleType)) {
         setCarRequests([]);
+        setFlightRequests([]);
         const data = await adminFetch<{ buses: { id: string; name: string; listing_name: string; registration_number: string | null; bus_number: string | null; verification_token: string | null; verification_status: string | null; updated_at: string }[] }>(
           "/api/verification/pending-buses"
         );
@@ -129,6 +149,8 @@ export function Verification() {
           }))
         );
       } else if (category === "vehicles" && vehicleType === "Cars") {
+        setBusRequests([]);
+        setFlightRequests([]);
         const data = await adminFetch<{ cars: { id: string; name: string; listing_name: string; registration_number: string | null; category: string; verification_token: string | null; verification_status: string | null; updated_at: string }[] }>(
           "/api/verification/pending-cars"
         );
@@ -144,14 +166,38 @@ export function Verification() {
             status: c.verification_status || "Pending",
           }))
         );
+      } else if (category === "vehicles" && vehicleType === "Flights") {
         setBusRequests([]);
+        setCarRequests([]);
+        try {
+          const data = await adminFetch<{ flights: { id: string; flight_number: string; airline_name: string; listing_name: string; verification_token: string | null; verification_status: string | null; updated_at: string }[] }>(
+            "/api/verification/pending-flights"
+          );
+          setFlightRequests(
+            (data.flights || []).map((f) => ({
+              id: f.id,
+              flight_number: f.flight_number || "—",
+              airline_name: f.airline_name || "—",
+              listingName: f.listing_name || "—",
+              token: f.verification_token || "—",
+              requestedAt: formatRequestedAt(f.updated_at),
+              status: f.verification_status || "Pending",
+            }))
+          );
+        } catch {
+          setFlightRequests([]);
+        }
       } else if (category === "vehicles") {
         setBusRequests([]);
         setCarRequests([]);
+        setFlightRequests([]);
       }
     } catch {
       if (category === "company") setRequests([]);
-      if (category === "vehicles") setBusRequests([]);
+      if (category === "vehicles") {
+        setBusRequests([]);
+        if (vehicleType === "Flights") setFlightRequests([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -179,6 +225,7 @@ export function Verification() {
           address: string | null;
           ownerName: string | null;
           ownerEmail: string | null;
+          experienceInfo?: { category: string; city: string; duration_text: string; price_per_person_cents: number; cancellation_policy: string | null };
           documents: { type: string; fileName: string; url?: string }[];
         }>(`/api/verification/listing/${viewRequest.id}`);
         if (!cancelled) {
@@ -187,6 +234,7 @@ export function Verification() {
             ownerName: detail.ownerName ?? undefined,
             ownerEmail: detail.ownerEmail ?? undefined,
             address: detail.address ?? undefined,
+            experienceInfo: detail.experienceInfo,
             documents: detail.documents || [],
             requestedAt: formatRequestedAt(detail.updated_at),
           });
@@ -261,6 +309,28 @@ export function Verification() {
       await adminFetch(`/api/verification/car/${id}/reject`, { method: "POST" });
       await fetchPending();
       if (viewCarRequest?.id === id) setViewCarRequest(null);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleApproveFlight = async (id: string) => {
+    setActionLoading(id);
+    try {
+      await adminFetch(`/api/verification/flight/${id}/approve`, { method: "POST" });
+      await fetchPending();
+      if (viewFlightRequest?.id === id) setViewFlightRequest(null);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRejectFlight = async (id: string) => {
+    setActionLoading(id);
+    try {
+      await adminFetch(`/api/verification/flight/${id}/reject`, { method: "POST" });
+      await fetchPending();
+      if (viewFlightRequest?.id === id) setViewFlightRequest(null);
     } finally {
       setActionLoading(null);
     }
@@ -348,10 +418,51 @@ export function Verification() {
     };
   }, [viewCarRequest?.id, category]);
 
+  useEffect(() => {
+    if (!viewFlightRequest || category !== "vehicles") {
+      setFlightRequestDetail(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const detail = await adminFetch<{
+          id: string;
+          flight_number: string;
+          airline_name: string;
+          listingName: string | null;
+          ownerName: string | null;
+          ownerEmail: string | null;
+          aircraft_type?: string;
+          updated_at: string;
+          routes?: { id: string; from_place: string; to_place: string; fare_cents: number }[];
+          documents?: { document_type: string; file_name: string; file_url: string }[];
+        }>(`/api/verification/flight/${viewFlightRequest.id}`);
+        if (!cancelled) {
+          setFlightRequestDetail({
+            ...viewFlightRequest,
+            ownerName: detail.ownerName ?? undefined,
+            ownerEmail: detail.ownerEmail ?? undefined,
+            aircraft_type: detail.aircraft_type,
+            requestedAt: formatRequestedAt(detail.updated_at),
+            routes: detail.routes ?? [],
+            documents: detail.documents ?? [],
+          });
+        }
+      } catch {
+        if (!cancelled) setFlightRequestDetail({ ...viewFlightRequest });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [viewFlightRequest?.id, category]);
+
   const filteredRequests = category === "company" ? requests : [];
   const displayDetail = listingDetail ?? viewRequest;
   const displayBusDetail = busRequestDetail ?? viewBusRequest;
   const displayCarDetail = carRequestDetail ?? viewCarRequest;
+  const displayFlightDetail = flightRequestDetail ?? viewFlightRequest;
 
   return (
     <div className="space-y-6">
@@ -705,6 +816,62 @@ export function Verification() {
             </table>
           </div>
         )}
+
+        {category === "vehicles" && vehicleType === "Flights" && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-forest-200 bg-forest-50/50">
+                  <th className="text-left px-6 py-3 font-medium text-muted-foreground">Flight number</th>
+                  <th className="text-left px-6 py-3 font-medium text-muted-foreground">Airline</th>
+                  <th className="text-left px-6 py-3 font-medium text-muted-foreground">Listing</th>
+                  <th className="text-left px-6 py-3 font-medium text-muted-foreground">Requested</th>
+                  <th className="text-left px-6 py-3 font-medium text-muted-foreground">Status</th>
+                  <th className="text-right px-6 py-3 font-medium text-muted-foreground">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">Loading…</td>
+                  </tr>
+                ) : flightRequests.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">No flight verification requests.</td>
+                  </tr>
+                ) : (
+                  flightRequests.map((req) => (
+                    <tr key={req.id} className="border-b border-forest-200/70 hover:bg-forest-50/30 transition-colors">
+                      <td className="px-6 py-3.5 font-medium text-foreground font-mono">{req.flight_number}</td>
+                      <td className="px-6 py-3.5 text-foreground">{req.airline_name}</td>
+                      <td className="px-6 py-3.5 text-foreground">{req.listingName}</td>
+                      <td className="px-6 py-3.5 text-muted-foreground">{req.requestedAt}</td>
+                      <td className="px-6 py-3.5">
+                        <span className="inline-flex items-center gap-1.5 text-amber-700 bg-amber-100 px-2.5 py-1 rounded-full text-xs font-medium">
+                          <ShieldCheck size={12} />
+                          {req.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button type="button" onClick={() => setViewFlightRequest(req)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-forest-300 text-forest-700 text-xs font-medium hover:bg-forest-100">
+                            <Eye size={14} /> View
+                          </button>
+                          <button type="button" onClick={() => handleApproveFlight(req.id)} disabled={!!actionLoading} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-forest-600 text-white text-xs font-medium hover:bg-forest-700 disabled:opacity-60">
+                            <Check size={14} /> Approve
+                          </button>
+                          <button type="button" onClick={() => handleRejectFlight(req.id)} disabled={!!actionLoading} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-forest-300 text-forest-700 text-xs font-medium hover:bg-forest-100 disabled:opacity-60">
+                            <X size={14} /> Reject
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* View details & documents modal (company) */}
@@ -769,6 +936,39 @@ export function Verification() {
                   )}
                 </dl>
               </section>
+
+              {displayDetail?.type?.toLowerCase() === "experience" && displayDetail?.experienceInfo && (
+                <section>
+                  <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                    <MapPin size={18} className="text-forest-600" />
+                    Experience details
+                  </h4>
+                  <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <dt className="text-muted-foreground">Category</dt>
+                      <dd className="font-medium text-foreground mt-0.5 capitalize">{displayDetail.experienceInfo.category}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">City</dt>
+                      <dd className="text-foreground mt-0.5">{displayDetail.experienceInfo.city}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Duration</dt>
+                      <dd className="text-foreground mt-0.5">{displayDetail.experienceInfo.duration_text}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Price per person</dt>
+                      <dd className="text-foreground mt-0.5">₹{(displayDetail.experienceInfo.price_per_person_cents / 100).toLocaleString()}</dd>
+                    </div>
+                    {displayDetail.experienceInfo.cancellation_policy && (
+                      <div className="sm:col-span-2">
+                        <dt className="text-muted-foreground">Cancellation policy</dt>
+                        <dd className="text-foreground mt-0.5">{displayDetail.experienceInfo.cancellation_policy}</dd>
+                      </div>
+                    )}
+                  </dl>
+                </section>
+              )}
 
               <section>
                 <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
@@ -1065,6 +1265,108 @@ export function Verification() {
                 <Check size={16} /> Approve
               </button>
               <button type="button" onClick={() => viewCarRequest && handleRejectCar(viewCarRequest.id)} disabled={!!actionLoading} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-100 disabled:opacity-60">
+                <X size={16} /> Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View flight details modal */}
+      {viewFlightRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" aria-hidden onClick={() => setViewFlightRequest(null)} />
+          <div className="relative z-10 w-full max-w-lg max-h-[90vh] overflow-auto bg-card rounded-2xl border border-forest-200 shadow-xl">
+            <div className="sticky top-0 bg-card border-b border-forest-200 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-foreground">Flight verification</h3>
+              <button type="button" onClick={() => setViewFlightRequest(null)} className="p-2 rounded-lg hover:bg-forest-100 text-muted-foreground hover:text-foreground" aria-label="Close">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <section>
+                <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><Plane size={18} className="text-forest-600" /> Flight & listing</h4>
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <dt className="text-muted-foreground">Flight number</dt>
+                    <dd className="font-medium font-mono text-foreground mt-0.5">{viewFlightRequest.flight_number}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Airline</dt>
+                    <dd className="font-medium text-foreground mt-0.5">{viewFlightRequest.airline_name}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Listing</dt>
+                    <dd className="text-foreground mt-0.5">{viewFlightRequest.listingName}</dd>
+                  </div>
+                  {displayFlightDetail?.aircraft_type && (
+                    <div>
+                      <dt className="text-muted-foreground">Aircraft type</dt>
+                      <dd className="text-foreground mt-0.5">{displayFlightDetail.aircraft_type}</dd>
+                    </div>
+                  )}
+                  <div>
+                    <dt className="text-muted-foreground">Token</dt>
+                    <dd className="font-mono text-foreground mt-0.5">{viewFlightRequest.token}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Requested</dt>
+                    <dd className="text-foreground mt-0.5">{displayFlightDetail?.requestedAt ?? viewFlightRequest.requestedAt}</dd>
+                  </div>
+                  {displayFlightDetail?.ownerName != null && (
+                    <div className="sm:col-span-2 flex items-start gap-2">
+                      <User size={18} className="text-forest-600 shrink-0 mt-0.5" />
+                      <div>
+                        <dt className="text-muted-foreground">Vendor</dt>
+                        <dd className="font-medium text-foreground mt-0.5">{displayFlightDetail.ownerName}</dd>
+                        {displayFlightDetail.ownerEmail && <dd className="text-muted-foreground text-xs mt-0.5">{displayFlightDetail.ownerEmail}</dd>}
+                      </div>
+                    </div>
+                  )}
+                </dl>
+              </section>
+
+              {(displayFlightDetail?.routes?.length ?? 0) > 0 && (
+                <section>
+                  <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><MapPin size={18} className="text-forest-600" /> Routes & pricing</h4>
+                  <ul className="space-y-2 text-sm">
+                    {displayFlightDetail!.routes!.map((r) => (
+                      <li key={r.id} className="rounded-lg border border-forest-200 p-3">
+                        <span className="text-foreground">{r.from_place} → {r.to_place}</span>
+                        <span className="text-muted-foreground ml-2">₹{(r.fare_cents / 100).toLocaleString("en-IN")}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {(displayFlightDetail?.documents?.length ?? 0) > 0 && (
+                <section>
+                  <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><FileText size={18} className="text-forest-600" /> Documents</h4>
+                  <ul className="space-y-2 text-sm">
+                    {displayFlightDetail!.documents!.map((doc, i) => (
+                      <li key={i} className="flex items-center gap-2 rounded-lg border border-forest-200 p-3">
+                        <span className="text-muted-foreground">{doc.document_type}</span>
+                        <span className="text-foreground truncate flex-1">{doc.file_name}</span>
+                        <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="shrink-0 px-2 py-1 rounded bg-forest-100 text-forest-700 text-xs font-medium hover:bg-forest-200">Open</a>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              {displayFlightDetail?.documents?.length === 0 && !viewFlightRequest.documents?.length && (
+                <section>
+                  <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><FileText size={18} className="text-forest-600" /> Documents</h4>
+                  <p className="text-sm text-muted-foreground py-2">No documents submitted.</p>
+                </section>
+              )}
+            </div>
+            <div className="sticky bottom-0 border-t border-forest-200 px-6 py-4 bg-card flex justify-end gap-2">
+              <button type="button" onClick={() => setViewFlightRequest(null)} className="px-4 py-2 rounded-lg border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-100">Close</button>
+              <button type="button" onClick={() => viewFlightRequest && handleApproveFlight(viewFlightRequest.id)} disabled={!!actionLoading} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-60">
+                <Check size={16} /> Approve
+              </button>
+              <button type="button" onClick={() => viewFlightRequest && handleRejectFlight(viewFlightRequest.id)} disabled={!!actionLoading} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-100 disabled:opacity-60">
                 <X size={16} /> Reject
               </button>
             </div>

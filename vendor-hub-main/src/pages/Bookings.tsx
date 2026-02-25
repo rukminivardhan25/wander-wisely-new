@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { vendorFetch } from "@/lib/api";
 import {
   Bus,
   Car,
+  Plane,
   UtensilsCrossed,
   Hotel,
   Ticket,
@@ -16,6 +17,8 @@ import {
   CheckCircle2,
   XCircle,
   Filter,
+  Eye,
+  Trash2,
 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -96,6 +99,182 @@ interface BusBookingCard {
   hasAisle?: boolean;
 }
 
+/** Static flight card for vendor Flight tab (seats, details, bookings in sidebar). */
+interface FlightBookingRow {
+  id: string;
+  ref: string;
+  customerName: string;
+  passengers: number;
+  amount: number;
+  status: string;
+}
+/** Cabin class section (e.g. Business rows A–B, Economy rows C–E). */
+interface SeatClassSection {
+  name: string;
+  rowFrom: string;
+  rowTo: string;
+  totalSeats: number;
+  booked: number;
+}
+/** Full seat layout from fleet (vendor-created). When present, seat structure is built from this. */
+interface FlightSeatLayout {
+  classes_enabled: { first: boolean; business: boolean; economy: boolean };
+  cabin_first: { rows: number; left_cols: number; right_cols: number };
+  cabin_business: { rows: number; left_cols: number; right_cols: number };
+  cabin_economy: { rows: number; left_cols: number; right_cols: number };
+}
+
+interface VendorFlightCard {
+  flightNumber: string;
+  airline: string;
+  aircraft: string;
+  route: string;
+  departureTime: string;
+  arrivalTime: string;
+  totalSeats: number;
+  seatsBooked: number;
+  pendingRequests: number;
+  bookings: FlightBookingRow[];
+  flightType: "domestic" | "international";
+  seatClasses: SeatClassSection[];
+  /** For fetching seat_layout when drawer opens */
+  listingId?: string;
+  flightId?: string;
+  /** Vendor-created structure from fleet; when set, seat map uses this instead of fixed 3-3 */
+  seatLayout?: FlightSeatLayout | null;
+}
+
+const ZERO_CABIN_BOOKINGS = { rows: 0, left_cols: 0, right_cols: 0 };
+
+function parseCabinBookings(c: unknown): { rows: number; left_cols: number; right_cols: number } {
+  if (!c || typeof c !== "object") return ZERO_CABIN_BOOKINGS;
+  const x = c as Record<string, unknown>;
+  return {
+    rows: typeof x.rows === "number" ? x.rows : 0,
+    left_cols: typeof x.left_cols === "number" ? x.left_cols : 0,
+    right_cols: typeof x.right_cols === "number" ? x.right_cols : 0,
+  };
+}
+
+/** Parse seat_layout from API (fleet structure). First, Business, Economy all supported; missing cabins default to zeros. */
+function parseSeatLayoutInBookings(seatLayout: unknown): FlightSeatLayout | null {
+  if (!seatLayout || typeof seatLayout !== "object") return null;
+  const o = seatLayout as Record<string, unknown>;
+  const ce = o.classes_enabled;
+  const cen = ce && typeof ce === "object" ? (ce as Record<string, unknown>) : {};
+  return {
+    classes_enabled: { first: Boolean(cen.first), business: Boolean(cen.business), economy: Boolean(cen.economy) },
+    cabin_first: parseCabinBookings(o.cabin_first),
+    cabin_business: parseCabinBookings(o.cabin_business),
+    cabin_economy: parseCabinBookings(o.cabin_economy),
+  };
+}
+
+const BOOKINGS_CABIN_ORDER = ["first", "business", "economy"] as const;
+const BOOKINGS_CABIN_LABEL: Record<string, string> = { first: "First", business: "Business", economy: "Economy / Budget" };
+const BOOKINGS_CABIN_COLOUR: Record<string, string> = {
+  first: "bg-amber-500/80 text-white",
+  business: "bg-blue-600/90 text-white",
+  economy: "bg-slate-500/80 text-white",
+};
+
+function buildSeatRowsBookings(layout: FlightSeatLayout): { cabin: string; globalRow: number; left_cols: number; right_cols: number }[] {
+  const out: { cabin: string; globalRow: number; left_cols: number; right_cols: number }[] = [];
+  let globalRow = 0;
+  for (const cabin of BOOKINGS_CABIN_ORDER) {
+    const enabled = cabin === "first" ? layout.classes_enabled.first : cabin === "business" ? layout.classes_enabled.business : layout.classes_enabled.economy;
+    if (!enabled) continue;
+    const config = cabin === "first" ? layout.cabin_first : cabin === "business" ? layout.cabin_business : layout.cabin_economy;
+    for (let r = 0; r < config.rows; r++) {
+      globalRow++;
+      out.push({ cabin, globalRow, left_cols: config.left_cols, right_cols: config.right_cols });
+    }
+  }
+  return out;
+}
+
+function seatLetterBookings(index: number, leftCount: number, rightCount: number): string {
+  if (index < leftCount) return String.fromCharCode(65 + index);
+  return String.fromCharCode(65 + leftCount + (index - leftCount));
+}
+
+// Static flights for vendor Flight tab (sidebar details + seat structure)
+const STATIC_VENDOR_FLIGHTS: VendorFlightCard[] = [
+  {
+    flightNumber: "6E-201",
+    airline: "IndiGo",
+    aircraft: "A320",
+    route: "HYD → BLR",
+    departureTime: "06:00",
+    arrivalTime: "07:15",
+    totalSeats: 30,
+    seatsBooked: 6,
+    pendingRequests: 2,
+    flightType: "domestic",
+    seatClasses: [
+      { name: "Economy", rowFrom: "A", rowTo: "E", totalSeats: 30, booked: 6 },
+    ],
+    bookings: [
+      { id: "fb1", ref: "FLT-A1B2C3", customerName: "Ramesh K.", passengers: 2, amount: 7000, status: "Pending" },
+      { id: "fb2", ref: "FLT-X9Y8Z7", customerName: "Priya S.", passengers: 1, amount: 3500, status: "Pending" },
+    ],
+  },
+  {
+    flightNumber: "6E-405",
+    airline: "IndiGo",
+    aircraft: "A321",
+    route: "HYD → BLR",
+    departureTime: "14:30",
+    arrivalTime: "15:45",
+    totalSeats: 28,
+    seatsBooked: 16,
+    pendingRequests: 0,
+    flightType: "domestic",
+    seatClasses: [
+      { name: "Economy", rowFrom: "A", rowTo: "D", totalSeats: 28, booked: 16 },
+    ],
+    bookings: [
+      { id: "fb3", ref: "FLT-M4N5P6", customerName: "Vikram R.", passengers: 3, amount: 10500, status: "Confirmed" },
+    ],
+  },
+  {
+    flightNumber: "UK-812",
+    airline: "Vistara",
+    aircraft: "B787",
+    route: "HYD → BLR",
+    departureTime: "18:00",
+    arrivalTime: "19:20",
+    totalSeats: 24,
+    seatsBooked: 16,
+    pendingRequests: 1,
+    flightType: "international",
+    seatClasses: [
+      { name: "Business", rowFrom: "A", rowTo: "B", totalSeats: 12, booked: 4 },
+      { name: "Economy", rowFrom: "C", rowTo: "D", totalSeats: 12, booked: 12 },
+    ],
+    bookings: [
+      { id: "fb4", ref: "FLT-Q7R8S9", customerName: "Anita M.", passengers: 2, amount: 12000, status: "Pending" },
+    ],
+  },
+  {
+    flightNumber: "AI-127",
+    airline: "Air India",
+    aircraft: "B777",
+    route: "DEL → BOM",
+    departureTime: "09:00",
+    arrivalTime: "11:25",
+    totalSeats: 60,
+    seatsBooked: 22,
+    pendingRequests: 3,
+    flightType: "domestic",
+    seatClasses: [
+      { name: "Business", rowFrom: "A", rowTo: "B", totalSeats: 12, booked: 2 },
+      { name: "Economy", rowFrom: "C", rowTo: "J", totalSeats: 48, booked: 20 },
+    ],
+    bookings: [],
+  },
+];
+
 // API response for GET /api/transport-bookings?date= (bookings/seatsBooked from main app)
 interface TransportBusFromApi {
   busId: string;
@@ -163,38 +342,44 @@ interface ScheduledCarArea {
 interface ScheduledCar {
   carId: string;
   carName: string;
+  registrationNumber?: string;
   areas: ScheduledCarArea[];
   listingId?: string;
   listingName?: string;
 }
 
-/** One card in the scheduled cars grid: car + one area (local or intercity). */
+/** One card in the scheduled cars grid: same layout as bus card (listing, name, registration, route, date, price, status, View Details). */
 function ScheduledCarCard({
-  carName,
-  listingName,
+  car,
   area,
+  onViewDetails,
 }: {
-  carName: string;
-  listingName?: string;
+  car: ScheduledCar;
   area: ScheduledCarArea;
+  onViewDetails?: () => void;
 }) {
   const isLocal = (area.areaType || "local").toLowerCase() === "local";
   const routeLabel = isLocal ? (area.cityName ?? "—") : `${area.fromCity ?? "—"} → ${area.toCity ?? "—"}`;
   const dateLabel = isLocal
     ? area.fromDate && area.toDate
-      ? `All dates: ${area.fromDate} to ${area.toDate}`
+      ? `${area.fromDate} to ${area.toDate}`
       : "—"
     : area.fromDate
-      ? `Starts: ${area.fromDate}`
+      ? area.toDate
+        ? `${area.fromDate} to ${area.toDate}`
+        : area.fromDate
       : "—";
-  const timeOrPrice =
+  const timeLabel =
     isLocal && area.startTime && area.endTime
       ? `${area.startTime.slice(0, 5)}–${area.endTime.slice(0, 5)}`
-      : area.pricePerKmCents != null
-        ? `₹${(area.pricePerKmCents / 100).toFixed(2)}/km`
-        : area.baseFareCents != null
-          ? `₹${(area.baseFareCents / 100).toLocaleString("en-IN")}`
-          : "—";
+      : null;
+  const priceLabel =
+    area.pricePerKmCents != null
+      ? `₹${(area.pricePerKmCents / 100).toFixed(2)}/km`
+      : area.baseFareCents != null
+        ? `₹${(area.baseFareCents / 100).toLocaleString("en-IN")}`
+        : null;
+  const regNum = (car.registrationNumber || "").trim() || null;
 
   return (
     <motion.div
@@ -204,29 +389,240 @@ function ScheduledCarCard({
     >
       <Card className="border-0 shadow-none rounded-2xl">
         <CardContent className="p-5">
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-start gap-3">
               <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
                 <Car className="h-6 w-6 text-slate-600" />
               </div>
-              <div className="min-w-0 flex-1">
-                {listingName && (
+              <div>
+                {car.listingName && (
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    {listingName}
+                    {car.listingName}
                   </p>
                 )}
-                <p className="font-semibold text-foreground">{carName}</p>
-                <p className="text-sm text-muted-foreground mt-0.5 capitalize">
-                  {area.areaType || "local"} · {routeLabel}
+                <p className="font-semibold text-foreground">{car.carName}</p>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {regNum ? `${regNum} · ` : ""}Route: {routeLabel}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">{dateLabel}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{timeOrPrice}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Date: {dateLabel}
+                  {timeLabel ? ` · ${timeLabel}` : ""}
+                </p>
               </div>
             </div>
+            <div className="flex flex-col sm:items-end gap-1">
+              <p className="text-sm text-muted-foreground capitalize">
+                {area.areaType || "local"}
+              </p>
+              <p className="text-lg font-semibold text-foreground">
+                {priceLabel ?? "—"}
+              </p>
+              <StatusBadge status="scheduled" type="car" />
+            </div>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-4 w-full sm:w-auto rounded-xl gap-2"
+            onClick={onViewDetails}
+          >
+            View Details
+            <ChevronRight className="h-4 w-4" />
+          </Button>
         </CardContent>
       </Card>
     </motion.div>
+  );
+}
+
+/** Right sidebar content for a selected car schedule: date, schedule details, booking status, pending requests. */
+function CarDetailSidebar({
+  car,
+  area,
+  selectedDate,
+  carBookings,
+  onAccept,
+  onReject,
+  actionId,
+}: {
+  car: ScheduledCar;
+  area: ScheduledCarArea;
+  selectedDate: string;
+  carBookings: CarBookingRow[];
+  dateFilter?: string;
+  onAccept: (listingId: string, bookingId: string) => void;
+  onReject: (listingId: string, bookingId: string) => void;
+  actionId: string | null;
+  onClose?: () => void;
+}) {
+  const isLocal = (area.areaType || "local").toLowerCase() === "local";
+  const routeLabel = isLocal ? (area.cityName ?? "—") : `${area.fromCity ?? "—"} → ${area.toCity ?? "—"}`;
+  const dateRange =
+    area.fromDate && area.toDate
+      ? `${area.fromDate} to ${area.toDate}`
+      : area.fromDate
+        ? area.fromDate
+        : "—";
+  const timeRange =
+    area.startTime && area.endTime
+      ? `${String(area.startTime).slice(0, 5)}–${String(area.endTime).slice(0, 5)}`
+      : null;
+  const priceLabel =
+    area.pricePerKmCents != null
+      ? `₹${(area.pricePerKmCents / 100).toFixed(2)}/km`
+      : area.baseFareCents != null
+        ? `₹${(area.baseFareCents / 100).toLocaleString("en-IN")}`
+        : "—";
+  const pending = carBookings.filter((b) => b.status === "pending_vendor");
+  const others = carBookings.filter((b) => b.status !== "pending_vendor");
+
+  return (
+    <div className="mt-6 space-y-6">
+      {/* Schedule & date */}
+      <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
+        <p className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+          <CalendarIcon className="h-4 w-4" />
+          Schedule & date
+        </p>
+        <dl className="space-y-1.5 text-sm">
+          <div>
+            <dt className="text-muted-foreground">Viewing date</dt>
+            <dd className="font-medium text-foreground">{selectedDate}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Date range</dt>
+            <dd className="font-medium text-foreground">{dateRange}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Route</dt>
+            <dd className="font-medium text-foreground">{routeLabel}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Type</dt>
+            <dd className="font-medium text-foreground capitalize">{area.areaType || "local"}</dd>
+          </div>
+          {timeRange && (
+            <div>
+              <dt className="text-muted-foreground">Time</dt>
+              <dd className="font-medium text-foreground">{timeRange}</dd>
+            </div>
+          )}
+          <div>
+            <dt className="text-muted-foreground">Price</dt>
+            <dd className="font-medium text-foreground">{priceLabel}</dd>
+          </div>
+        </dl>
+        <p className="text-xs text-muted-foreground mt-2">
+          {car.listingName && <span>{car.listingName} · </span>}
+          {car.carName}
+          {car.registrationNumber && ` · ${car.registrationNumber}`}
+        </p>
+      </div>
+
+      {/* Booking status summary */}
+      <div>
+        <p className="text-sm font-semibold text-foreground mb-2">Booking status</p>
+        <p className="text-sm text-muted-foreground">
+          {carBookings.length === 0
+            ? "No booking requests for this car on this date."
+            : `${pending.length} pending, ${others.length} other (approved/rejected/confirmed).`}
+        </p>
+      </div>
+
+      {/* Pending requests */}
+      {pending.length > 0 && (
+        <div>
+          <p className="text-sm font-semibold text-foreground mb-2">Pending requests</p>
+          <div className="rounded-xl border border-slate-200 overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="font-medium">Ref</TableHead>
+                  <TableHead className="font-medium">Details</TableHead>
+                  <TableHead className="font-medium">Amount</TableHead>
+                  <TableHead className="font-medium">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pending.map((b) => (
+                  <TableRow key={b.id}>
+                    <TableCell className="py-2 font-mono text-sm">{b.bookingRef}</TableCell>
+                    <TableCell className="py-2 text-sm">
+                      {b.bookingType === "local" ? (
+                        <>{(b.pickupPoint || b.city) ?? "—"} → {(b.dropPoint || b.city) ?? "—"}</>
+                      ) : (
+                        <>{b.fromCity ?? "—"} → {b.toCity ?? "—"}</>
+                      )}
+                      <span className="text-muted-foreground ml-1">· {b.passengers} pax</span>
+                    </TableCell>
+                    <TableCell className="py-2 text-sm">
+                      {b.totalCents != null ? `₹${(b.totalCents / 100).toLocaleString("en-IN")}` : "—"}
+                    </TableCell>
+                    <TableCell className="py-2">
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="rounded-lg gap-1 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                          disabled={actionId === b.id}
+                          onClick={() => b.listingId && onAccept(b.listingId, b.id)}
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Accept
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="rounded-lg gap-1 text-red-600 border-red-200 hover:bg-red-50"
+                          disabled={actionId === b.id}
+                          onClick={() => b.listingId && onReject(b.listingId, b.id)}
+                        >
+                          <XCircle className="h-3.5 w-3.5" /> Reject
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
+
+      {/* All requests for this car (non-pending) */}
+      {others.length > 0 && (
+        <div>
+          <p className="text-sm font-semibold text-foreground mb-2">Other requests</p>
+          <div className="rounded-xl border border-slate-200 overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="font-medium">Ref</TableHead>
+                  <TableHead className="font-medium">Details</TableHead>
+                  <TableHead className="font-medium">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {others.map((b) => (
+                  <TableRow key={b.id}>
+                    <TableCell className="py-2 font-mono text-sm">{b.bookingRef}</TableCell>
+                    <TableCell className="py-2 text-sm">
+                      {b.bookingType === "local" ? (
+                        <>{(b.pickupPoint || b.city) ?? "—"} → {(b.dropPoint || b.city) ?? "—"}</>
+                      ) : (
+                        <>{b.fromCity ?? "—"} → {b.toCity ?? "—"}</>
+                      )}
+                    </TableCell>
+                    <TableCell className="py-2">
+                      <StatusBadge status={b.status} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -394,6 +790,7 @@ const BUS_STATUS_STYLES: Record<string, string> = {
   active: "bg-emerald-500/15 text-emerald-700",
   completed: "bg-blue-500/15 text-blue-700",
   cancelled: "bg-red-500/15 text-red-700",
+  scheduled: "bg-emerald-500/15 text-emerald-700",
 };
 
 /** Convert seat label (A1, B2, ...) to 1-based seat number. colsPerRow = left + right. */
@@ -432,9 +829,9 @@ function StatusBadge({
   type = "booking",
 }: {
   status: string;
-  type?: "booking" | "bus";
+  type?: "booking" | "bus" | "car";
 }) {
-  const styles = type === "bus" ? BUS_STATUS_STYLES : BOOKING_STATUS_STYLES;
+  const styles = type === "bus" || type === "car" ? BUS_STATUS_STYLES : BOOKING_STATUS_STYLES;
   const label = status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   return (
     <span
@@ -729,6 +1126,239 @@ function BookingTable({
   );
 }
 
+function FlightInfoHeader({ flight }: { flight: VendorFlightCard }) {
+  const seatsLeft = flight.totalSeats - flight.seatsBooked;
+  const classes = flight.seatClasses?.length ? flight.seatClasses : [{ name: "Economy", rowFrom: "A", rowTo: String.fromCharCode(64 + Math.ceil(flight.totalSeats / 6)), totalSeats: flight.totalSeats, booked: flight.seatsBooked }];
+  return (
+    <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 mb-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <p className="font-semibold text-foreground font-mono">{flight.flightNumber}</p>
+        <span className={cn(
+          "inline-flex text-xs font-medium px-2 py-0.5 rounded-full",
+          flight.flightType === "international" ? "bg-blue-100 text-blue-800" : "bg-slate-200 text-slate-700"
+        )}>
+          {flight.flightType === "international" ? "International" : "Domestic"}
+        </span>
+      </div>
+      <p className="text-sm text-muted-foreground mt-1">
+        {flight.airline} · {flight.aircraft} · {flight.route}
+      </p>
+      <p className="text-sm text-muted-foreground mt-1">
+        {flight.departureTime} – {flight.arrivalTime}
+      </p>
+      <p className="text-xs text-muted-foreground mt-2">
+        Total seats: {flight.totalSeats} · Seats left: <span className="font-medium text-foreground">{seatsLeft}</span> · Booked: {flight.seatsBooked} · Pending requests: {flight.pendingRequests}
+      </p>
+      {classes.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-slate-200">
+          <p className="text-xs font-medium text-muted-foreground mb-1.5">Class details</p>
+          <ul className="text-xs text-muted-foreground space-y-0.5">
+            {classes.map((c, i) => (
+              <li key={i}>
+                <span className="font-medium text-foreground">{c.name}</span>: rows {c.rowFrom}–{c.rowTo} · {c.booked}/{c.totalSeats} booked
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FlightSeatStructure({ flight }: { flight: VendorFlightCard }) {
+  const total = flight.totalSeats;
+  const booked = flight.seatsBooked;
+  const seatLayout = flight.seatLayout ?? null;
+
+  /** When using vendor layout: build rows and track global seat index for booked state */
+  const seatRowsFromLayout = seatLayout ? buildSeatRowsBookings(seatLayout) : null;
+  const totalFromLayout = seatRowsFromLayout ? seatRowsFromLayout.reduce((s, r) => s + r.left_cols + r.right_cols, 0) : 0;
+
+  /** First N seats (by front-to-back order) are booked */
+  const bookedSet = new Set<number>();
+  if (seatRowsFromLayout) {
+    let idx = 0;
+    for (const row of seatRowsFromLayout) {
+      const rowSeats = row.left_cols + row.right_cols;
+      for (let i = 0; i < rowSeats && idx < total; i++) {
+        idx++;
+        if (idx <= booked) bookedSet.add(idx);
+      }
+    }
+  } else {
+    const colsPerRow = 6;
+    const rows = Math.ceil(total / colsPerRow);
+    for (let i = 0; i < booked && i < total; i++) bookedSet.add(i + 1);
+  }
+
+  const seatClasses = flight.seatClasses ?? [];
+  const rowToClass = new Map<string, string>();
+  seatClasses.forEach((sc) => {
+    const start = sc.rowFrom.charCodeAt(0);
+    const end = sc.rowTo.charCodeAt(0);
+    for (let r = start; r <= end; r++) rowToClass.set(String.fromCharCode(r), sc.name);
+  });
+
+  const colsPerRow = 6;
+  const rows = Math.ceil(total / colsPerRow);
+
+  return (
+    <div className="mb-6">
+      <p className="text-sm font-medium text-foreground mb-3">Seat structure · Tickets booked: {booked} / {total}</p>
+      {seatLayout && (
+        <div className="flex flex-wrap gap-2 mb-3">
+          {BOOKINGS_CABIN_ORDER.map((cabin) => {
+            if (!(cabin === "first" ? seatLayout.classes_enabled.first : cabin === "business" ? seatLayout.classes_enabled.business : seatLayout.classes_enabled.economy)) return null;
+            const config = cabin === "first" ? seatLayout.cabin_first : cabin === "business" ? seatLayout.cabin_business : seatLayout.cabin_economy;
+            const classTotal = config.rows * (config.left_cols + config.right_cols);
+            return (
+              <span key={cabin} className={cn("text-xs font-medium px-2.5 py-1 rounded-md", BOOKINGS_CABIN_COLOUR[cabin] ?? "bg-slate-200")}>
+                {BOOKINGS_CABIN_LABEL[cabin]}: {config.rows} rows × {config.left_cols}-{config.right_cols} → {classTotal} seats
+              </span>
+            );
+          })}
+        </div>
+      )}
+      <div className="rounded-2xl overflow-hidden bg-slate-600 border border-slate-500 shadow-inner">
+        <div className="bg-slate-700 text-slate-200 py-2 px-4 text-center text-xs font-medium border-b border-slate-600">
+          Front · Cockpit
+        </div>
+        <div className="max-h-64 overflow-y-auto overflow-x-auto bg-slate-600" style={{ minHeight: "80px" }}>
+          <div className="p-3">
+            {seatRowsFromLayout ? (() => {
+              let globalSeatIndex = 0;
+              return (
+                <div className="flex gap-1 items-end justify-start min-w-max">
+                  {seatRowsFromLayout.map((row) => {
+                    const colour = BOOKINGS_CABIN_COLOUR[row.cabin] ?? "bg-slate-400";
+                    const rowLetter = String.fromCharCode(64 + row.globalRow);
+                    const leftLabels = Array.from({ length: row.left_cols }, (_, i) => `${rowLetter}${i + 1}`);
+                    const rightLabels = Array.from({ length: row.right_cols }, (_, i) => `${rowLetter}${row.left_cols + i + 1}`);
+                    return (
+                      <div key={`${row.globalRow}-${row.cabin}`} className="flex flex-col gap-0.5 flex-shrink-0 w-12 border border-slate-500/80 rounded-md overflow-hidden bg-slate-600/50">
+                        <div className="text-[10px] font-bold text-center py-1 bg-slate-700 text-slate-300 border-b border-slate-600">{row.globalRow}</div>
+                        <div className="flex flex-1 p-0.5 gap-0.5">
+                          <div className="flex flex-col gap-0.5 flex-1">
+                            {leftLabels.map((label) => {
+                              globalSeatIndex++;
+                              const isBooked = bookedSet.has(globalSeatIndex);
+                              return (
+                                <div key={label} title={isBooked ? `${label} · Booked` : `${label} · Available`} className={cn("min-h-[22px] flex items-center justify-center text-[10px] font-semibold rounded", isBooked ? "bg-slate-400 text-slate-700" : "bg-emerald-500 text-white", colour)}>{label}</div>
+                              );
+                            })}
+                          </div>
+                          <div className="w-1 bg-slate-500 rounded self-stretch my-0.5 shrink-0" aria-label="Aisle" />
+                          <div className="flex flex-col gap-0.5 flex-1">
+                            {rightLabels.map((label) => {
+                              globalSeatIndex++;
+                              const isBooked = bookedSet.has(globalSeatIndex);
+                              return (
+                                <div key={label} title={isBooked ? `${label} · Booked` : `${label} · Available`} className={cn("min-h-[22px] flex items-center justify-center text-[10px] font-semibold rounded", isBooked ? "bg-slate-400 text-slate-700" : "bg-emerald-500 text-white", colour)}>{label}</div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })() : (
+              Array.from({ length: rows }, (_, rowIndex) => {
+                const rowLetter = String.fromCharCode(65 + rowIndex);
+                const classForRow = rowToClass.get(rowLetter);
+                const showClassLabel = classForRow && (rowIndex === 0 || rowToClass.get(String.fromCharCode(64 + rowIndex)) !== classForRow);
+                return (
+                  <div key={rowIndex}>
+                    {showClassLabel && (
+                      <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1 mt-1 first:mt-0">{classForRow}</div>
+                    )}
+                    <div className="flex items-center gap-1.5 mb-2 last:mb-0">
+                      <span className="w-5 text-center text-xs font-semibold text-slate-300 shrink-0">{rowLetter}</span>
+                      <div className="flex-1 flex items-center gap-1">
+                        {[0, 1, 2].map((col) => {
+                          const seatNum = rowIndex * colsPerRow + col + 1;
+                          if (seatNum > total) return <div key={col} className="w-9 h-8 rounded flex-shrink-0" />;
+                          const isBooked = bookedSet.has(seatNum);
+                          const seatLabel = `${rowLetter}${col + 1}`;
+                          return (
+                            <div key={seatNum} title={isBooked ? `${seatLabel} · Booked` : `${seatLabel} · Available`} className={cn("w-9 h-8 rounded-md text-[11px] font-semibold flex items-center justify-center flex-shrink-0 transition-colors", isBooked ? "bg-slate-400 text-slate-700" : "bg-emerald-500 text-white")}>{seatLabel}</div>
+                          );
+                        })}
+                      </div>
+                      <div className="w-3 h-8 rounded bg-slate-500 flex-shrink-0" aria-label="Aisle" />
+                      <div className="flex-1 flex items-center gap-1">
+                        {[3, 4, 5].map((col) => {
+                          const seatNum = rowIndex * colsPerRow + col + 1;
+                          if (seatNum > total) return <div key={col} className="w-9 h-8 rounded flex-shrink-0" />;
+                          const isBooked = bookedSet.has(seatNum);
+                          const seatLabel = `${rowLetter}${col + 1}`;
+                          return (
+                            <div key={seatNum} title={isBooked ? `${seatLabel} · Booked` : `${seatLabel} · Available`} className={cn("w-9 h-8 rounded-md text-[11px] font-semibold flex items-center justify-center flex-shrink-0 transition-colors", isBooked ? "bg-slate-400 text-slate-700" : "bg-emerald-500 text-white")}>{seatLabel}</div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+      <p className="text-xs text-slate-400 mt-2 text-center">
+        {seatRowsFromLayout ? `Front ← rows (left | aisle | right) → Back · ${totalFromLayout} seats` : `Rows A–${String.fromCharCode(64 + rows)} · Left 1–3 · Aisle · Right 4–6`}
+      </p>
+      <div className="flex gap-4 mt-2 text-xs justify-center flex-wrap">
+        <span className="flex items-center gap-1.5 text-muted-foreground"><span className="w-3.5 h-3.5 rounded bg-emerald-500" /> Available</span>
+        <span className="flex items-center gap-1.5 text-muted-foreground"><span className="w-3.5 h-3.5 rounded bg-slate-400" /> Booked</span>
+      </div>
+    </div>
+  );
+}
+
+function FlightBookingsTable({ bookings }: { bookings: FlightBookingRow[] }) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow className="border-slate-200 hover:bg-transparent">
+          <TableHead className="font-medium text-muted-foreground">Ref</TableHead>
+          <TableHead className="font-medium text-muted-foreground">Customer</TableHead>
+          <TableHead className="font-medium text-muted-foreground">Passengers</TableHead>
+          <TableHead className="font-medium text-muted-foreground">Amount</TableHead>
+          <TableHead className="font-medium text-muted-foreground">Status</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {bookings.length === 0 ? (
+          <TableRow>
+            <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+              No bookings for this flight.
+            </TableCell>
+          </TableRow>
+        ) : (
+          bookings.map((b) => (
+            <TableRow key={b.id} className="border-slate-100">
+              <TableCell className="font-mono text-xs">{b.ref}</TableCell>
+              <TableCell className="font-medium text-foreground">{b.customerName}</TableCell>
+              <TableCell className="text-foreground">{b.passengers}</TableCell>
+              <TableCell className="font-medium text-foreground">₹{b.amount.toLocaleString("en-IN")}</TableCell>
+              <TableCell>
+                <span className={cn(
+                  "inline-flex text-xs font-medium px-2 py-0.5 rounded-full",
+                  b.status === "Pending" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
+                )}>
+                  {b.status}
+                </span>
+              </TableCell>
+            </TableRow>
+          ))
+        )}
+      </TableBody>
+    </Table>
+  );
+}
+
 function BookingDetailModal({
   booking,
   open,
@@ -849,15 +1479,712 @@ function HotelBookingsSection() {
   );
 }
 
-function ExperienceBookingsSection() {
+type ExperienceBookingRow = {
+  id: string;
+  bookingRef: string;
+  userId: string;
+  participantsCount: number;
+  totalCents: number;
+  status: string;
+  paidAt?: string;
+  createdAt: string;
+  slotDate: string;
+  slotTime: string;
+};
+
+/** Experience details from GET /api/listings/:listingId/experience */
+type ExperienceInfo = {
+  name: string;
+  category: string;
+  city: string;
+  location_address?: string | null;
+  duration_text: string;
+  short_description?: string | null;
+  long_description?: string | null;
+  max_participants_per_slot: number;
+  price_per_person_cents: number;
+  tax_included?: boolean;
+  status: string;
+};
+
+function ExperienceBookingsSection({ dateFilter }: { dateFilter: string }) {
+  const [listings, setListings] = useState<{ id: string; name: string; type: string }[]>([]);
+  const [bookingsByListing, setBookingsByListing] = useState<Record<string, { experienceName: string; bookings: ExperienceBookingRow[] }>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [experienceDetailOpen, setExperienceDetailOpen] = useState(false);
+  const [selectedExperienceDetail, setSelectedExperienceDetail] = useState<{ listingId: string; experienceName: string; bookings: ExperienceBookingRow[] } | null>(null);
+  const [experienceDetailsLoading, setExperienceDetailsLoading] = useState(false);
+  const [selectedExperienceInfo, setSelectedExperienceInfo] = useState<ExperienceInfo | null>(null);
+  const [bookingDetailOpen, setBookingDetailOpen] = useState(false);
+  const [selectedBookingDetail, setSelectedBookingDetail] = useState<(ExperienceBookingRow & { listingId: string; experienceName: string }) | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    vendorFetch<{ listings: { id: string; name: string; type: string }[] }>("/api/listings")
+      .then((data) => {
+        if (cancelled) return;
+        const expListings = (data.listings ?? []).filter((l) => (l.type || "").toLowerCase() === "experience");
+        setListings(expListings);
+        if (expListings.length === 0) {
+          setBookingsByListing({});
+          return;
+        }
+        return Promise.all(
+          expListings.map((listing) =>
+            vendorFetch<{ bookings: ExperienceBookingRow[] }>(
+              `/api/listings/${listing.id}/experience/bookings?date=${encodeURIComponent(dateFilter)}`
+            ).then((res) => ({ listing, bookings: res.bookings ?? [] }))
+          )
+        );
+      })
+      .then((results) => {
+        if (cancelled || !results) return;
+        const byListing: Record<string, { experienceName: string; bookings: ExperienceBookingRow[] }> = {};
+        results.forEach((r: { listing: { id: string; name: string }; bookings: ExperienceBookingRow[] }) => {
+          byListing[r.listing.id] = { experienceName: r.listing.name, bookings: r.bookings };
+        });
+        setBookingsByListing(byListing);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dateFilter]);
+
+  if (loading) {
+    return (
+      <Card className="rounded-2xl border border-slate-200/80 shadow-sm">
+        <CardContent className="p-8 text-center">
+          <p className="text-sm text-muted-foreground">Loading experience bookings for {dateFilter}…</p>
+        </CardContent>
+      </Card>
+    );
+  }
+  if (error) {
+    return (
+      <Card className="rounded-2xl border border-slate-200/80 shadow-sm">
+        <CardContent className="p-8 text-center">
+          <p className="text-sm text-destructive">{error}</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const allEntries = Object.entries(bookingsByListing).flatMap(([listingId, { experienceName, bookings }]) =>
+    bookings.map((b) => ({ listingId, experienceName, ...b }))
+  );
+  const hasAny = allEntries.length > 0;
+
+  const openExperienceDetail = (listingId: string) => {
+    const entry = bookingsByListing[listingId];
+    if (entry) setSelectedExperienceDetail({ listingId, experienceName: entry.experienceName, bookings: entry.bookings });
+    setSelectedExperienceInfo(null);
+    setExperienceDetailOpen(true);
+    setExperienceDetailsLoading(true);
+    vendorFetch<ExperienceInfo>(`/api/listings/${listingId}/experience`)
+      .then((data) => setSelectedExperienceInfo(data))
+      .catch(() => setSelectedExperienceInfo(null))
+      .finally(() => setExperienceDetailsLoading(false));
+  };
+
+  const closeExperienceDetail = () => {
+    setExperienceDetailOpen(false);
+    setSelectedExperienceDetail(null);
+    setSelectedExperienceInfo(null);
+  };
+  const openBookingDetail = (b: typeof allEntries[0]) => {
+    setSelectedBookingDetail(b);
+    setBookingDetailOpen(true);
+  };
+
   return (
-    <Card className="rounded-2xl border border-slate-200/80 shadow-sm">
-      <CardContent className="p-12 text-center">
-        <Ticket className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-        <p className="font-medium text-foreground">Experience bookings</p>
-        <p className="text-sm text-muted-foreground mt-1">Coming soon.</p>
-      </CardContent>
-    </Card>
+    <>
+      <div className="space-y-6">
+        {/* Experience cards for this date */}
+        <Card className="rounded-2xl border border-slate-200/80 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-display font-semibold flex items-center gap-2">
+              <Ticket className="h-5 w-5" />
+              Experiences for {dateFilter}
+            </CardTitle>
+            <p className="text-sm text-muted-foreground font-normal">Click View details on a card to see all bookings for that experience.</p>
+          </CardHeader>
+          <CardContent>
+            {listings.length === 0 ? (
+              <p className="text-sm text-muted-foreground">You have no experience listings. Add one from My Listings.</p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {listings.map((listing) => {
+                  const entry = bookingsByListing[listing.id];
+                  const count = entry?.bookings?.length ?? 0;
+                  return (
+                    <div
+                      key={listing.id}
+                      className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 flex flex-col"
+                    >
+                      <p className="font-medium text-foreground">{entry?.experienceName ?? listing.name}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{count} booking{count !== 1 ? "s" : ""} for this day</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-3 rounded-lg gap-1.5 w-fit"
+                        onClick={() => openExperienceDetail(listing.id)}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        View details
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* All bookings for this day (table with full details on click) */}
+        <Card className="rounded-2xl border border-slate-200/80 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-display font-semibold">Bookings for {dateFilter}</CardTitle>
+            <p className="text-sm text-muted-foreground font-normal">Click the icon to see complete booking and payment details.</p>
+          </CardHeader>
+          <CardContent>
+            {listings.length === 0 ? null : !hasAny ? (
+              <p className="text-sm text-muted-foreground">No bookings for this date yet.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-9">Details</TableHead>
+                    <TableHead>Ref</TableHead>
+                    <TableHead>Experience</TableHead>
+                    <TableHead>Slot</TableHead>
+                    <TableHead>Participants</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {allEntries.map((b) => (
+                    <TableRow key={b.id}>
+                      <TableCell className="w-9 p-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 rounded-lg text-slate-600 hover:bg-slate-100"
+                          title="View full details"
+                          onClick={() => openBookingDetail(b)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{b.bookingRef}</TableCell>
+                      <TableCell>{b.experienceName}</TableCell>
+                      <TableCell>{b.slotDate} · {b.slotTime}</TableCell>
+                      <TableCell>{b.participantsCount}</TableCell>
+                      <TableCell>₹{(b.totalCents / 100).toFixed(0)}</TableCell>
+                      <TableCell>
+                        <span className={b.paidAt ? "text-emerald-600" : "text-amber-600"}>
+                          {b.paidAt ? "Paid" : "Pending payment"}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Sheet: experience details first, then bookings for one experience on this day */}
+      <Sheet open={experienceDetailOpen} onOpenChange={(o) => !o && closeExperienceDetail()}>
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto rounded-l-2xl">
+          <SheetHeader>
+            <SheetTitle>
+              {selectedExperienceDetail ? `${selectedExperienceDetail.experienceName} — ${dateFilter}` : "Experience details"}
+            </SheetTitle>
+          </SheetHeader>
+          {selectedExperienceDetail && (
+            <div className="mt-6 space-y-6">
+              {/* Experience details (fetched) */}
+              <div>
+                <h4 className="text-sm font-semibold text-foreground mb-3">Experience details</h4>
+                {experienceDetailsLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading…</p>
+                ) : selectedExperienceInfo ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-2 text-sm">
+                    <p><span className="text-muted-foreground">Name:</span> <strong>{selectedExperienceInfo.name}</strong></p>
+                    <p><span className="text-muted-foreground">Category:</span> {selectedExperienceInfo.category}</p>
+                    <p><span className="text-muted-foreground">City:</span> {selectedExperienceInfo.city}</p>
+                    {selectedExperienceInfo.location_address && (
+                      <p><span className="text-muted-foreground">Address:</span> {selectedExperienceInfo.location_address}</p>
+                    )}
+                    <p><span className="text-muted-foreground">Duration:</span> {selectedExperienceInfo.duration_text}</p>
+                    <p><span className="text-muted-foreground">Max participants per slot:</span> {selectedExperienceInfo.max_participants_per_slot}</p>
+                    <p><span className="text-muted-foreground">Price per person:</span> ₹{(selectedExperienceInfo.price_per_person_cents / 100).toFixed(0)}{selectedExperienceInfo.tax_included ? " (tax included)" : ""}</p>
+                    {selectedExperienceInfo.short_description && (
+                      <p><span className="text-muted-foreground">Description:</span> {selectedExperienceInfo.short_description}</p>
+                    )}
+                    <p><span className="text-muted-foreground">Status:</span> {selectedExperienceInfo.status}</p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Could not load experience details.</p>
+                )}
+              </div>
+
+              {/* Bookings for this day */}
+              <div>
+                <h4 className="text-sm font-semibold text-foreground mb-3">Bookings for this day</h4>
+                {selectedExperienceDetail.bookings.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No bookings for this experience on this date.</p>
+                ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Ref</TableHead>
+                      <TableHead>Slot</TableHead>
+                      <TableHead>Participants</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-9" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedExperienceDetail.bookings.map((b) => (
+                      <TableRow key={b.id}>
+                        <TableCell className="font-mono text-xs">{b.bookingRef}</TableCell>
+                        <TableCell>{b.slotDate} · {b.slotTime}</TableCell>
+                        <TableCell>{b.participantsCount}</TableCell>
+                        <TableCell>₹{(b.totalCents / 100).toFixed(0)}</TableCell>
+                        <TableCell>
+                          <span className={b.paidAt ? "text-emerald-600" : "text-amber-600"}>
+                            {b.paidAt ? "Paid" : "Pending payment"}
+                          </span>
+                        </TableCell>
+                        <TableCell className="p-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title="View full details"
+                            onClick={() => {
+                              setExperienceDetailOpen(false);
+                              setSelectedBookingDetail({ ...b, listingId: selectedExperienceDetail.listingId, experienceName: selectedExperienceDetail.experienceName });
+                              setBookingDetailOpen(true);
+                            }}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                )}
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Sheet: single booking full details */}
+      <Sheet open={bookingDetailOpen} onOpenChange={(o) => !o && (setBookingDetailOpen(false), setSelectedBookingDetail(null))}>
+        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto rounded-l-2xl">
+          <SheetHeader>
+            <SheetTitle>Booking details</SheetTitle>
+          </SheetHeader>
+          {selectedBookingDetail && (
+            <div className="mt-6 space-y-4">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Booking reference</p>
+                <p className="font-mono font-semibold text-foreground mt-0.5">{selectedBookingDetail.bookingRef}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Experience</p>
+                <p className="text-foreground mt-0.5">{selectedBookingDetail.experienceName}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Slot</p>
+                <p className="text-foreground mt-0.5">{selectedBookingDetail.slotDate} · {selectedBookingDetail.slotTime}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Participants</p>
+                <p className="text-foreground mt-0.5">{selectedBookingDetail.participantsCount}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Amount</p>
+                <p className="text-foreground mt-0.5">₹{(selectedBookingDetail.totalCents / 100).toFixed(0)}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Payment status</p>
+                <p className={`mt-0.5 ${selectedBookingDetail.paidAt ? "text-emerald-600" : "text-amber-600"}`}>
+                  {selectedBookingDetail.paidAt ? "Paid" : "Pending payment"}
+                </p>
+                {selectedBookingDetail.paidAt && (
+                  <p className="text-xs text-muted-foreground mt-0.5">Paid at: {new Date(selectedBookingDetail.paidAt).toLocaleString()}</p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Booked on</p>
+                <p className="text-foreground mt-0.5 text-sm">{new Date(selectedBookingDetail.createdAt).toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">User</p>
+                <p className="text-foreground mt-0.5 text-sm font-mono text-muted-foreground">ID: {selectedBookingDetail.userId?.slice(0, 8)}…</p>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+    </>
+  );
+}
+
+type EventBookingRow = {
+  id: string;
+  bookingRef: string;
+  userId: string;
+  totalCents: number;
+  status: string;
+  paidAt?: string;
+  createdAt: string;
+};
+
+/** Event details from GET /api/listings/:listingId/event */
+type EventInfo = {
+  name: string;
+  category: string;
+  city: string;
+  venue_name: string;
+  venue_address?: string | null;
+  start_date: string;
+  end_date: string;
+  start_time: string;
+  end_time: string;
+  organizer_name: string;
+  description?: string | null;
+  status: string;
+  ticket_types?: { name: string; price_cents: number; quantity_total: number; max_per_user: number }[];
+};
+
+function EventBookingsSection({ dateFilter }: { dateFilter: string }) {
+  const [listings, setListings] = useState<{ id: string; name: string; type: string }[]>([]);
+  const [eventsByListing, setEventsByListing] = useState<Record<string, { eventName: string; startDate: string; endDate: string }>>({});
+  const [bookingsByListing, setBookingsByListing] = useState<Record<string, { eventName: string; startDate: string; endDate: string; bookings: EventBookingRow[] }>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [eventDetailOpen, setEventDetailOpen] = useState(false);
+  const [selectedEventDetail, setSelectedEventDetail] = useState<{ listingId: string; eventName: string; bookings: EventBookingRow[] } | null>(null);
+  const [eventDetailsLoading, setEventDetailsLoading] = useState(false);
+  const [selectedEventInfo, setSelectedEventInfo] = useState<EventInfo | null>(null);
+  const [bookingDetailOpen, setBookingDetailOpen] = useState(false);
+  type EventBookingEntry = EventBookingRow & { listingId: string; eventName: string; eventStartDate?: string; eventEndDate?: string };
+  const [selectedBookingDetail, setSelectedBookingDetail] = useState<EventBookingEntry | null>(null);
+
+  useEffect(() => {
+    if (!dateFilter || dateFilter.length < 10) {
+      setBookingsByListing({});
+      setLoading(false);
+      return;
+    }
+    const selectedDate = dateFilter.slice(0, 10);
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    vendorFetch<{ listings: { id: string; name: string; type: string }[] }>("/api/listings")
+      .then((data) => {
+        if (cancelled) return;
+        const eventListings = (data.listings ?? []).filter((l) => (l.type || "").toLowerCase() === "event");
+        setListings(eventListings);
+        if (eventListings.length === 0) {
+          setEventsByListing({});
+          setBookingsByListing({});
+          return;
+        }
+        return Promise.all(
+          eventListings.map((listing) =>
+            vendorFetch<EventInfo>(`/api/listings/${listing.id}/event`).then((ev) => ({ listing, ev }))
+          )
+        );
+      })
+      .then((results) => {
+        if (cancelled || !results) return;
+        const eventMap: Record<string, { eventName: string; startDate: string; endDate: string }> = {};
+        results.forEach((r: { listing: { id: string; name: string }; ev: EventInfo }) => {
+          const start = (r.ev.start_date ?? "").slice(0, 10);
+          const end = (r.ev.end_date ?? "").slice(0, 10);
+          eventMap[r.listing.id] = { eventName: r.ev.name ?? r.listing.name, startDate: start, endDate: end };
+        });
+        setEventsByListing(eventMap);
+        const liveOnDate = results.filter((r: { listing: { id: string }; ev: EventInfo }) => {
+          const start = (r.ev.start_date ?? "").slice(0, 10);
+          const end = (r.ev.end_date ?? "").slice(0, 10);
+          return start && end && selectedDate >= start && selectedDate <= end;
+        });
+        const liveListingIds = liveOnDate.map((r: { listing: { id: string } }) => r.listing.id);
+        if (liveListingIds.length === 0) {
+          setBookingsByListing({});
+          return;
+        }
+        return Promise.all(
+          liveListingIds.map((listingId: string) =>
+            vendorFetch<{ bookings: EventBookingRow[] }>(`/api/listings/${listingId}/event/bookings`).then((res) => ({
+              listingId,
+              eventName: eventMap[listingId]?.eventName ?? "",
+              startDate: eventMap[listingId]?.startDate ?? "",
+              endDate: eventMap[listingId]?.endDate ?? "",
+              bookings: res.bookings ?? [],
+            }))
+          )
+        );
+      })
+      .then((results) => {
+        if (cancelled || !results) return;
+        const byListing: Record<string, { eventName: string; startDate: string; endDate: string; bookings: EventBookingRow[] }> = {};
+        results.forEach((r: { listingId: string; eventName: string; startDate: string; endDate: string; bookings: EventBookingRow[] }) => {
+          byListing[r.listingId] = { eventName: r.eventName, startDate: r.startDate, endDate: r.endDate, bookings: r.bookings };
+        });
+        setBookingsByListing(byListing);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dateFilter]);
+
+  if (loading) {
+    return (
+      <Card className="rounded-2xl border border-slate-200/80 shadow-sm">
+        <CardContent className="p-8 text-center">
+          <p className="text-sm text-muted-foreground">Loading events for {dateFilter}…</p>
+        </CardContent>
+      </Card>
+    );
+  }
+  if (error) {
+    return (
+      <Card className="rounded-2xl border border-slate-200/80 shadow-sm">
+        <CardContent className="p-8 text-center">
+          <p className="text-sm text-destructive">{error}</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const allEntries: EventBookingEntry[] = Object.entries(bookingsByListing).flatMap(([listingId, { eventName, startDate, endDate, bookings }]) =>
+    bookings.map((b) => ({ ...b, listingId, eventName, eventStartDate: startDate, eventEndDate: endDate }))
+  );
+
+  const openEventDetail = (listingId: string) => {
+    const entry = bookingsByListing[listingId];
+    if (entry) setSelectedEventDetail({ listingId, eventName: entry.eventName, bookings: entry.bookings });
+    setSelectedEventInfo(null);
+    setEventDetailOpen(true);
+    setEventDetailsLoading(true);
+    vendorFetch<EventInfo>(`/api/listings/${listingId}/event`)
+      .then((data) => setSelectedEventInfo(data))
+      .catch(() => setSelectedEventInfo(null))
+      .finally(() => setEventDetailsLoading(false));
+  };
+
+  const closeEventDetail = () => {
+    setEventDetailOpen(false);
+    setSelectedEventDetail(null);
+    setSelectedEventInfo(null);
+  };
+
+  const openBookingDetail = (b: EventBookingEntry) => {
+    setSelectedBookingDetail(b);
+    setBookingDetailOpen(true);
+  };
+
+  return (
+    <>
+      <div className="space-y-6">
+        <Card className="rounded-2xl border border-slate-200/80 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-display font-semibold flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5" />
+              Events for {dateFilter}
+            </CardTitle>
+            <p className="text-sm text-muted-foreground font-normal">Only events that are live on the selected date (between their start and end date) are shown. Click View details to see bookings.</p>
+          </CardHeader>
+          <CardContent>
+            {listings.length === 0 ? (
+              <p className="text-sm text-muted-foreground">You have no event listings. Add one from My Listings.</p>
+            ) : Object.keys(bookingsByListing).length === 0 ? (
+              <p className="text-sm text-muted-foreground">No events are live on {dateFilter}. Change the date above or add events whose start–end range includes this date.</p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {Object.entries(bookingsByListing).map(([listingId, entry]) => {
+                  const count = entry.bookings.length;
+                  return (
+                    <div key={listingId} className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 flex flex-col">
+                      <p className="font-medium text-foreground">{entry.eventName}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Event live: {entry.startDate}{entry.endDate !== entry.startDate ? ` – ${entry.endDate}` : ""}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{count} booking{count !== 1 ? "s" : ""}</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-3 rounded-lg gap-1.5 w-fit"
+                        onClick={() => openEventDetail(listingId)}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        View details
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {allEntries.length > 0 && (
+          <Card className="rounded-2xl border border-slate-200/80 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-display font-semibold">All event bookings</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Ref</TableHead>
+                    <TableHead>Event</TableHead>
+                    <TableHead>Event dates (live)</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Booked on</TableHead>
+                    <TableHead className="w-12" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {allEntries.map((b) => (
+                    <TableRow key={b.id}>
+                      <TableCell className="font-mono text-foreground">{b.bookingRef}</TableCell>
+                      <TableCell>{b.eventName}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{b.eventStartDate}{b.eventEndDate && b.eventStartDate !== b.eventEndDate ? ` – ${b.eventEndDate}` : ""}</TableCell>
+                      <TableCell>₹{(b.totalCents / 100).toLocaleString()}</TableCell>
+                      <TableCell className="capitalize">{b.status}</TableCell>
+                      <TableCell className="text-muted-foreground">{new Date(b.createdAt).toLocaleString()}</TableCell>
+                      <TableCell>
+                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => openBookingDetail(b)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      <Sheet open={eventDetailOpen} onOpenChange={(o) => !o && closeEventDetail()}>
+        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto rounded-l-2xl">
+          <SheetHeader>
+            <SheetTitle className="text-lg font-semibold">
+              {selectedEventDetail ? `${selectedEventDetail.eventName} — ${dateFilter}` : "Event details"}
+            </SheetTitle>
+          </SheetHeader>
+          {eventDetailsLoading ? (
+            <p className="text-sm text-muted-foreground py-4">Loading…</p>
+          ) : selectedEventInfo ? (
+            <div className="mt-6 space-y-4">
+              <div>
+                <p className="font-medium text-foreground">{selectedEventInfo.name}</p>
+                <p className="text-sm text-muted-foreground">{selectedEventInfo.category} · {selectedEventInfo.city}</p>
+                <p className="text-xs text-foreground mt-1">{selectedEventInfo.venue_name}{selectedEventInfo.venue_address ? ` · ${selectedEventInfo.venue_address}` : ""}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{selectedEventInfo.start_date}{selectedEventInfo.end_date !== selectedEventInfo.start_date ? ` – ${selectedEventInfo.end_date}` : ""} · {selectedEventInfo.start_time} – {selectedEventInfo.end_time}</p>
+                {selectedEventInfo.description && <p className="text-sm text-foreground mt-2">{selectedEventInfo.description}</p>}
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-foreground mb-2">Bookings for this event</h4>
+                {selectedEventDetail?.bookings?.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No bookings yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {selectedEventDetail?.bookings?.map((b) => (
+                      <div key={b.id} className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+                        <div>
+                          <p className="font-mono text-sm text-foreground">{b.bookingRef}</p>
+                          <p className="text-xs text-muted-foreground">₹{(b.totalCents / 100).toLocaleString()} · {b.status}</p>
+                        </div>
+                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => openBookingDetail({ ...b, listingId: selectedEventDetail!.listingId, eventName: selectedEventDetail!.eventName })}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Could not load event details.</p>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      <Dialog open={bookingDetailOpen} onOpenChange={setBookingDetailOpen}>
+        <DialogContent className="rounded-2xl max-w-md">
+          <DialogHeader>
+            <DialogTitle>Event booking</DialogTitle>
+          </DialogHeader>
+          {selectedBookingDetail && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Booking ref</p>
+                <p className="font-mono font-semibold text-foreground mt-0.5">{selectedBookingDetail.bookingRef}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Event</p>
+                <p className="text-foreground mt-0.5">{selectedBookingDetail.eventName}</p>
+              </div>
+              {(selectedBookingDetail.eventStartDate || selectedBookingDetail.eventEndDate) && (
+                <div className="sm:col-span-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Event live (dates)</p>
+                  <p className="text-foreground mt-0.5 text-sm">{selectedBookingDetail.eventStartDate}{selectedBookingDetail.eventEndDate && selectedBookingDetail.eventStartDate !== selectedBookingDetail.eventEndDate ? ` – ${selectedBookingDetail.eventEndDate}` : ""}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Amount</p>
+                <p className="text-foreground mt-0.5">₹{(selectedBookingDetail.totalCents / 100).toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</p>
+                <p className="capitalize text-foreground mt-0.5">{selectedBookingDetail.status}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Payment</p>
+                <p className={`mt-0.5 ${selectedBookingDetail.paidAt ? "text-emerald-600" : "text-amber-600"}`}>{selectedBookingDetail.paidAt ? "Paid" : "Pending"}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Booked on</p>
+                <p className="text-foreground mt-0.5 text-sm">{new Date(selectedBookingDetail.createdAt).toLocaleString()}</p>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -885,7 +2212,7 @@ export default function Bookings() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const [transportVehicleType, setTransportVehicleType] = useState<"bus" | "car">("bus");
+  const [transportVehicleType, setTransportVehicleType] = useState<"bus" | "car" | "flight">("bus");
   const [transportBuses, setTransportBuses] = useState<BusBookingCard[]>([]);
   const [transportLoading, setTransportLoading] = useState(false);
   const [transportError, setTransportError] = useState("");
@@ -895,6 +2222,29 @@ export default function Bookings() {
   const [carBookingsActionId, setCarBookingsActionId] = useState<string | null>(null);
   const [scheduledCars, setScheduledCars] = useState<ScheduledCar[]>([]);
   const [scheduledCarsLoading, setScheduledCarsLoading] = useState(false);
+  const [selectedCarDetail, setSelectedCarDetail] = useState<{ car: ScheduledCar; area: ScheduledCarArea } | null>(null);
+  const [carBookingDetailModalOpen, setCarBookingDetailModalOpen] = useState(false);
+  const [carBookingDetail, setCarBookingDetail] = useState<{
+    booking: { id: string; bookingRef: string; bookingType: string; fromCity?: string; toCity?: string; city?: string; pickupPoint?: string; dropPoint?: string; travelTime?: string; travelDate: string; passengers: number; totalCents?: number; status: string; otp?: string; rejectedReason?: string; createdAt: string };
+    car?: { name: string; registrationNumber?: string; category: string; carType: string; seats: number; acType?: string; manufacturer?: string; model?: string };
+    drivers: { id: string; name: string | null; phone: string | null; licenseNumber: string }[];
+  } | null>(null);
+  const [carBookingDetailLoading, setCarBookingDetailLoading] = useState(false);
+  const [flightDetailOpen, setFlightDetailOpen] = useState(false);
+  const [selectedFlightForDetail, setSelectedFlightForDetail] = useState<VendorFlightCard | null>(null);
+  const [flightSchedules, setFlightSchedules] = useState<Array<{
+    id: string; flightId: string; flightNumber: string; airlineName: string; aircraftType: string; flightType: string;
+    fromPlace: string; toPlace: string; scheduleDate: string; departureTime: string; arrivalTime: string;
+    totalSeats: number; status: string; pendingCount?: number; listingId?: string;
+  }>>([]);
+  const [flightBookings, setFlightBookings] = useState<Array<{
+    id: string; bookingRef: string; flightId: string; scheduleId: string | null; flightNumber?: string;
+    routeFrom: string; routeTo: string; travelDate: string; passengers: number; totalCents: number;
+    status: string; createdAt: string; listingId?: string;
+  }>>([]);
+  const [flightLoading, setFlightLoading] = useState(false);
+  const [flightError, setFlightError] = useState("");
+  const [flightBookingsActionId, setFlightBookingsActionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (selectedCategory !== "transport" || !dateFilter || transportVehicleType !== "bus") return;
@@ -993,11 +2343,61 @@ export default function Bookings() {
     };
   }, [selectedCategory, transportVehicleType, dateFilter]);
 
+  // Fetch flight schedules + bookings when Flight tab is selected and date is set
+  useEffect(() => {
+    if (selectedCategory !== "transport" || transportVehicleType !== "flight" || !dateFilter) return;
+    let cancelled = false;
+    setFlightLoading(true);
+    setFlightError("");
+    vendorFetch<{ listings: { id: string; name: string; type: string }[] }>("/api/listings")
+      .then((data) => {
+        if (cancelled) return;
+        const transportListings = (data.listings ?? []).filter((l) => (l.type || "").toLowerCase() === "transport");
+        return Promise.all(
+          transportListings.map((listing) =>
+            vendorFetch<{ schedules: Array<{ id: string; flightId: string; flightNumber: string; airlineName: string; aircraftType: string; flightType: string; fromPlace: string; toPlace: string; scheduleDate: string; departureTime: string; arrivalTime: string; totalSeats: number; status: string; pendingCount?: number }>; bookings: Array<{ id: string; bookingRef: string; flightId: string; scheduleId: string | null; flightNumber?: string; routeFrom: string; routeTo: string; travelDate: string; passengers: number; totalCents: number; status: string; createdAt: string }> }>(
+              `/api/listings/${listing.id}/flight-bookings?date=${encodeURIComponent(dateFilter)}`
+            ).then((res) => ({
+              schedules: (res.schedules ?? []).map((s) => ({ ...s, listingId: listing.id })),
+              bookings: (res.bookings ?? []).map((b) => ({ ...b, listingId: listing.id })),
+            }))
+          )
+        );
+      })
+      .then((arrays) => {
+        if (cancelled) return;
+        const allSchedules = (arrays ?? []).flatMap((a) => a.schedules);
+        const allBookings = (arrays ?? []).flatMap((a) => a.bookings);
+        setFlightSchedules(allSchedules);
+        setFlightBookings(allBookings);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setFlightSchedules([]);
+          setFlightBookings([]);
+          setFlightError(err instanceof Error ? err.message : "Failed to load flight data");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setFlightLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCategory, transportVehicleType, dateFilter]);
+
   const handleViewBusDetails = (bus: BusBookingCard) => {
     setSelectedBus(bus);
     setBusDetailOpen(true);
     setSelectedCustomer(null);
   };
+
+  const handleViewCarDetails = (car: ScheduledCar, area: ScheduledCarArea) => {
+    setSelectedCarDetail({ car, area });
+    setSelectedCustomer(null);
+  };
+
+  const closeCarDetail = () => setSelectedCarDetail(null);
 
   const handleViewCustomer = (b: CustomerBooking) => {
     setSelectedCustomer(b);
@@ -1009,6 +2409,100 @@ export default function Bookings() {
     setSelectedBus(null);
     setCustomerModalOpen(false);
     setSelectedCustomer(null);
+  };
+
+  /** Build a VendorFlightCard from API schedule + bookings for the detail drawer */
+  const scheduleToVendorFlightCard = useCallback((
+    s: { id: string; flightId: string; flightNumber: string; airlineName: string; aircraftType: string; flightType: string; fromPlace: string; toPlace: string; departureTime: string; arrivalTime: string; totalSeats: number; pendingCount?: number; listingId?: string },
+    allBookings: Array<{ id: string; bookingRef: string; scheduleId: string | null; routeFrom: string; routeTo: string; travelDate: string; passengers: number; totalCents: number; status: string; listingId?: string }>
+  ): VendorFlightCard => {
+    const listingId = s.listingId;
+    const forSchedule = allBookings.filter((b) => b.scheduleId === s.id && (listingId == null || b.listingId === listingId));
+    const seatsBooked = forSchedule
+      .filter((b) => b.status === "confirmed" || b.status === "approved_awaiting_payment")
+      .reduce((sum, b) => sum + b.passengers, 0);
+    const pendingRequests = forSchedule.filter((b) => b.status === "pending_vendor").length;
+    const bookingsForTable: FlightBookingRow[] = forSchedule.map((b) => ({
+      id: b.id,
+      ref: b.bookingRef,
+      customerName: "Guest",
+      passengers: b.passengers,
+      amount: b.totalCents / 100,
+      status: b.status === "pending_vendor" ? "Pending" : b.status === "approved_awaiting_payment" ? "Approved" : b.status === "confirmed" ? "Confirmed" : b.status === "rejected" ? "Rejected" : b.status,
+    }));
+    const rows = Math.ceil(s.totalSeats / 6) || 1;
+    return {
+      flightNumber: s.flightNumber,
+      airline: s.airlineName,
+      aircraft: s.aircraftType,
+      route: `${s.fromPlace} → ${s.toPlace}`,
+      departureTime: s.departureTime,
+      arrivalTime: s.arrivalTime,
+      totalSeats: s.totalSeats,
+      seatsBooked,
+      pendingRequests: s.pendingCount ?? pendingRequests,
+      flightType: (s.flightType === "international" ? "international" : "domestic") as "domestic" | "international",
+      seatClasses: [{ name: "Economy", rowFrom: "A", rowTo: String.fromCharCode(64 + rows), totalSeats: s.totalSeats, booked: seatsBooked }],
+      bookings: bookingsForTable,
+      listingId: s.listingId,
+      flightId: s.flightId,
+    };
+  }, []);
+
+  const openFlightDetail = (flight: VendorFlightCard) => {
+    setSelectedFlightForDetail(flight);
+    setFlightDetailOpen(true);
+  };
+  const closeFlightDetail = () => {
+    setFlightDetailOpen(false);
+    setSelectedFlightForDetail(null);
+  };
+
+  /** Fetch flight seat_layout when drawer opens so seat structure matches vendor-created layout */
+  useEffect(() => {
+    if (!flightDetailOpen || !selectedFlightForDetail?.listingId || !selectedFlightForDetail?.flightId) return;
+    if (selectedFlightForDetail.seatLayout !== undefined) return;
+    const listingId = selectedFlightForDetail.listingId;
+    const flightId = selectedFlightForDetail.flightId;
+    let cancelled = false;
+    vendorFetch<{ seatLayout?: unknown }>(`/api/listings/${listingId}/flights/${flightId}`)
+      .then((res) => {
+        if (cancelled) return;
+        const parsed = parseSeatLayoutInBookings(res?.seatLayout);
+        setSelectedFlightForDetail((prev) =>
+          prev && prev.listingId === listingId && prev.flightId === flightId
+            ? { ...prev, seatLayout: parsed ?? null }
+            : prev
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedFlightForDetail((prev) => (prev ? { ...prev, seatLayout: null } : prev));
+      });
+    return () => { cancelled = true; };
+  }, [flightDetailOpen, selectedFlightForDetail?.listingId, selectedFlightForDetail?.flightId, selectedFlightForDetail?.seatLayout]);
+
+  const handleFlightAccept = async (listingId: string, bookingId: string) => {
+    setFlightBookingsActionId(bookingId);
+    try {
+      await vendorFetch(`/api/listings/${listingId}/flight-bookings/${bookingId}/accept`, { method: "PATCH" });
+      setFlightBookings((prev) =>
+        prev.map((b) => (b.id === bookingId ? { ...b, status: "approved_awaiting_payment" as const } : b))
+      );
+    } finally {
+      setFlightBookingsActionId(null);
+    }
+  };
+
+  const handleFlightReject = async (listingId: string, bookingId: string) => {
+    setFlightBookingsActionId(bookingId);
+    try {
+      await vendorFetch(`/api/listings/${listingId}/flight-bookings/${bookingId}/reject`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+      setFlightBookings((prev) =>
+        prev.map((b) => (b.id === bookingId ? { ...b, status: "rejected" as const } : b))
+      );
+    } finally {
+      setFlightBookingsActionId(null);
+    }
   };
 
   const companyNameFromBuses =
@@ -1063,17 +2557,39 @@ export default function Bookings() {
     }
   };
 
-  const handleCarBookingReject = async (listingId: string, bookingId: string) => {
+  const handleCarBookingReject = async (listingId: string, bookingId: string, reason?: string) => {
     setCarBookingsActionId(bookingId);
     try {
-      await vendorFetch(`/api/listings/${listingId}/car-bookings/${bookingId}/reject`, { method: "PATCH", body: JSON.stringify({}) });
+      await vendorFetch(`/api/listings/${listingId}/car-bookings/${bookingId}/reject`, { method: "PATCH", body: JSON.stringify(reason != null ? { reason } : {}) });
       setCarBookings((prev) =>
         prev.map((b) => (b.id === bookingId ? { ...b, status: "rejected" } : b))
       );
+      setCarBookingDetailModalOpen(false);
+      setCarBookingDetail(null);
     } catch (err) {
       setCarBookingsError(err instanceof Error ? err.message : "Failed to reject");
     } finally {
       setCarBookingsActionId(null);
+    }
+  };
+
+  const handleCarBookingViewDetails = async (listingId: string, bookingId: string) => {
+    setCarBookingDetailLoading(true);
+    setCarBookingDetail(null);
+    setCarBookingDetailModalOpen(true);
+    try {
+      const res = await vendorFetch<{ booking: unknown; car?: unknown; drivers: unknown[] }>(
+        `/api/listings/${listingId}/car-bookings/${bookingId}/details`
+      );
+      setCarBookingDetail({
+        booking: res.booking as NonNullable<typeof carBookingDetail>["booking"],
+        car: res.car as NonNullable<typeof carBookingDetail>["car"],
+        drivers: (res.drivers ?? []) as NonNullable<typeof carBookingDetail>["drivers"],
+      });
+    } catch {
+      setCarBookingDetail(null);
+    } finally {
+      setCarBookingDetailLoading(false);
     }
   };
 
@@ -1142,7 +2658,7 @@ export default function Bookings() {
           <div className="relative flex-1 min-w-[160px] max-w-[220px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input
-              placeholder={transportVehicleType === "car" ? "Search car or booking…" : "Search bus or customer..."}
+              placeholder={transportVehicleType === "flight" ? "Search flight or booking…" : transportVehicleType === "car" ? "Search car or booking…" : "Search bus or customer..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 rounded-xl h-9 text-sm"
@@ -1185,13 +2701,20 @@ export default function Bookings() {
             <Ticket className="h-4 w-4" />
             Experience
           </TabsTrigger>
+          <TabsTrigger
+            value="event"
+            className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2"
+          >
+            <CalendarIcon className="h-4 w-4" />
+            Event
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="transport" className="mt-6 space-y-6">
           {/* Vehicle-type bar: Bus | Car */}
           <Tabs
             value={transportVehicleType}
-            onValueChange={(v) => setTransportVehicleType(v as "bus" | "car")}
+            onValueChange={(v) => setTransportVehicleType(v as "bus" | "car" | "flight")}
             className="w-full"
           >
             <TabsList className="bg-slate-100 p-1 rounded-xl border border-slate-200/80 w-full sm:w-auto flex-wrap h-auto gap-1">
@@ -1210,6 +2733,14 @@ export default function Bookings() {
               >
                 <Car className="h-4 w-4" />
                 Car
+              </TabsTrigger>
+              <TabsTrigger
+                value="flight"
+                className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2"
+                onClick={() => setStatusFilter("all")}
+              >
+                <Plane className="h-4 w-4" />
+                Flight
               </TabsTrigger>
             </TabsList>
 
@@ -1277,9 +2808,9 @@ export default function Bookings() {
                               car.areas.map((area) => (
                                 <ScheduledCarCard
                                   key={`${car.carId}-${area.areaId}`}
-                                  carName={car.carName}
-                                  listingName={car.listingName}
+                                  car={car}
                                   area={area}
+                                  onViewDetails={() => handleViewCarDetails(car, area)}
                                 />
                               ))
                             )}
@@ -1359,32 +2890,55 @@ export default function Bookings() {
                                     b.status === "rejected" && "bg-red-100 text-red-800"
                                   )}
                                 >
-                                  {b.status.replace(/_/g, " ")}
+                                  {b.status === "confirmed" ? "Completed" : b.status.replace(/_/g, " ")}
                                 </span>
                               </TableCell>
                               <TableCell className="py-3 text-right">
-                                {b.status === "pending_vendor" && b.listingId && (
-                                  <div className="flex items-center justify-end gap-1">
+                                <div className="flex items-center justify-end gap-1 flex-wrap">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="rounded-lg h-8 w-8 p-0 text-slate-600 hover:bg-slate-100"
+                                    title="View ticket & car details"
+                                    onClick={() => b.listingId && handleCarBookingViewDetails(b.listingId, b.id)}
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                  {(b.status === "pending_vendor" || b.status === "rejected" || b.status === "confirmed") && (
                                     <Button
                                       size="sm"
-                                      variant="outline"
-                                      className="rounded-lg gap-1 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                                      variant="ghost"
+                                      className="rounded-lg h-8 w-8 p-0 text-red-600 hover:bg-red-50"
+                                      title="Delete"
                                       disabled={carBookingsActionId === b.id}
-                                      onClick={() => handleCarBookingAccept(b.listingId!, b.id)}
+                                      onClick={() => b.listingId && handleCarBookingReject(b.listingId, b.id, "Deleted by vendor")}
                                     >
-                                      <CheckCircle2 className="h-3.5 w-3.5" /> Accept
+                                      <Trash2 className="h-4 w-4" />
                                     </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="rounded-lg gap-1 text-red-600 border-red-200 hover:bg-red-50"
-                                      disabled={carBookingsActionId === b.id}
-                                      onClick={() => handleCarBookingReject(b.listingId!, b.id)}
-                                    >
-                                      <XCircle className="h-3.5 w-3.5" /> Reject
-                                    </Button>
-                                  </div>
-                                )}
+                                  )}
+                                  {b.status === "pending_vendor" && b.listingId && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="rounded-lg gap-1 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                                        disabled={carBookingsActionId === b.id}
+                                        onClick={() => handleCarBookingAccept(b.listingId!, b.id)}
+                                      >
+                                        <CheckCircle2 className="h-3.5 w-3.5" /> Accept
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="rounded-lg gap-1 text-red-600 border-red-200 hover:bg-red-50"
+                                        disabled={carBookingsActionId === b.id}
+                                        onClick={() => handleCarBookingReject(b.listingId!, b.id)}
+                                      >
+                                        <XCircle className="h-3.5 w-3.5" /> Reject
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
                               </TableCell>
                             </TableRow>
                           ))}
@@ -1397,6 +2951,129 @@ export default function Bookings() {
                   )}
                 </>
               )}
+              {transportVehicleType === "flight" && (
+                <div className="space-y-6">
+                  {flightError && (
+                    <div className="rounded-xl border border-amber-500/50 bg-amber-50 p-4 text-sm text-amber-900">
+                      {flightError}
+                    </div>
+                  )}
+                  {!dateFilter ? (
+                    <p className="text-sm text-muted-foreground py-8 text-center">Select a date above to see flights and requests for that day.</p>
+                  ) : flightLoading ? (
+                    <p className="text-sm text-muted-foreground py-8 text-center">Loading flights…</p>
+                  ) : (
+                    <>
+                      <div>
+                        <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                          <Plane className="h-4 w-4" />
+                          Flights for {dateFilter}
+                        </h3>
+                        {flightSchedules.length > 0 ? (
+                          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mt-2">
+                            {flightSchedules.map((s) => (
+                              <Card key={s.id} className="rounded-xl border border-slate-200 overflow-hidden">
+                                <CardContent className="p-4 flex flex-col">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <p className="font-mono font-semibold text-foreground">{s.flightNumber}</p>
+                                        <span className={cn(
+                                          "inline-flex text-[10px] font-medium px-1.5 py-0.5 rounded",
+                                          s.flightType === "international" ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-600"
+                                        )}>
+                                          {s.flightType === "international" ? "Intl" : "Domestic"}
+                                        </span>
+                                      </div>
+                                      <p className="text-xs text-muted-foreground mt-0.5">{s.airlineName} · {s.aircraftType}</p>
+                                      <p className="text-sm mt-2">{s.fromPlace} → {s.toPlace} · {s.departureTime} – {s.arrivalTime}</p>
+                                      <p className="text-xs text-muted-foreground mt-1">
+                                        {s.totalSeats} seats · {(s.pendingCount ?? 0)} pending request{(s.pendingCount ?? 0) !== 1 ? "s" : ""}
+                                      </p>
+                                    </div>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="rounded-lg h-8 w-8 p-0 text-slate-600 hover:bg-slate-100 shrink-0"
+                                      title="View flight details & bookings"
+                                      onClick={() => openFlightDetail(scheduleToVendorFlightCard(s, flightBookings))}
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground py-6 text-center">
+                            No flights scheduled for {dateFilter}. Schedules are shown from the database for the selected date.
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-semibold text-foreground mb-2">Flight booking requests</h3>
+                        <div className="rounded-xl border border-slate-200 overflow-hidden">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-muted/50">
+                                <TableHead className="font-medium">Ref</TableHead>
+                                <TableHead className="font-medium">Flight</TableHead>
+                                <TableHead className="font-medium">Route</TableHead>
+                                <TableHead className="font-medium">Date</TableHead>
+                                <TableHead className="font-medium">Passengers</TableHead>
+                                <TableHead className="font-medium">Amount</TableHead>
+                                <TableHead className="font-medium">Status</TableHead>
+                                <TableHead className="text-right font-medium w-32">Actions</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {flightBookings.length > 0 ? (
+                                flightBookings.map((b) => (
+                                  <TableRow key={b.id}>
+                                    <TableCell className="py-3 font-mono text-xs">{b.bookingRef}</TableCell>
+                                    <TableCell className="py-3">{b.flightNumber ?? ""} · Flight</TableCell>
+                                    <TableCell className="py-3">{b.routeFrom} → {b.routeTo}</TableCell>
+                                    <TableCell className="py-3">{b.travelDate}</TableCell>
+                                    <TableCell className="py-3">{b.passengers}</TableCell>
+                                    <TableCell className="py-3">₹ {(b.totalCents / 100).toLocaleString("en-IN")}</TableCell>
+                                    <TableCell className="py-3">
+                                      <span className={cn(
+                                        "inline-flex text-xs font-medium px-2 py-0.5 rounded-full",
+                                        b.status === "pending_vendor" ? "bg-amber-100 text-amber-800" : b.status === "confirmed" ? "bg-emerald-100 text-emerald-800" : b.status === "rejected" ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-700"
+                                      )}>
+                                        {b.status === "pending_vendor" ? "Pending" : b.status === "approved_awaiting_payment" ? "Approved" : b.status === "confirmed" ? "Confirmed" : "Rejected"}
+                                      </span>
+                                    </TableCell>
+                                    <TableCell className="py-3 text-right">
+                                      {b.status === "pending_vendor" && b.listingId && (
+                                        <>
+                                          <Button size="sm" variant="outline" className="rounded-lg gap-1 mr-1 text-emerald-700 border-emerald-300" disabled={flightBookingsActionId === b.id} onClick={() => handleFlightAccept(b.listingId!, b.id)}>
+                                            <CheckCircle2 className="h-3.5 w-3.5" /> Accept
+                                          </Button>
+                                          <Button size="sm" variant="outline" className="rounded-lg gap-1 text-red-600 border-red-200" disabled={flightBookingsActionId === b.id} onClick={() => handleFlightReject(b.listingId!, b.id)}>
+                                            <XCircle className="h-3.5 w-3.5" /> Reject
+                                          </Button>
+                                        </>
+                                      )}
+                                    </TableCell>
+                                  </TableRow>
+                                ))
+                              ) : (
+                                <TableRow>
+                                  <TableCell colSpan={8} className="py-8 text-center text-muted-foreground text-sm">
+                                    No flight booking requests for this date.
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </Tabs>
         </TabsContent>
@@ -1408,7 +3085,10 @@ export default function Bookings() {
           <HotelBookingsSection />
         </TabsContent>
         <TabsContent value="experience" className="mt-6">
-          <ExperienceBookingsSection />
+          <ExperienceBookingsSection dateFilter={dateFilter} />
+        </TabsContent>
+        <TabsContent value="event" className="mt-6">
+          <EventBookingsSection dateFilter={dateFilter} />
         </TabsContent>
       </Tabs>
 
@@ -1434,6 +3114,53 @@ export default function Bookings() {
         </SheetContent>
       </Sheet>
 
+      {/* Flight detail drawer: seats left, details, seat structure, bookings */}
+      <Sheet open={flightDetailOpen} onOpenChange={(o) => !o && closeFlightDetail()}>
+        <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto rounded-l-2xl">
+          <SheetHeader>
+            <SheetTitle className="text-lg font-display font-semibold">
+              Flight details
+            </SheetTitle>
+          </SheetHeader>
+          {selectedFlightForDetail && (
+            <div className="mt-6">
+              <FlightInfoHeader flight={selectedFlightForDetail} />
+              <FlightSeatStructure flight={selectedFlightForDetail} />
+              <p className="text-sm font-medium text-foreground mb-3">Bookings</p>
+              <FlightBookingsTable bookings={selectedFlightForDetail.bookings} />
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Car schedule detail drawer: date, schedule info, booking status, pending requests */}
+      <Sheet open={!!selectedCarDetail} onOpenChange={(o) => !o && closeCarDetail()}>
+        <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto rounded-l-2xl">
+          <SheetHeader>
+            <SheetTitle className="text-lg font-display font-semibold">
+              Car schedule details
+            </SheetTitle>
+          </SheetHeader>
+          {selectedCarDetail && (
+            <CarDetailSidebar
+              car={selectedCarDetail.car}
+              area={selectedCarDetail.area}
+              selectedDate={dateFilter}
+              carBookings={carBookings.filter(
+                (b) =>
+                  b.carId === selectedCarDetail.car.carId &&
+                  b.travelDate === dateFilter &&
+                  (b.listingId === selectedCarDetail.car.listingId || !selectedCarDetail.car.listingId)
+              )}
+              onAccept={handleCarBookingAccept}
+              onReject={handleCarBookingReject}
+              actionId={carBookingsActionId}
+              onClose={closeCarDetail}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
+
       {/* Per-customer booking detail modal */}
       <BookingDetailModal
         booking={selectedCustomer}
@@ -1443,6 +3170,92 @@ export default function Bookings() {
           setSelectedCustomer(null);
         }}
       />
+
+      {/* Car booking details modal (ticket + car + drivers) */}
+      <Dialog open={carBookingDetailModalOpen} onOpenChange={(o) => !o && (setCarBookingDetailModalOpen(false), setCarBookingDetail(null))}>
+        <DialogContent className="rounded-2xl max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-display font-semibold flex items-center gap-2">
+              <Eye className="h-5 w-5" /> Car booking details
+            </DialogTitle>
+          </DialogHeader>
+          {carBookingDetailLoading && (
+            <p className="text-sm text-muted-foreground py-4">Loading…</p>
+          )}
+          {!carBookingDetailLoading && carBookingDetail && (
+            <div className="space-y-6">
+              {/* Ticket */}
+              <div>
+                <h4 className="text-sm font-semibold text-foreground mb-2">Ticket</h4>
+                <div className="rounded-xl bg-slate-50 p-4 space-y-2 text-sm">
+                  <p><span className="text-muted-foreground">Ref:</span> <span className="font-mono">{carBookingDetail.booking.bookingRef}</span></p>
+                  <p><span className="text-muted-foreground">Date:</span> {carBookingDetail.booking.travelDate}</p>
+                  <p><span className="text-muted-foreground">Route:</span>{" "}
+                    {carBookingDetail.booking.bookingType === "intercity"
+                      ? `${carBookingDetail.booking.fromCity ?? "—"} → ${carBookingDetail.booking.toCity ?? "—"}`
+                      : carBookingDetail.booking.city ?? (carBookingDetail.booking.pickupPoint && carBookingDetail.booking.dropPoint ? `${carBookingDetail.booking.pickupPoint} → ${carBookingDetail.booking.dropPoint}` : "—")}
+                  </p>
+                  <p><span className="text-muted-foreground">Passengers:</span> {carBookingDetail.booking.passengers}</p>
+                  <p><span className="text-muted-foreground">Amount:</span>{" "}
+                    {carBookingDetail.booking.totalCents != null ? `₹ ${(carBookingDetail.booking.totalCents / 100).toLocaleString("en-IN")}` : "—"}
+                  </p>
+                  <p><span className="text-muted-foreground">Status:</span>{" "}
+                    <span className={cn(
+                      "font-medium",
+                      carBookingDetail.booking.status === "confirmed" && "text-emerald-600",
+                      carBookingDetail.booking.status === "pending_vendor" && "text-amber-600",
+                      carBookingDetail.booking.status === "approved_awaiting_payment" && "text-blue-600",
+                      carBookingDetail.booking.status === "rejected" && "text-red-600"
+                    )}>
+                      {carBookingDetail.booking.status === "confirmed" ? "Completed" : carBookingDetail.booking.status.replace(/_/g, " ")}
+                    </span>
+                  </p>
+                  {carBookingDetail.booking.otp && (
+                    <p><span className="text-muted-foreground">OTP:</span> <span className="font-mono font-semibold">{carBookingDetail.booking.otp}</span></p>
+                  )}
+                  {carBookingDetail.booking.rejectedReason && (
+                    <p><span className="text-muted-foreground">Reason:</span> {carBookingDetail.booking.rejectedReason}</p>
+                  )}
+                </div>
+              </div>
+              {/* Car */}
+              {carBookingDetail.car && (
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground mb-2">Car</h4>
+                  <div className="rounded-xl bg-slate-50 p-4 space-y-2 text-sm">
+                    <p><span className="text-muted-foreground">Name:</span> {carBookingDetail.car.name}</p>
+                    {carBookingDetail.car.registrationNumber && <p><span className="text-muted-foreground">Registration:</span> {carBookingDetail.car.registrationNumber}</p>}
+                    <p><span className="text-muted-foreground">Type:</span> {carBookingDetail.car.carType} · {carBookingDetail.car.category}</p>
+                    <p><span className="text-muted-foreground">Seats:</span> {carBookingDetail.car.seats}</p>
+                    {carBookingDetail.car.acType && <p><span className="text-muted-foreground">AC:</span> {carBookingDetail.car.acType}</p>}
+                    {(carBookingDetail.car.manufacturer || carBookingDetail.car.model) && (
+                      <p><span className="text-muted-foreground">Model:</span> {[carBookingDetail.car.manufacturer, carBookingDetail.car.model].filter(Boolean).join(" ")}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+              {/* Drivers */}
+              {carBookingDetail.drivers && carBookingDetail.drivers.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground mb-2">Drivers</h4>
+                  <div className="space-y-3">
+                    {carBookingDetail.drivers.map((d) => (
+                      <div key={d.id} className="rounded-xl bg-slate-50 p-4 space-y-1 text-sm">
+                        <p><span className="text-muted-foreground">Name:</span> {d.name ?? "—"}</p>
+                        <p><span className="text-muted-foreground">Phone:</span> {d.phone ?? "—"}</p>
+                        <p><span className="text-muted-foreground">License:</span> {d.licenseNumber}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {!carBookingDetailLoading && !carBookingDetail && carBookingDetailModalOpen && (
+            <p className="text-sm text-muted-foreground py-4">Could not load details.</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

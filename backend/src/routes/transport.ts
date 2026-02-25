@@ -10,15 +10,33 @@ const router = Router();
 router.get("/cities", async (req: Request, res: Response): Promise<void> => {
   try {
     const pool = getTransportPool();
-    const result = await pool.query<{ city: string }>(
-      `select distinct trim(c) as city from (
-        select from_place as c from routes where from_place is not null and trim(from_place) != ''
-        union select to_place as c from routes where to_place is not null and trim(to_place) != ''
-        union select city_name as c from car_operating_areas where city_name is not null and trim(city_name) != ''
-        union select from_city as c from car_operating_areas where from_city is not null and trim(from_city) != ''
-        union select to_city as c from car_operating_areas where to_city is not null and trim(to_city) != ''
-      ) u where trim(c) != '' order by 1`
-    );
+    const withFlights = `select distinct trim(c) as city from (
+      select from_place as c from routes where from_place is not null and trim(from_place) != ''
+      union select to_place as c from routes where to_place is not null and trim(to_place) != ''
+      union select city_name as c from car_operating_areas where city_name is not null and trim(city_name) != ''
+      union select from_city as c from car_operating_areas where from_city is not null and trim(from_city) != ''
+      union select to_city as c from car_operating_areas where to_city is not null and trim(to_city) != ''
+      union select from_place as c from flight_routes where from_place is not null and trim(from_place) != ''
+      union select to_place as c from flight_routes where to_place is not null and trim(to_place) != ''
+    ) u where trim(c) != '' order by 1`;
+    const withoutFlights = `select distinct trim(c) as city from (
+      select from_place as c from routes where from_place is not null and trim(from_place) != ''
+      union select to_place as c from routes where to_place is not null and trim(to_place) != ''
+      union select city_name as c from car_operating_areas where city_name is not null and trim(city_name) != ''
+      union select from_city as c from car_operating_areas where from_city is not null and trim(from_city) != ''
+      union select to_city as c from car_operating_areas where to_city is not null and trim(to_city) != ''
+    ) u where trim(c) != '' order by 1`;
+    let result: { rows: { city: string }[] };
+    try {
+      result = await pool.query<{ city: string }>(withFlights);
+    } catch (e) {
+      const msg = e && typeof e === "object" && "message" in e ? String((e as Error).message) : "";
+      if (msg.includes("flight_routes")) {
+        result = await pool.query<{ city: string }>(withoutFlights);
+      } else {
+        throw e;
+      }
+    }
     const cities = result.rows.map((r) => r.city).filter(Boolean);
     res.json({ cities });
   } catch (err) {
@@ -26,7 +44,7 @@ router.get("/cities", async (req: Request, res: Response): Promise<void> => {
     const message = err instanceof Error ? err.message : "Failed to fetch cities";
     res.status(500).json({
       error: message.includes("does not exist")
-        ? "Transport tables not found. Set TRANSPORT_DATABASE_URL to the vendor hub database."
+        ? "Transport tables not found. Run vendor-hub migrations on this database (listings, buses, bus_schedules, routes)."
         : "Failed to fetch cities",
     });
   }
@@ -186,7 +204,7 @@ router.get("/available-buses", async (req: Request, res: Response): Promise<void
     const message = err instanceof Error ? err.message : "Failed to fetch available buses";
     res.status(500).json({
       error: message.includes("does not exist")
-        ? "Transport tables not found. Set TRANSPORT_DATABASE_URL to the vendor hub database, or use a shared database with listings, buses, bus_schedules, routes."
+        ? "Transport tables not found. Run vendor-hub migrations on this database (listings, buses, bus_schedules, routes)."
         : "Failed to fetch available buses",
     });
   }
@@ -324,7 +342,7 @@ router.get("/available-cars", async (req: Request, res: Response): Promise<void>
     const message = err instanceof Error ? err.message : "Failed to fetch available cars";
     res.status(500).json({
       error: message.includes("does not exist")
-        ? "Car/transport tables not found. Run vendor-hub migrations 026, 028, 031, 032 and set TRANSPORT_DATABASE_URL."
+        ? "Car/transport tables not found. Run vendor-hub migrations 026, 028, 031, 032 on this database."
         : message,
     });
   }

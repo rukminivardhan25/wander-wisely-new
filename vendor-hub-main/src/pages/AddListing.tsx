@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  UtensilsCrossed, Building2, ShoppingBag, Bus, Compass, Key, PartyPopper, Map, Siren,
+  UtensilsCrossed, Building2, ShoppingBag, Bus, Compass, Key, PartyPopper,
   ChevronRight, ChevronLeft, Upload, X, Check
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -16,8 +16,6 @@ const businessTypes = [
   { id: "experience", label: "Experience", icon: Compass },
   { id: "rental", label: "Rental", icon: Key },
   { id: "event", label: "Event", icon: PartyPopper },
-  { id: "guide", label: "Guide Service", icon: Map },
-  { id: "emergency", label: "Emergency", icon: Siren },
 ];
 
 const steps = ["Business Type", "Basic Info", "Location", "Photos", "Publish"];
@@ -31,7 +29,17 @@ export default function AddListing() {
   const [submitStatus, setSubmitStatus] = useState<"idle" | "loading" | "error">("idle");
   const [submitError, setSubmitError] = useState("");
 
-  const nextStep = () => setCurrentStep((s) => Math.min(s + 1, steps.length - 1));
+  const nextStep = () => {
+    if (currentStep === 0 && selectedType === "experience") {
+      navigate("/add-listing/experience");
+      return;
+    }
+    if (currentStep === 0 && selectedType === "event") {
+      navigate("/add-listing/event");
+      return;
+    }
+    setCurrentStep((s) => Math.min(s + 1, steps.length - 1));
+  };
   const prevStep = () => setCurrentStep((s) => Math.max(s - 1, 0));
 
   return (
@@ -103,6 +111,24 @@ export default function AddListing() {
                   <div className="text-sm text-foreground">
                     <p className="font-medium mb-1">Transport selected</p>
                     <p className="text-muted-foreground">After you complete and publish this listing, you’ll set up your fleet, routes, schedules and pricing in <strong>My Listings</strong> → <strong>Manage Fleet</strong> on this listing.</p>
+                  </div>
+                </div>
+              )}
+              {selectedType === "experience" && (
+                <div className="mt-4 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-start gap-3">
+                  <Compass className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="text-sm text-foreground">
+                    <p className="font-medium mb-1">Experience selected</p>
+                    <p className="text-muted-foreground">Create a bookable experience (tours, workshops, activities). You’ll set dates, time slots, capacity and pricing in the next steps.</p>
+                  </div>
+                </div>
+              )}
+              {selectedType === "event" && (
+                <div className="mt-4 p-4 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-start gap-3">
+                  <PartyPopper className="h-5 w-5 text-violet-600 shrink-0 mt-0.5" />
+                  <div className="text-sm text-foreground">
+                    <p className="font-medium mb-1">Event selected</p>
+                    <p className="text-muted-foreground">Create a ticketed event (concerts, shows, meetups). You’ll set venue, dates and ticket types in the next steps.</p>
                   </div>
                 </div>
               )}

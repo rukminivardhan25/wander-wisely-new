@@ -80,7 +80,98 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
         }
       }
 
-      // Replace vendor's customer list with aggregated data from last year (idempotent sync)
+      // Also sync from car bookings (same DB: car_bookings + users). New customers added; existing (e.g. from bus) updated.
+      let listingIdsResult = await query<{ id: string }>(
+        `select id from listings where vendor_id = $1 and lower(trim(type)) = 'transport'`,
+        [vendorId]
+      ).catch(() => ({ rows: [] as { id: string }[] }));
+      if (listingIdsResult.rows.length === 0) {
+        listingIdsResult = await query<{ id: string }>(
+          `select l.id from listings l join vendor_listings vl on vl.listing_id = l.id and vl.vendor_id = $1 where lower(trim(l.type)) = 'transport'`,
+          [vendorId]
+        ).catch(() => ({ rows: [] as { id: string }[] }));
+      }
+      const transportListingIds = listingIdsResult.rows.map((r) => r.id);
+      if (transportListingIds.length > 0) {
+        const carRows = await query<{
+          user_id: string;
+          user_email: string | null;
+          user_full_name: string | null;
+          total_cents: number | null;
+          created_at: string;
+        }>(
+          `select b.user_id, u.email as user_email, u.full_name as user_full_name, b.total_cents, b.created_at
+           from car_bookings b
+           left join users u on u.id = b.user_id
+           where b.listing_id = any($1::uuid[])
+             and b.travel_date >= $2::date and b.travel_date <= $3::date`,
+          [transportListingIds, fromStr, toStr]
+        ).catch(() => ({ rows: [] as { user_id: string; user_email: string | null; user_full_name: string | null; total_cents: number | null; created_at: string }[] }));
+        for (const row of carRows.rows) {
+          const email = (row.user_email ?? "").trim().toLowerCase() || `unknown-car-${row.user_id}`;
+          const existing = seen.get(email);
+          const totalCents = row.total_cents != null && row.total_cents >= 0 ? row.total_cents : 0;
+          const createdAt = row.created_at ?? "";
+          const name = (row.user_full_name ?? "").trim() || "Customer";
+          if (existing) {
+            existing.totalBookings += 1;
+            existing.totalSpentCents += totalCents;
+            if (createdAt && (!existing.lastBookingAt || createdAt > existing.lastBookingAt)) {
+              existing.lastBookingAt = createdAt;
+            }
+            if (name !== "Customer") existing.name = name;
+          } else {
+            seen.set(email, {
+              name,
+              phone: "",
+              totalBookings: 1,
+              totalSpentCents: totalCents,
+              lastBookingAt: createdAt || null,
+            });
+          }
+        }
+
+        // Sync from flight bookings (same DB: flight_bookings + users).
+        const flightRows = await query<{
+          user_id: string;
+          user_email: string | null;
+          user_full_name: string | null;
+          total_cents: number | null;
+          created_at: string;
+        }>(
+          `select b.user_id, u.email as user_email, u.full_name as user_full_name, b.total_cents, b.created_at
+           from flight_bookings b
+           left join users u on u.id = b.user_id
+           where b.listing_id = any($1::uuid[])
+             and b.travel_date >= $2::date and b.travel_date <= $3::date`,
+          [transportListingIds, fromStr, toStr]
+        ).catch(() => ({ rows: [] as { user_id: string; user_email: string | null; user_full_name: string | null; total_cents: number | null; created_at: string }[] }));
+        for (const row of flightRows.rows) {
+          const email = (row.user_email ?? "").trim().toLowerCase() || `unknown-flight-${row.user_id}`;
+          const existing = seen.get(email);
+          const totalCents = row.total_cents != null && row.total_cents >= 0 ? row.total_cents : 0;
+          const createdAt = row.created_at ?? "";
+          const name = (row.user_full_name ?? "").trim() || "Customer";
+          if (existing) {
+            existing.totalBookings += 1;
+            existing.totalSpentCents += totalCents;
+            if (createdAt && (!existing.lastBookingAt || createdAt > existing.lastBookingAt)) {
+              existing.lastBookingAt = createdAt;
+            }
+            if (name !== "Customer") existing.name = name;
+          } else {
+            seen.set(email, {
+              name,
+              phone: "",
+              totalBookings: 1,
+              totalSpentCents: totalCents,
+              lastBookingAt: createdAt || null,
+            });
+          }
+        }
+      }
+
+      // Replace vendor's customer list with aggregated data from bus + car + flight (idempotent sync)
       await query("delete from vendor_customers where vendor_id = $1", [vendorId]);
       for (const [email, data] of seen) {
         await query(

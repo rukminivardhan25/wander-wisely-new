@@ -70,7 +70,24 @@ router.get("/listing/:id", async (req: Request, res: Response): Promise<void> =>
       owner_id: "Owner ID",
       tax_document: "Tax Document",
       health_safety: "Health & Safety Certificate",
+      government_id: "Government ID",
+      business_activity_proof: "Business / Activity Proof",
+      location_authorization: "Location Authorization",
+      digital_declaration: "Digital Declaration",
     };
+    let experienceInfo: { category: string; city: string; duration_text: string; price_per_person_cents: number; cancellation_policy: string | null } | null = null;
+    if (row.type?.toLowerCase() === "experience") {
+      try {
+        const exp = await query<{ category: string; city: string; duration_text: string; price_per_person_cents: number; cancellation_policy: string | null }>(
+          "SELECT category, city, duration_text, price_per_person_cents, cancellation_policy FROM experiences WHERE listing_id = $1 LIMIT 1",
+          [id]
+        );
+        if (exp.rows.length > 0) experienceInfo = exp.rows[0];
+      } catch {
+        // experiences table may not exist
+      }
+    }
+
     const adminBase = process.env.ADMIN_API_BASE_URL ?? `http://localhost:${process.env.PORT ?? 3003}`;
     const base = adminBase.replace(/\/$/, "");
     res.json({
@@ -83,6 +100,7 @@ router.get("/listing/:id", async (req: Request, res: Response): Promise<void> =>
       address: row.registered_address || row.address || null,
       ownerName: row.vendor_name || null,
       ownerEmail: row.vendor_email || null,
+      experienceInfo: experienceInfo ?? undefined,
       documents: documents.map((d) => {
         const filename = d.file_url.split("/").pop() || "";
         const url = /^[a-f0-9-]+\.(pdf|jpg|jpeg|png|gif|webp)$/i.test(filename) ? `${base}/api/verification/uploads/${filename}` : d.file_url;
@@ -438,6 +456,126 @@ router.post("/car/:id/reject", async (req: Request, res: Response): Promise<void
     res.json({ message: "Rejected", verification_status: "rejected" });
   } catch (err) {
     console.error("Verification car reject error:", err);
+    res.status(500).json({ error: "Failed to reject" });
+  }
+});
+
+// ----- Flight verification (category = Flights) -----
+
+/** List flights awaiting verification (have a token; status no_request or pending). */
+router.get("/pending-flights", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await query<{
+      id: string;
+      flight_number: string;
+      airline_name: string;
+      listing_id: string;
+      listing_name: string;
+      verification_token: string | null;
+      verification_status: string | null;
+      updated_at: string;
+    }>(
+      `SELECT f.id, f.flight_number, f.airline_name, f.listing_id, f.verification_token, f.verification_status, f.updated_at,
+        l.name AS listing_name
+       FROM flights f
+       JOIN listings l ON l.id = f.listing_id
+       WHERE f.verification_token IS NOT NULL
+         AND (f.verification_status IS NULL OR f.verification_status IN ('no_request', 'pending'))
+       ORDER BY f.updated_at DESC NULLS LAST`
+    );
+    res.json({ flights: result.rows });
+  } catch (err) {
+    console.error("Verification pending flights error:", err);
+    if (err && typeof err === "object" && "code" in err && String((err as { code: string }).code) === "42P01") {
+      res.status(503).json({ error: "Flights table not set up. Run flight schema (034–037) on admin DB." });
+      return;
+    }
+    res.status(500).json({ error: "Failed to fetch pending flights" });
+  }
+});
+
+/** Get one flight detail for admin (flight + listing + vendor + routes). */
+router.get("/flight/:id", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const flight = await query<{
+      id: string;
+      flight_number: string;
+      airline_name: string;
+      aircraft_type: string;
+      total_seats: number;
+      listing_id: string;
+      verification_token: string | null;
+      verification_status: string | null;
+      updated_at: string;
+      listing_name: string | null;
+      vendor_name: string | null;
+      vendor_email: string | null;
+    }>(
+      `SELECT f.id, f.flight_number, f.airline_name, f.aircraft_type, f.total_seats, f.listing_id, f.verification_token, f.verification_status, f.updated_at,
+        l.name AS listing_name, v.name AS vendor_name, v.email AS vendor_email
+       FROM flights f
+       JOIN listings l ON l.id = f.listing_id
+       LEFT JOIN vendors v ON v.id = l.vendor_id
+       WHERE f.id = $1`,
+      [id]
+    );
+    if (flight.rows.length === 0) {
+      res.status(404).json({ error: "Flight not found" });
+      return;
+    }
+    const row = flight.rows[0];
+    let routes: { id: string; from_place: string; to_place: string; fare_cents: number | null }[] = [];
+    try {
+      const routeRows = await query<{ id: string; from_place: string; to_place: string; fare_cents: number | null }>(
+        "SELECT id, from_place, to_place, fare_cents FROM flight_routes WHERE flight_id = $1 ORDER BY from_place, to_place",
+        [id]
+      );
+      routes = routeRows.rows;
+    } catch {
+      // flight_routes may not exist
+    }
+    res.json({
+      id: row.id,
+      flight_number: row.flight_number,
+      airline_name: row.airline_name,
+      aircraft_type: row.aircraft_type,
+      total_seats: row.total_seats,
+      listingId: row.listing_id,
+      listingName: row.listing_name,
+      verification_token: row.verification_token,
+      verification_status: row.verification_status,
+      updated_at: row.updated_at,
+      ownerName: row.vendor_name || null,
+      ownerEmail: row.vendor_email || null,
+      routes,
+    });
+  } catch (err) {
+    console.error("Verification flight detail error:", err);
+    res.status(500).json({ error: "Failed to fetch flight" });
+  }
+});
+
+/** Approve a flight (set verification_status approved and status active). */
+router.post("/flight/:id/approve", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    await query("UPDATE flights SET verification_status = 'approved', verified_at = now(), status = 'active', updated_at = now() WHERE id = $1", [id]);
+    res.json({ message: "Approved", verification_status: "approved" });
+  } catch (err) {
+    console.error("Verification flight approve error:", err);
+    res.status(500).json({ error: "Failed to approve" });
+  }
+});
+
+/** Reject a flight */
+router.post("/flight/:id/reject", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    await query("UPDATE flights SET verification_status = 'rejected', updated_at = now() WHERE id = $1", [id]);
+    res.json({ message: "Rejected", verification_status: "rejected" });
+  } catch (err) {
+    console.error("Verification flight reject error:", err);
     res.status(500).json({ error: "Failed to reject" });
   }
 });

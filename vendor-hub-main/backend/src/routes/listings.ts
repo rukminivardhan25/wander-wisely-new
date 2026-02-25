@@ -284,6 +284,15 @@ router.delete("/:id", async (req: Request, res: Response): Promise<void> => {
     await runIfExists("DELETE FROM buses WHERE listing_id = $1", [listingId]);
     await runIfExists("DELETE FROM drivers WHERE listing_id = $1", [listingId]);
     await runIfExists("DELETE FROM listing_availability WHERE listing_id = $1", [listingId]);
+    await runIfExists("DELETE FROM experience_media WHERE experience_id IN (SELECT id FROM experiences WHERE listing_id = $1)", [listingId]);
+    await runIfExists("DELETE FROM experience_slots WHERE experience_id IN (SELECT id FROM experiences WHERE listing_id = $1)", [listingId]);
+    await runIfExists("DELETE FROM experiences WHERE listing_id = $1", [listingId]);
+    await runIfExists("DELETE FROM event_booking_ticket_codes WHERE event_booking_ticket_id IN (SELECT id FROM event_booking_tickets WHERE event_booking_id IN (SELECT id FROM event_bookings WHERE event_id IN (SELECT id FROM events WHERE listing_id = $1)))", [listingId]);
+    await runIfExists("DELETE FROM event_booking_tickets WHERE event_booking_id IN (SELECT id FROM event_bookings WHERE event_id IN (SELECT id FROM events WHERE listing_id = $1))", [listingId]);
+    await runIfExists("DELETE FROM event_bookings WHERE event_id IN (SELECT id FROM events WHERE listing_id = $1)", [listingId]);
+    await runIfExists("DELETE FROM event_ticket_types WHERE event_id IN (SELECT id FROM events WHERE listing_id = $1)", [listingId]);
+    await runIfExists("DELETE FROM event_media WHERE event_id IN (SELECT id FROM events WHERE listing_id = $1)", [listingId]);
+    await runIfExists("DELETE FROM events WHERE listing_id = $1", [listingId]);
     await runIfExists("DELETE FROM vendor_listings WHERE listing_id = $1", [listingId]);
     const result = await query("DELETE FROM listings WHERE id = $1 RETURNING id", [listingId]);
     if (result.rowCount === 0) {

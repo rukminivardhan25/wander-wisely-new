@@ -5,6 +5,7 @@ import {
   Clock,
   IndianRupee,
   Bus,
+  Car,
   Plane,
   Utensils,
   Mountain,
@@ -17,21 +18,22 @@ import {
   MapPin,
   Download,
   Wallet,
-  Map,
+  Map as MapIcon,
   Plus,
   ChevronRight,
-  Hotel,
   Train,
-  Ticket,
   Stethoscope,
   Phone,
   Building2,
   Play,
+  Eye,
+  Trash2,
+  CheckCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar as DateCalendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Layout from "@/components/Layout";
@@ -39,6 +41,74 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getStoredBusBookings, type StoredBusBooking } from "@/lib/bookingsStorage";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api";
+import { cn } from "@/lib/utils";
+
+/** Car booking from GET /api/car-bookings */
+type CarBookingItem = {
+  id: string;
+  bookingRef: string;
+  bookingType: string;
+  fromCity?: string;
+  toCity?: string;
+  city?: string;
+  travelDate: string;
+  passengers: number;
+  status: string;
+};
+
+/** Flight booking from GET /api/flight-bookings */
+type FlightBookingItem = {
+  id: string;
+  bookingRef: string;
+  listingId: string;
+  flightId: string;
+  scheduleId?: string;
+  routeFrom: string;
+  routeTo: string;
+  travelDate: string;
+  passengers: number;
+  totalCents: number;
+  status: string;
+  otp?: string;
+  paidAt?: string;
+  createdAt: string;
+  allSeatsAssigned?: boolean;
+};
+
+/** Experience booking from GET /api/experience-bookings */
+type ExperienceBookingItem = {
+  id: string;
+  bookingRef: string;
+  experienceId: string;
+  experienceSlotId: string;
+  participantsCount: number;
+  totalCents: number;
+  status: string;
+  paidAt?: string;
+  createdAt: string;
+  slotDate: string;
+  slotTime: string;
+  experienceName: string;
+  experienceCity: string;
+};
+
+/** Event booking from GET /api/event-bookings */
+type EventBookingItem = {
+  id: string;
+  bookingRef: string;
+  eventId: string;
+  totalCents: number;
+  status: string;
+  paidAt?: string;
+  createdAt: string;
+  eventName: string;
+  eventCity: string;
+  venueName: string;
+  startDate: string;
+  endDate: string;
+  startTime: string;
+  endTime: string;
+};
 
 const CATEGORY_CONFIG: Record<ActivityType, { label: string; icon: JSX.Element; color: string; bg: string }> = {
   transport: { label: "Transport", icon: <Bus className="h-4 w-4" />, color: "text-blue-600", bg: "bg-blue-500" },
@@ -159,9 +229,67 @@ const MyTrip = () => {
   const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date | undefined>(undefined);
   const [startDateSetting, setStartDateSetting] = useState(false);
   const [storedBusBookings, setStoredBusBookings] = useState<StoredBusBooking[]>([]);
+  const [carBookings, setCarBookings] = useState<CarBookingItem[]>([]);
+  const [carDetailModalOpen, setCarDetailModalOpen] = useState(false);
+  const [carDetailData, setCarDetailData] = useState<{
+    booking: { bookingRef: string; bookingType: string; fromCity?: string; toCity?: string; city?: string; pickupPoint?: string; dropPoint?: string; travelDate: string; passengers: number; totalCents?: number; status: string; otp?: string };
+    car?: { name: string; registrationNumber?: string; carType?: string; seats?: number; acType?: string; manufacturer?: string; model?: string };
+    drivers?: { name: string | null; phone: string | null; licenseNumber: string }[];
+  } | null>(null);
+  const [carDetailLoading, setCarDetailLoading] = useState(false);
+  const [carDetailBookingId, setCarDetailBookingId] = useState<string | null>(null);
+  const [carCancelId, setCarCancelId] = useState<string | null>(null);
+  const [flightBookings, setFlightBookings] = useState<FlightBookingItem[]>([]);
+  const [experienceBookings, setExperienceBookings] = useState<ExperienceBookingItem[]>([]);
+  const [eventBookings, setEventBookings] = useState<EventBookingItem[]>([]);
+  const [flightSeatModalOpen, setFlightSeatModalOpen] = useState(false);
+  const [flightSeatBookingId, setFlightSeatBookingId] = useState<string | null>(null);
+  const [flightSeatMap, setFlightSeatMap] = useState<{
+    seatLayout: { rows: number; colsPerRow: number; totalSeats: number; leftCols: number; rightCols: number; cabinClasses: Array<{ name: string; rowFrom: string; rowTo: string }> };
+    seats: Array<{ rowLetter: string; colNumber: number; label: string; status: string }>;
+  } | null>(null);
+  const [flightSeatClass, setFlightSeatClass] = useState<string>("");
+  const [flightSeatSelection, setFlightSeatSelection] = useState<Record<number, string>>({});
+  const [flightSeatCurrentPassenger, setFlightSeatCurrentPassenger] = useState(0);
+  const [flightSeatSaving, setFlightSeatSaving] = useState(false);
+  const [flightTicketModalOpen, setFlightTicketModalOpen] = useState(false);
+  const [flightTicketData, setFlightTicketData] = useState<{
+    bookingRef: string;
+    otp: string;
+    verificationCode: string;
+    flight: { flightNumber: string; airlineName: string; routeFrom: string; routeTo: string; travelDate: string; departureTime: string; arrivalTime: string };
+    passengers: Array<{ name: string; seatNumber: string }>;
+  } | null>(null);
+  const [flightTicketLoading, setFlightTicketLoading] = useState(false);
+  const [flightPayId, setFlightPayId] = useState<string | null>(null);
+  const [experiencePayId, setExperiencePayId] = useState<string | null>(null);
+  const [eventPayId, setEventPayId] = useState<string | null>(null);
+  const [experienceTicketModalOpen, setExperienceTicketModalOpen] = useState(false);
+  const [experienceTicketData, setExperienceTicketData] = useState<ExperienceBookingItem | null>(null);
+  const [eventTicketModalOpen, setEventTicketModalOpen] = useState(false);
+  const [eventTicketData, setEventTicketData] = useState<EventBookingItem | null>(null);
+  const [bookingsFilterDate, setBookingsFilterDate] = useState<string>("");
   const { token } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const bookingsFilterDateNorm = bookingsFilterDate.trim().slice(0, 10) || null;
+  const normDate = (s: string) => (s || "").slice(0, 10);
+  const filteredEventBookings = bookingsFilterDateNorm
+    ? eventBookings.filter((b) => normDate(b.startDate) <= bookingsFilterDateNorm && bookingsFilterDateNorm <= normDate(b.endDate))
+    : eventBookings;
+  const filteredExperienceBookings = bookingsFilterDateNorm
+    ? experienceBookings.filter((b) => normDate(b.slotDate) === bookingsFilterDateNorm)
+    : experienceBookings;
+  const filteredFlightBookings = bookingsFilterDateNorm
+    ? flightBookings.filter((b) => normDate(b.travelDate) === bookingsFilterDateNorm)
+    : flightBookings;
+  const filteredCarBookings = bookingsFilterDateNorm
+    ? carBookings.filter((b) => normDate(b.travelDate) === bookingsFilterDateNorm)
+    : carBookings;
+  const filteredStoredBusBookings = bookingsFilterDateNorm
+    ? storedBusBookings.filter((b) => normDate(b.travelDate) === bookingsFilterDateNorm)
+    : storedBusBookings;
 
   useEffect(() => {
     if (!token) {
@@ -196,8 +324,46 @@ const MyTrip = () => {
       }).then(({ data }) => {
         if (data?.bookings) setStoredBusBookings(data.bookings);
       });
+      apiFetch<{ bookings: CarBookingItem[] }>("/api/car-bookings", {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(({ data }) => {
+        if (data?.bookings) {
+          setCarBookings(
+            data.bookings.map((b) => ({
+              ...b,
+              travelDate: typeof b.travelDate === "string" && b.travelDate.length >= 10 ? b.travelDate.slice(0, 10) : String(b.travelDate).slice(0, 10),
+            }))
+          );
+        }
+      }).catch(() => setCarBookings([]));
+      apiFetch<{ bookings: FlightBookingItem[] }>("/api/flight-bookings", {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(({ data }) => {
+        if (data?.bookings) {
+          setFlightBookings(
+            data.bookings.map((b) => ({
+              ...b,
+              travelDate: typeof b.travelDate === "string" && b.travelDate.length >= 10 ? b.travelDate.slice(0, 10) : String(b.travelDate).slice(0, 10),
+            }))
+          );
+        }
+      }).catch(() => setFlightBookings([]));
+      apiFetch<{ bookings: ExperienceBookingItem[] }>("/api/experience-bookings", {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(({ data }) => {
+        if (data?.bookings) setExperienceBookings(data.bookings);
+      }).catch(() => setExperienceBookings([]));
+      apiFetch<{ bookings: EventBookingItem[] }>("/api/event-bookings", {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(({ data }) => {
+        if (data?.bookings) setEventBookings(data.bookings);
+      }).catch(() => setEventBookings([]));
     } else {
       setStoredBusBookings(getStoredBusBookings());
+      setCarBookings([]);
+      setFlightBookings([]);
+      setExperienceBookings([]);
+      setEventBookings([]);
     }
   }, [token]);
 
@@ -206,6 +372,437 @@ const MyTrip = () => {
     window.addEventListener("focus", loadBookings);
     return () => window.removeEventListener("focus", loadBookings);
   }, [loadBookings]);
+
+  const openCarDetail = useCallback(
+    (bookingId: string) => {
+      if (!token) return;
+      setCarDetailBookingId(bookingId);
+      setCarDetailLoading(true);
+      setCarDetailData(null);
+      setCarDetailModalOpen(true);
+      apiFetch<{
+        bookingRef: string;
+        bookingType: string;
+        fromCity?: string;
+        toCity?: string;
+        city?: string;
+        pickupPoint?: string;
+        dropPoint?: string;
+        travelDate: string;
+        passengers: number;
+        totalCents?: number;
+        status: string;
+        otp?: string;
+        car?: { name: string; registrationNumber?: string; carType?: string; seats?: number; acType?: string; manufacturer?: string; model?: string };
+        drivers?: { name: string | null; phone: string | null; licenseNumber: string }[];
+      }>(`/api/car-bookings/${bookingId}`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(({ data: d }) => {
+          if (d)
+            setCarDetailData({
+              booking: { bookingRef: d.bookingRef, bookingType: d.bookingType, fromCity: d.fromCity, toCity: d.toCity, city: d.city, pickupPoint: d.pickupPoint, dropPoint: d.dropPoint, travelDate: d.travelDate, passengers: d.passengers, totalCents: d.totalCents, status: d.status, otp: d.otp },
+              car: d.car,
+              drivers: d.drivers,
+            });
+        })
+        .catch(() => setCarDetailData(null))
+        .finally(() => setCarDetailLoading(false));
+    },
+    [token]
+  );
+
+  const cancelCarBooking = useCallback(
+    async (bookingId: string) => {
+      if (!token) return;
+      setCarCancelId(bookingId);
+      try {
+        await apiFetch(`/api/car-bookings/${bookingId}/cancel`, { method: "PATCH", headers: { Authorization: `Bearer ${token}` } });
+        setCarBookings((prev) => prev.filter((b) => b.id !== bookingId));
+        setCarDetailModalOpen(false);
+        setCarDetailData(null);
+        setCarDetailBookingId(null);
+        toast({ title: "Booking cancelled", description: "Your car booking request has been cancelled." });
+      } catch {
+        toast({ title: "Failed to cancel", description: "Could not cancel the booking.", variant: "destructive" });
+      } finally {
+        setCarCancelId(null);
+      }
+    },
+    [token, toast]
+  );
+
+  const openFlightSeatModal = useCallback(
+    async (bookingId: string) => {
+      if (!token) return;
+      setFlightSeatBookingId(bookingId);
+      setFlightSeatMap(null);
+      setFlightSeatSelection({});
+      setFlightSeatCurrentPassenger(0);
+      setFlightSeatClass("");
+      setFlightSeatModalOpen(true);
+      try {
+        const { data } = await apiFetch<{
+          seatLayout: {
+            useVendorLayout?: boolean;
+            rows?: number;
+            colsPerRow?: number;
+            totalSeats?: number;
+            leftCols?: number;
+            rightCols?: number;
+            cabinClasses: Array<{ name: string; rowFrom: string; rowTo: string; leftCols?: number; rightCols?: number }>;
+          };
+          seats: Array<{ rowLetter?: string; rowNumber?: number; colNumber: number; label: string; status: string }>;
+        }>(`/api/flight-bookings/${bookingId}/seat-map`, { headers: { Authorization: `Bearer ${token}` } });
+        if (data) {
+          setFlightSeatMap(data);
+          setFlightSeatClass(data.seatLayout.cabinClasses?.[0]?.name ?? "Economy");
+        }
+      } catch {
+        setFlightSeatMap(null);
+      }
+    },
+    [token]
+  );
+
+  const saveFlightSeats = useCallback(async () => {
+    if (!token || !flightSeatBookingId || !flightSeatMap) return;
+    const arr = Object.entries(flightSeatSelection).map(([idx, label]) => ({
+      passengerIndex: parseInt(idx, 10) + 1,
+      label: String(label).trim().toUpperCase(),
+    }));
+    if (arr.length === 0) {
+      toast({ title: "Select seats", description: "Click on available seats to assign each passenger.", variant: "destructive" });
+      return;
+    }
+    setFlightSeatSaving(true);
+    try {
+      await apiFetch(`/api/flight-bookings/${flightSeatBookingId}/seats`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+        body: { seats: arr },
+      });
+      toast({ title: "Seats saved", description: "You can now pay for your booking." });
+      setFlightSeatModalOpen(false);
+      setFlightSeatBookingId(null);
+      setFlightSeatMap(null);
+      setFlightSeatSelection({});
+      loadBookings();
+    } catch {
+      toast({ title: "Failed to save seats", variant: "destructive" });
+    } finally {
+      setFlightSeatSaving(false);
+    }
+  }, [token, flightSeatBookingId, flightSeatMap, flightSeatSelection, loadBookings, toast]);
+
+  const openFlightTicket = useCallback(
+    async (bookingId: string) => {
+      if (!token) return;
+      setFlightTicketLoading(true);
+      setFlightTicketData(null);
+      setFlightTicketModalOpen(true);
+      try {
+        const { data } = await apiFetch<{
+          bookingRef: string;
+          otp: string;
+          verificationCode: string;
+          flight: { flightNumber: string; airlineName: string; routeFrom: string; routeTo: string; travelDate: string; departureTime: string; arrivalTime: string };
+          passengers: Array<{ name: string; seatNumber: string }>;
+        }>(`/api/flight-bookings/${bookingId}/ticket`, { headers: { Authorization: `Bearer ${token}` } });
+        setFlightTicketData(data ?? null);
+      } catch {
+        setFlightTicketData(null);
+      } finally {
+        setFlightTicketLoading(false);
+      }
+    },
+    [token]
+  );
+
+  const downloadFlightTicket = useCallback((data: {
+    bookingRef: string;
+    otp: string;
+    verificationCode: string;
+    flight: { flightNumber: string; airlineName: string; routeFrom: string; routeTo: string; travelDate: string; departureTime: string; arrivalTime: string };
+    passengers: Array<{ name: string; seatNumber: string }>;
+  }) => {
+    const passengersRows = data.passengers.map((p) => `<tr><td style="padding:8px 12px;font-weight:500">${escapeHtml(p.name)}</td><td style="padding:8px 12px;font-family:monospace;font-weight:600;color:#4338ca">${escapeHtml(p.seatNumber || "—")}</td></tr>`).join("");
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Flight ticket - ${escapeHtml(data.bookingRef)}</title><style>
+      *{box-sizing:border-box} body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;color:#0f172a}
+      .ticket{max-width:420px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.12)}
+      .head{background:linear-gradient(135deg,#4f46e5,#2563eb,#06b6d4);color:#fff;padding:24px 28px}
+      .head h1{margin:0;font-size:1.5rem;font-weight:700} .head .ref{font-size:12px;opacity:.9;margin-top:8px;font-family:monospace}
+      .route{display:flex;align-items:center;gap:16px;padding:20px;background:#f8fafc;border:1px solid #e2e8f0;margin:16px;border-radius:12px}
+      .route .col{flex:1;text-align:center} .route .col small{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#64748b}
+      .route .col strong{display:block;margin-top:4px} .route .col span{font-size:14px;color:#64748b}
+      .route .plane{width:40px;height:40px;border-radius:50%;background:#e0e7ff;color:#4338ca;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+      table{width:100%;border-collapse:collapse;font-size:14px}
+      th{text-align:left;padding:10px 16px;background:#f8fafc;color:#64748b;font-weight:500;border-bottom:1px solid #e2e8f0}
+      td{border-bottom:1px solid #f1f5f9;padding:10px 16px}
+      .otp{background:#fffbeb;border:2px solid #fcd34d;border-radius:12px;padding:20px;text-align:center;margin:16px}
+      .otp small{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#92400e}
+      .otp .code{font-size:28px;font-weight:700;font-family:monospace;letter-spacing:6px;color:#78350f;margin:8px 0}
+      .otp .ver{font-size:11px;color:#a16207;word-break:break-all}
+    </style></head><body><div class="ticket">
+      <div class="head"><p style="margin:0;font-size:14px;opacity:.9">Boarding pass</p><h1>${escapeHtml(data.flight.airlineName)}</h1><p class="ref">Ref: ${escapeHtml(data.bookingRef)}</p></div>
+      <div class="route"><div class="col"><small>From</small><strong>${escapeHtml(data.flight.routeFrom)}</strong><span>${escapeHtml(data.flight.departureTime)}</span></div><div class="plane">✈</div><div class="col"><small>To</small><strong>${escapeHtml(data.flight.routeTo)}</strong><span>${escapeHtml(data.flight.arrivalTime)}</span></div></div>
+      <div style="margin:0 16px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden"><div style="padding:12px 16px;background:#f1f5f9;border-bottom:1px solid #e2e8f0;font-size:14px;font-weight:600">Flight ${escapeHtml(data.flight.flightNumber)} · ${escapeHtml(data.flight.travelDate)}</div><table><thead><tr><th>Passenger</th><th>Seat</th></tr></thead><tbody>${passengersRows}</tbody></table></div>
+      <div class="otp"><small>Show at gate</small><div class="code">${escapeHtml(data.otp)}</div><p class="ver">Verification: ${escapeHtml(data.verificationCode)}</p></div>
+    </div></body></html>`;
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "none";
+    document.body.appendChild(iframe);
+    const doc = iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(html);
+      doc.close();
+      iframe.contentWindow?.focus();
+      setTimeout(() => {
+        iframe.contentWindow?.print();
+        document.body.removeChild(iframe);
+      }, 300);
+    } else {
+      document.body.removeChild(iframe);
+      toast({ title: "Download failed", description: "Could not open print preview.", variant: "destructive" });
+    }
+  }, [toast]);
+
+  function escapeHtml(s: string): string {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  const downloadExperienceTicket = useCallback((data: ExperienceBookingItem) => {
+    const ref = escapeHtml(data.bookingRef);
+    const name = escapeHtml(data.experienceName);
+    const date = escapeHtml(data.slotDate);
+    const time = escapeHtml(data.slotTime);
+    const amt = (data.totalCents / 100).toFixed(0);
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ticket ${ref}</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.ticket{max-width:360px;background:#fff;border:2px solid #0f172a;border-radius:12px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.12)}
+.ticket-head{background:linear-gradient(135deg,#059669 0%,#047857 100%);color:#fff;padding:16px 20px;text-align:center}
+.ticket-head .brand{font-size:11px;letter-spacing:.2em;opacity:.9}
+.ticket-head .title{font-size:18px;font-weight:700;margin:4px 0 0}
+.perf{border:none;border-top:2px dashed #cbd5e1;margin:0}
+.ticket-body{padding:20px}
+.ref-box{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px;text-align:center;margin-bottom:16px}
+.ref-label{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#166534;margin:0}
+.ref-value{font-size:16px;font-weight:700;font-family:ui-monospace,monospace;color:#0f172a;margin:4px 0 0}
+.row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #e2e8f0;font-size:14px}
+.row:last-child{border-bottom:none}
+.row .l{color:#64748b}
+.row .r{font-weight:600;color:#0f172a}
+.amount{font-size:18px;color:#059669;margin-top:4px}
+.barcode{height:36px;background:repeating-linear-gradient(90deg,#0f172a 0,#0f172a 2px,transparent 2px,transparent 6px);margin:16px 0 0}
+.ticket-foot{background:#f8fafc;padding:12px 20px;text-align:center;font-size:11px;color:#64748b}
+</style></head><body>
+<div class="ticket">
+  <div class="ticket-head"><div class="brand">WANDERLUST</div><div class="title">Experience ticket</div></div>
+  <hr class="perf"/>
+  <div class="ticket-body">
+    <div class="ref-box"><p class="ref-label">Booking reference</p><p class="ref-value">${ref}</p></div>
+    <div class="row"><span class="l">Experience</span><span class="r">${name}</span></div>
+    <div class="row"><span class="l">Date</span><span class="r">${date}</span></div>
+    <div class="row"><span class="l">Time</span><span class="r">${time}</span></div>
+    <div class="row"><span class="l">Participants</span><span class="r">${data.participantsCount}</span></div>
+    <div class="row"><span class="l">Amount paid</span><span class="r amount">₹${amt}</span></div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+  <div class="ticket-foot">Print or save as PDF · Wanderlust</div>
+</div>
+</body></html>`;
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "none";
+    document.body.appendChild(iframe);
+    const doc = iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(html);
+      doc.close();
+      iframe.contentWindow?.focus();
+      setTimeout(() => {
+        iframe.contentWindow?.print();
+        document.body.removeChild(iframe);
+      }, 300);
+    } else {
+      document.body.removeChild(iframe);
+      toast({ title: "Download failed", description: "Could not open print preview.", variant: "destructive" });
+    }
+  }, [toast]);
+
+  const flightPay = useCallback(
+    async (bookingId: string) => {
+      if (!token) return;
+      setFlightPayId(bookingId);
+      try {
+        const { data, error } = await apiFetch<{ ok: boolean; status: string; otp: string }>(`/api/flight-bookings/${bookingId}/pay`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!error && data?.status === "confirmed") {
+          toast({ title: "Payment confirmed", description: "Your flight booking is confirmed." });
+          loadBookings();
+        } else {
+          toast({ title: "Payment failed", description: error ?? "Try again.", variant: "destructive" });
+        }
+      } catch {
+        toast({ title: "Payment failed", variant: "destructive" });
+      } finally {
+        setFlightPayId(null);
+      }
+    },
+    [token, loadBookings, toast]
+  );
+
+  const experiencePay = useCallback(
+    async (bookingId: string) => {
+      if (!token) return;
+      setExperiencePayId(bookingId);
+      try {
+        const { error } = await apiFetch(`/api/experience-bookings/${bookingId}/pay`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!error) {
+          toast({ title: "Payment confirmed", description: "Your experience booking is confirmed. You can view your ticket below." });
+          loadBookings();
+        } else {
+          toast({ title: "Payment failed", description: error, variant: "destructive" });
+        }
+      } catch {
+        toast({ title: "Payment failed", variant: "destructive" });
+      } finally {
+        setExperiencePayId(null);
+      }
+    },
+    [token, loadBookings, toast]
+  );
+
+  const eventPay = useCallback(
+    async (bookingId: string) => {
+      if (!token) return;
+      setEventPayId(bookingId);
+      try {
+        const { error } = await apiFetch(`/api/event-bookings/${bookingId}/pay`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!error) {
+          toast({ title: "Payment confirmed", description: "Your event booking is confirmed. You can view your ticket below." });
+          loadBookings();
+        } else {
+          toast({ title: "Payment failed", description: error, variant: "destructive" });
+        }
+      } catch {
+        toast({ title: "Payment failed", variant: "destructive" });
+      } finally {
+        setEventPayId(null);
+      }
+    },
+    [token, loadBookings, toast]
+  );
+
+  const downloadEventTicket = useCallback((data: EventBookingItem) => {
+    const ref = escapeHtml(data.bookingRef);
+    const name = escapeHtml(data.eventName);
+    const venue = escapeHtml(data.venueName);
+    const dateStr = data.startDate + (data.endDate !== data.startDate ? ` – ${data.endDate}` : "");
+    const timeStr = `${data.startTime} – ${data.endTime}`;
+    const amt = (data.totalCents / 100).toFixed(0);
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ticket ${ref}</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.ticket{max-width:360px;background:#fff;border:2px solid #0f172a;border-radius:12px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.12)}
+.ticket-head{background:linear-gradient(135deg,#7c3aed 0%,#5b21b6 100%);color:#fff;padding:16px 20px;text-align:center}
+.ticket-head .brand{font-size:11px;letter-spacing:.2em;opacity:.9}
+.ticket-head .title{font-size:18px;font-weight:700;margin:4px 0 0}
+.perf{border:none;border-top:2px dashed #cbd5e1;margin:0}
+.ticket-body{padding:20px}
+.ref-box{background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;padding:12px;text-align:center;margin-bottom:16px}
+.ref-label{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#5b21b6;margin:0}
+.ref-value{font-size:16px;font-weight:700;font-family:ui-monospace,monospace;color:#0f172a;margin:4px 0 0}
+.row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #e2e8f0;font-size:14px}
+.row .l{color:#64748b}
+.row .r{font-weight:600;color:#0f172a}
+.amount{font-size:18px;color:#7c3aed;margin-top:4px}
+.barcode{height:36px;background:repeating-linear-gradient(90deg,#0f172a 0,#0f172a 2px,transparent 2px,transparent 6px);margin:16px 0 0}
+.ticket-foot{background:#f8fafc;padding:12px 20px;text-align:center;font-size:11px;color:#64748b}
+</style></head><body>
+<div class="ticket">
+  <div class="ticket-head"><div class="brand">WANDERLUST</div><div class="title">Event ticket</div></div>
+  <hr class="perf"/>
+  <div class="ticket-body">
+    <div class="ref-box"><p class="ref-label">Booking reference</p><p class="ref-value">${ref}</p></div>
+    <div class="row"><span class="l">Event</span><span class="r">${name}</span></div>
+    <div class="row"><span class="l">Venue</span><span class="r">${venue}</span></div>
+    <div class="row"><span class="l">Date</span><span class="r">${dateStr}</span></div>
+    <div class="row"><span class="l">Time</span><span class="r">${timeStr}</span></div>
+    <div class="row"><span class="l">Amount paid</span><span class="r amount">₹${amt}</span></div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+  <div class="ticket-foot">Print or save as PDF · Wanderlust</div>
+</div>
+</body></html>`;
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "none";
+    document.body.appendChild(iframe);
+    const doc = iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(html);
+      doc.close();
+      iframe.contentWindow?.focus();
+      setTimeout(() => {
+        iframe.contentWindow?.print();
+        document.body.removeChild(iframe);
+      }, 300);
+    } else {
+      document.body.removeChild(iframe);
+      toast({ title: "Download failed", description: "Could not open print preview.", variant: "destructive" });
+    }
+  }, [toast]);
+
+  /** Delete car booking from database; it will not appear again when the page is reopened. */
+  const deleteCarBooking = useCallback(
+    async (bookingId: string) => {
+      if (!token) return;
+      setCarCancelId(bookingId);
+      try {
+        const { error, status } = await apiFetch(`/api/car-bookings/${bookingId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+        if (!error && (status === 200 || status === 204)) {
+          setCarBookings((prev) => prev.filter((b) => b.id !== bookingId));
+          setCarDetailModalOpen(false);
+          setCarDetailData(null);
+          setCarDetailBookingId(null);
+          toast({ title: "Booking removed", description: "The booking has been deleted and will no longer appear in your list." });
+        } else {
+          toast({ title: "Failed to delete", description: error ?? "Could not delete the booking.", variant: "destructive" });
+        }
+      } catch {
+        toast({ title: "Failed to delete", description: "Could not delete the booking.", variant: "destructive" });
+      } finally {
+        setCarCancelId(null);
+      }
+    },
+    [token, toast]
+  );
 
   if (!token) {
     return (
@@ -310,7 +907,7 @@ const MyTrip = () => {
                     <Plus className="h-4 w-4" /> Add Expense
                   </Button>
                   <Button size="sm" variant="secondary" className="bg-white/90 text-slate-800 hover:bg-white shadow-md rounded-xl gap-1.5">
-                    <Map className="h-4 w-4" /> View Map
+                    <MapIcon className="h-4 w-4" /> View Map
                   </Button>
                   <Button size="sm" variant="secondary" className="bg-white/90 text-slate-800 hover:bg-white shadow-md rounded-xl gap-1.5">
                     <Download className="h-4 w-4" /> Download Plan
@@ -578,17 +1175,39 @@ const MyTrip = () => {
               </div>
               <div className="p-4">
                 <TabsContent value="bookings" className="mt-0">
-                  <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <h3 className="text-lg font-semibold text-foreground">My Bookings</h3>
-                    <Button asChild variant="hero" size="sm" className="rounded-xl gap-2 shrink-0">
-                      <Link to="/my-trip/book">
-                        <Plus className="h-4 w-4" />
-                        Book transport, stay & more
-                      </Link>
-                    </Button>
+                  <div className="mb-6 flex flex-col gap-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                      <h3 className="text-lg font-semibold text-foreground">My Bookings</h3>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Label htmlFor="bookings-date-filter" className="text-xs text-muted-foreground whitespace-nowrap">Show for date</Label>
+                        <Input
+                          id="bookings-date-filter"
+                          type="date"
+                          value={bookingsFilterDate}
+                          onChange={(e) => setBookingsFilterDate(e.target.value)}
+                          className="w-[140px] rounded-lg h-9"
+                        />
+                        {bookingsFilterDate && (
+                          <Button type="button" variant="ghost" size="sm" className="rounded-lg h-9 text-xs" onClick={() => setBookingsFilterDate("")}>
+                            Clear
+                          </Button>
+                        )}
+                        <Button asChild variant="hero" size="sm" className="rounded-xl gap-2 shrink-0">
+                          <Link to="/my-trip/book">
+                            <Plus className="h-4 w-4" />
+                            Book transport, stay & more
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                    {bookingsFilterDateNorm && (
+                      <p className="text-sm text-muted-foreground">
+                        Showing only bookings for <span className="font-medium text-foreground">{bookingsFilterDateNorm}</span>. Events: live on this date; others: travel/slot on this date.
+                      </p>
+                    )}
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {storedBusBookings.map((b) => {
+                    {filteredStoredBusBookings.map((b) => {
                       const { bookedAt: _, ...stateForSuccess } = b;
                       return (
                         <div key={b.bookingId} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3">
@@ -596,7 +1215,12 @@ const MyTrip = () => {
                             <Bus className="h-6 w-6 text-slate-600" />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="font-medium text-foreground truncate">{b.routeFrom} → {b.routeTo}</p>
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="font-medium text-foreground truncate">{b.routeFrom} → {b.routeTo}</p>
+                              <Button type="button" size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600 hover:bg-red-50 shrink-0" title="Delete" onClick={() => toast({ title: "Bus booking", description: "Cancel not available for bus from this page.", variant: "destructive" })}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                             <p className="text-xs text-muted-foreground">Bus · {b.travelDate}</p>
                             <p className="text-xs mt-1 text-amber-600">Confirmed</p>
                             <Button asChild size="sm" variant="outline" className="mt-2 rounded-lg text-xs">
@@ -606,31 +1230,193 @@ const MyTrip = () => {
                         </div>
                       );
                     })}
-                    {storedBusBookings.length === 0 && (
-                      <p className="text-sm text-muted-foreground col-span-full">No bus bookings yet. Book transport to see your tickets here.</p>
+                    {filteredCarBookings.map((b) => {
+                      const title = b.bookingType === "intercity" && b.fromCity && b.toCity
+                        ? `${b.fromCity} → ${b.toCity}`
+                        : b.city ?? "Car rental";
+                      const statusLabel =
+                        b.status === "pending_vendor"
+                          ? "Pending approval"
+                          : b.status === "approved_awaiting_payment"
+                            ? "Pay now"
+                            : b.status === "confirmed"
+                              ? "Completed"
+                              : b.status === "rejected"
+                                ? "Rejected"
+                                : b.status;
+                      const showDelete = b.status === "pending_vendor" || b.status === "approved_awaiting_payment" || b.status === "rejected" || b.status === "confirmed";
+                      const handleDelete = () => deleteCarBooking(b.id);
+                      return (
+                        <div key={b.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3">
+                          <div className="w-14 h-14 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
+                            <Car className="h-6 w-6 text-slate-600" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="font-medium text-foreground truncate">{title}</p>
+                              {showDelete && (
+                                <Button type="button" size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600 hover:bg-red-50 shrink-0" title="Delete" disabled={carCancelId === b.id} onClick={handleDelete}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">Car · {b.travelDate}</p>
+                            <p className={`text-xs mt-1 flex items-center gap-1 ${b.status === "confirmed" ? "text-emerald-600" : "text-amber-600"}`}>
+                              {b.status === "confirmed" && <CheckCircle className="h-3.5 w-3.5 shrink-0" />}
+                              {statusLabel}
+                            </p>
+                            <Button type="button" size="sm" variant="outline" className="mt-2 rounded-lg text-xs" onClick={() => openCarDetail(b.id)}>
+                              Check status
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {filteredFlightBookings.map((b) => {
+                      const statusLabel =
+                        b.status === "pending_vendor"
+                          ? "Pending approval"
+                          : b.status === "approved_awaiting_payment"
+                            ? (b.allSeatsAssigned ? "Seats selected — pay to confirm" : "Select seats, then pay")
+                            : b.status === "confirmed"
+                              ? "Confirmed"
+                              : b.status === "rejected"
+                                ? "Rejected"
+                                : b.status;
+                      return (
+                        <div key={b.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3">
+                          <div className="w-14 h-14 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
+                            <Plane className="h-6 w-6 text-slate-600" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="font-medium text-foreground truncate">{b.routeFrom} → {b.routeTo}</p>
+                            </div>
+                            <p className="text-xs text-muted-foreground">Flight · {b.travelDate} · {b.passengers} passenger{b.passengers !== 1 ? "s" : ""}</p>
+                            <p className={`text-xs mt-1 flex items-center gap-1 ${b.status === "confirmed" ? "text-emerald-600" : "text-amber-600"}`}>
+                              {b.status === "confirmed" && <CheckCircle className="h-3.5 w-3.5 shrink-0" />}
+                              {statusLabel}
+                            </p>
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {b.status === "approved_awaiting_payment" && (
+                                <Button type="button" size="sm" variant="outline" className="rounded-lg text-xs" onClick={() => openFlightSeatModal(b.id)}>
+                                  {b.allSeatsAssigned ? "Change seats" : "Select seats"}
+                                </Button>
+                              )}
+                              {b.status === "approved_awaiting_payment" && (
+                                <Button type="button" size="sm" variant="hero" className="rounded-lg text-xs" disabled={flightPayId === b.id || !b.allSeatsAssigned} onClick={() => flightPay(b.id)} title={!b.allSeatsAssigned ? "Select seats for all passengers first" : undefined}>
+                                  {flightPayId === b.id ? "Processing…" : "Pay now"}
+                                </Button>
+                              )}
+                              {b.status === "confirmed" && (
+                                <Button type="button" size="sm" variant="outline" className="rounded-lg text-xs" onClick={() => openFlightTicket(b.id)}>
+                                  View ticket
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {filteredExperienceBookings.map((b) => {
+                      const isPaid = !!b.paidAt;
+                      const statusLabel = b.status === "cancelled" ? "Cancelled" : b.status === "completed" ? "Completed" : isPaid ? "Confirmed" : "Pay to confirm";
+                      return (
+                        <div key={b.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3">
+                          <div className="w-14 h-14 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
+                            <Mountain className="h-6 w-6 text-emerald-600" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-foreground truncate">{b.experienceName}</p>
+                            <p className="text-xs text-muted-foreground">Experience · {b.slotDate} · {b.slotTime} · {b.participantsCount} participant{b.participantsCount !== 1 ? "s" : ""}</p>
+                            <p className={`text-xs mt-1 flex items-center gap-1 ${isPaid ? "text-emerald-600" : "text-amber-600"}`}>
+                              {isPaid && <CheckCircle className="h-3.5 w-3.5 shrink-0" />}
+                              {statusLabel}
+                            </p>
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {!isPaid && b.status !== "cancelled" && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="hero"
+                                  className="rounded-lg text-xs"
+                                  disabled={experiencePayId === b.id}
+                                  onClick={() => experiencePay(b.id)}
+                                >
+                                  {experiencePayId === b.id ? "Processing…" : "Pay now"}
+                                </Button>
+                              )}
+                              {isPaid && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="rounded-lg text-xs"
+                                  onClick={() => {
+                                    setExperienceTicketData(b);
+                                    setExperienceTicketModalOpen(true);
+                                  }}
+                                >
+                                  View ticket
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {filteredEventBookings.map((b) => {
+                      const isPaid = !!b.paidAt;
+                      const statusLabel = b.status === "cancelled" ? "Cancelled" : b.status === "completed" ? "Completed" : isPaid ? "Confirmed" : "Pay to confirm";
+                      return (
+                        <div key={b.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3">
+                          <div className="w-14 h-14 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
+                            <CalendarDays className="h-6 w-6 text-violet-600" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-foreground truncate">{b.eventName}</p>
+                            <p className="text-xs text-muted-foreground">Event · {b.venueName} · {b.startDate}{b.endDate !== b.startDate ? ` – ${b.endDate}` : ""} · {b.startTime} – {b.endTime}</p>
+                            <p className={`text-xs mt-1 flex items-center gap-1 ${isPaid ? "text-emerald-600" : "text-amber-600"}`}>
+                              {isPaid && <CheckCircle className="h-3.5 w-3.5 shrink-0" />}
+                              {statusLabel}
+                            </p>
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {!isPaid && b.status !== "cancelled" && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="hero"
+                                  className="rounded-lg text-xs"
+                                  disabled={eventPayId === b.id}
+                                  onClick={() => eventPay(b.id)}
+                                >
+                                  {eventPayId === b.id ? "Processing…" : "Pay now"}
+                                </Button>
+                              )}
+                              {isPaid && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="rounded-lg text-xs"
+                                  onClick={() => {
+                                    setEventTicketData(b);
+                                    setEventTicketModalOpen(true);
+                                  }}
+                                >
+                                  View ticket
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {filteredStoredBusBookings.length === 0 && filteredCarBookings.length === 0 && filteredFlightBookings.length === 0 && filteredExperienceBookings.length === 0 && filteredEventBookings.length === 0 && (
+                      <p className="text-sm text-muted-foreground col-span-full">
+                        {bookingsFilterDateNorm ? `No bookings for ${bookingsFilterDateNorm}. Try another date or clear the filter.` : "No bookings yet. Book transport, experiences, or events to see your tickets here."}
+                      </p>
                     )}
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3">
-                      <div className="w-14 h-14 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
-                        <Hotel className="h-6 w-6 text-slate-600" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-foreground truncate">Hotel in {data.trip.destination}</p>
-                        <p className="text-xs text-muted-foreground">Stay · Day 1–{data.trip.days}</p>
-                        <p className="text-xs mt-1 text-amber-600">Not booked</p>
-                        <Button size="sm" variant="outline" className="mt-2 rounded-lg text-xs" disabled>View ticket</Button>
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3">
-                      <div className="w-14 h-14 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
-                        <Ticket className="h-6 w-6 text-slate-600" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-foreground truncate">Experiences in {data.trip.destination}</p>
-                        <p className="text-xs text-muted-foreground">Experience</p>
-                        <p className="text-xs mt-1 text-amber-600">Not booked</p>
-                        <Button size="sm" variant="outline" className="mt-2 rounded-lg text-xs" disabled>View ticket</Button>
-                      </div>
-                    </div>
                   </div>
                 </TabsContent>
                 <TabsContent value="restaurants" className="mt-0">
@@ -847,6 +1633,428 @@ const MyTrip = () => {
                 </form>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Car booking details modal (ticket + car + drivers) — car service only */}
+        <Dialog open={carDetailModalOpen} onOpenChange={(o) => !o && (setCarDetailModalOpen(false), setCarDetailData(null), setCarDetailBookingId(null))}>
+          <DialogContent className="rounded-2xl max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-semibold flex items-center gap-2">
+                <Eye className="h-5 w-5" /> Car booking details
+              </DialogTitle>
+            </DialogHeader>
+            {carDetailLoading && <p className="text-sm text-muted-foreground py-4">Loading…</p>}
+            {!carDetailLoading && carDetailData && (
+              <div className="space-y-6">
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground mb-2">Ticket</h4>
+                  <div className="rounded-xl bg-slate-50 p-4 space-y-2 text-sm">
+                    <p><span className="text-muted-foreground">Ref:</span> <span className="font-mono">{carDetailData.booking.bookingRef}</span></p>
+                    <p><span className="text-muted-foreground">Date:</span> {carDetailData.booking.travelDate}</p>
+                    <p><span className="text-muted-foreground">Route:</span>{" "}
+                      {carDetailData.booking.bookingType === "intercity"
+                        ? `${carDetailData.booking.fromCity ?? "—"} → ${carDetailData.booking.toCity ?? "—"}`
+                        : carDetailData.booking.city ?? (carDetailData.booking.pickupPoint && carDetailData.booking.dropPoint ? `${carDetailData.booking.pickupPoint} → ${carDetailData.booking.dropPoint}` : "—")}
+                    </p>
+                    <p><span className="text-muted-foreground">Passengers:</span> {carDetailData.booking.passengers}</p>
+                    <p><span className="text-muted-foreground">Amount:</span>{" "}
+                      {carDetailData.booking.totalCents != null ? `₹ ${(carDetailData.booking.totalCents / 100).toLocaleString("en-IN")}` : "—"}
+                    </p>
+                    <p><span className="text-muted-foreground">Status:</span> {carDetailData.booking.status === "confirmed" ? "Completed" : carDetailData.booking.status.replace(/_/g, " ")}</p>
+                    {carDetailData.booking.otp && <p><span className="text-muted-foreground">OTP:</span> <span className="font-mono font-semibold">{carDetailData.booking.otp}</span></p>}
+                  </div>
+                </div>
+                {carDetailData.car && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground mb-2">Car</h4>
+                    <div className="rounded-xl bg-slate-50 p-4 space-y-2 text-sm">
+                      <p><span className="text-muted-foreground">Name:</span> {carDetailData.car.name}</p>
+                      {carDetailData.car.registrationNumber && <p><span className="text-muted-foreground">Registration:</span> {carDetailData.car.registrationNumber}</p>}
+                      {(carDetailData.car.carType || carDetailData.car.seats != null) && <p><span className="text-muted-foreground">Type / Seats:</span> {[carDetailData.car.carType, carDetailData.car.seats != null ? `${carDetailData.car.seats} seats` : ""].filter(Boolean).join(" · ")}</p>}
+                      {carDetailData.car.acType && <p><span className="text-muted-foreground">AC:</span> {carDetailData.car.acType}</p>}
+                      {(carDetailData.car.manufacturer || carDetailData.car.model) && <p><span className="text-muted-foreground">Model:</span> {[carDetailData.car.manufacturer, carDetailData.car.model].filter(Boolean).join(" ")}</p>}
+                    </div>
+                  </div>
+                )}
+                {carDetailData.drivers && carDetailData.drivers.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground mb-2">Drivers</h4>
+                    <div className="space-y-3">
+                      {carDetailData.drivers.map((d, i) => (
+                        <div key={i} className="rounded-xl bg-slate-50 p-4 space-y-1 text-sm">
+                          <p><span className="text-muted-foreground">Name:</span> {d.name ?? "—"}</p>
+                          <p><span className="text-muted-foreground">Phone:</span> {d.phone ?? "—"}</p>
+                          <p><span className="text-muted-foreground">License:</span> {d.licenseNumber}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {(carDetailData.booking.status === "pending_vendor" || carDetailData.booking.status === "approved_awaiting_payment") && carDetailBookingId && (
+                  <div className="pt-2 border-t">
+                    <Button asChild size="sm" variant="outline" className="rounded-lg w-full">
+                      <Link to="/my-trip/book" state={{ carBookingId: carDetailBookingId }} onClick={() => setCarDetailModalOpen(false)}>
+                        Pay or manage on Book page
+                      </Link>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+            {!carDetailLoading && !carDetailData && carDetailModalOpen && <p className="text-sm text-muted-foreground py-4">Could not load details.</p>}
+          </DialogContent>
+        </Dialog>
+
+        {/* Flight seat selection modal */}
+        <Dialog open={flightSeatModalOpen} onOpenChange={(o) => !o && (setFlightSeatModalOpen(false), setFlightSeatBookingId(null), setFlightSeatMap(null), setFlightSeatSelection({}), setFlightSeatClass(""))}>
+          <DialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-hidden flex flex-col" aria-describedby={undefined}>
+            <DialogHeader className="shrink-0">
+              <DialogTitle className="text-lg font-semibold">Select seats</DialogTitle>
+              <DialogDescription>
+                Choose cabin class, then click an available seat for each passenger. Layout: window · seats · aisle · seats · window.
+              </DialogDescription>
+            </DialogHeader>
+            {flightSeatMap && flightSeatBookingId && (() => {
+              const passengers = flightBookings.find((b) => b.id === flightSeatBookingId)?.passengers ?? 1;
+              const currentPassenger = Math.min(flightSeatCurrentPassenger, passengers - 1);
+              const assigned = Object.keys(flightSeatSelection).length;
+              const layout = flightSeatMap.seatLayout;
+              const cabinClasses = layout.cabinClasses ?? [{ name: "Economy", rowFrom: "A", rowTo: String.fromCharCode(64 + (layout.rows ?? 30)), leftCols: 3, rightCols: 3 }];
+              const selectedClass = cabinClasses.find((c) => c.name === flightSeatClass) ?? cabinClasses[0];
+              const useVendorLayout = layout.useVendorLayout && flightSeatMap.seats.some((s) => s.rowNumber != null);
+              const leftCols = selectedClass.leftCols ?? layout.leftCols ?? Math.floor((layout.colsPerRow ?? 6) / 2);
+              const rightCols = selectedClass.rightCols ?? layout.rightCols ?? (layout.colsPerRow ?? 6) - leftCols;
+
+              let seatsByRow: Map<string, typeof flightSeatMap.seats>;
+              let rowKeys: string[];
+              if (useVendorLayout) {
+                const rowFrom = parseInt(selectedClass.rowFrom, 10) || 1;
+                const rowTo = parseInt(selectedClass.rowTo, 10) || 1;
+                seatsByRow = new Map<string, typeof flightSeatMap.seats>();
+                for (const s of flightSeatMap.seats) {
+                  const rn = s.rowNumber ?? 0;
+                  if (rn >= rowFrom && rn <= rowTo) {
+                    const key = String(rn);
+                    if (!seatsByRow.has(key)) seatsByRow.set(key, []);
+                    seatsByRow.get(key)!.push(s);
+                  }
+                }
+                rowKeys = Array.from(seatsByRow.keys()).sort((a, b) => Number(a) - Number(b));
+              } else {
+                const rowFromChar = selectedClass.rowFrom.charCodeAt(0);
+                const rowToChar = selectedClass.rowTo.charCodeAt(0);
+                seatsByRow = new Map<string, typeof flightSeatMap.seats>();
+                for (const s of flightSeatMap.seats) {
+                  const letter = s.rowLetter ?? "";
+                  const code = letter.charCodeAt(0);
+                  if (code >= rowFromChar && code <= rowToChar) {
+                    if (!seatsByRow.has(letter)) seatsByRow.set(letter, []);
+                    seatsByRow.get(letter)!.push(s);
+                  }
+                }
+                rowKeys = Array.from(seatsByRow.keys()).sort();
+              }
+
+              return (
+                <div className="flex flex-col min-h-0 flex-1 space-y-4">
+                  <div className="flex flex-wrap items-center gap-3 shrink-0">
+                    <Label htmlFor="flight-seat-class" className="text-sm font-medium text-foreground">Cabin class</Label>
+                    <select
+                      id="flight-seat-class"
+                      value={flightSeatClass || cabinClasses[0]?.name}
+                      onChange={(e) => setFlightSeatClass(e.target.value)}
+                      className="rounded-lg border border-input bg-background px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      {cabinClasses.map((c) => (
+                        <option key={c.name} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
+                    <span className="text-sm text-muted-foreground">
+                      Passenger {currentPassenger + 1} of {passengers} · Assigned: {assigned}/{passengers}
+                    </span>
+                  </div>
+                  <div className="rounded-xl border border-slate-300 overflow-auto bg-slate-700 shadow-inner max-h-[50vh] min-h-[200px]">
+                    <div className="p-3">
+                      <div className="flex gap-1 items-stretch min-w-max">
+                        <div
+                          className="flex flex-col shrink-0 w-20 min-h-[100px] justify-center rounded-l-2xl rounded-r border border-slate-500/80 bg-slate-800"
+                          style={{ borderLeftWidth: "3px" }}
+                          title="Front of aircraft"
+                        >
+                          <div className="flex flex-1 items-center justify-center px-1 py-2 text-slate-200 text-center min-w-0">
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="text-[10px] uppercase tracking-wider text-slate-300 font-medium">Front</span>
+                              <span className="text-sm font-semibold text-white whitespace-nowrap">Cockpit</span>
+                            </div>
+                          </div>
+                        </div>
+                        {rowKeys.map((rowKey) => {
+                          const rowSeats = seatsByRow.get(rowKey) ?? [];
+                          const leftSeats = rowSeats.filter((s) => s.colNumber <= leftCols).sort((a, b) => a.colNumber - b.colNumber);
+                          const rightSeats = rowSeats.filter((s) => s.colNumber > leftCols).sort((a, b) => a.colNumber - b.colNumber);
+                          return (
+                            <div
+                              key={rowKey}
+                              className="flex flex-col shrink-0 w-14 border border-slate-500/80 rounded-lg overflow-hidden bg-slate-600/50"
+                            >
+                              <div className="text-[10px] font-bold text-center py-1 bg-slate-700 text-slate-300 border-b border-slate-600">
+                                {rowKey}
+                              </div>
+                              <div className="flex flex-1 p-1 gap-0.5">
+                                <div className="flex flex-col gap-0.5 flex-1">
+                                  {leftSeats.map((s) => {
+                                    const isSelected = Object.values(flightSeatSelection).includes(s.label);
+                                    const isYours = s.status === "yours";
+                                    const isBooked = s.status === "booked";
+                                    const available = s.status === "available" && !isSelected;
+                                    return (
+                                      <button
+                                        key={s.label}
+                                        type="button"
+                                        disabled={isBooked}
+                                        onClick={() => {
+                                          if (!available) return;
+                                          setFlightSeatSelection((prev) => ({ ...prev, [currentPassenger]: s.label }));
+                                          if (currentPassenger < passengers - 1) setFlightSeatCurrentPassenger((p) => p + 1);
+                                        }}
+                                        className={cn(
+                                          "min-h-[28px] flex items-center justify-center text-[11px] font-semibold rounded transition-colors",
+                                          isBooked && "bg-slate-500 text-slate-400 cursor-not-allowed",
+                                          (isYours || isSelected) && "bg-blue-500 text-white",
+                                          available && "bg-emerald-500 text-white hover:bg-emerald-400"
+                                        )}
+                                      >
+                                        {s.label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                <div className="w-1 bg-slate-500 rounded self-stretch my-0.5 shrink-0" aria-label="Aisle" />
+                                <div className="flex flex-col gap-0.5 flex-1">
+                                  {rightSeats.map((s) => {
+                                    const isSelected = Object.values(flightSeatSelection).includes(s.label);
+                                    const isYours = s.status === "yours";
+                                    const isBooked = s.status === "booked";
+                                    const available = s.status === "available" && !isSelected;
+                                    return (
+                                      <button
+                                        key={s.label}
+                                        type="button"
+                                        disabled={isBooked}
+                                        onClick={() => {
+                                          if (!available) return;
+                                          setFlightSeatSelection((prev) => ({ ...prev, [currentPassenger]: s.label }));
+                                          if (currentPassenger < passengers - 1) setFlightSeatCurrentPassenger((p) => p + 1);
+                                        }}
+                                        className={cn(
+                                          "min-h-[28px] flex items-center justify-center text-[11px] font-semibold rounded transition-colors",
+                                          isBooked && "bg-slate-500 text-slate-400 cursor-not-allowed",
+                                          (isYours || isSelected) && "bg-blue-500 text-white",
+                                          available && "bg-emerald-500 text-white hover:bg-emerald-400"
+                                        )}
+                                      >
+                                        {s.label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-slate-400 text-center py-1.5 border-t border-slate-600 shrink-0">
+                      Window · Left {leftCols} · Aisle · Right {rightCols} · Window
+                    </p>
+                  </div>
+                  <div className="flex gap-3 text-xs shrink-0">
+                    <span className="flex items-center gap-1.5 text-muted-foreground"><span className="w-3.5 h-3.5 rounded bg-emerald-500" /> Available</span>
+                    <span className="flex items-center gap-1.5 text-muted-foreground"><span className="w-3.5 h-3.5 rounded bg-blue-500" /> Your selection</span>
+                    <span className="flex items-center gap-1.5 text-muted-foreground"><span className="w-3.5 h-3.5 rounded bg-slate-500" /> Booked</span>
+                  </div>
+                  <DialogFooter className="shrink-0">
+                    <Button variant="outline" className="rounded-xl" onClick={() => setFlightSeatModalOpen(false)}>Cancel</Button>
+                    <Button className="rounded-xl" disabled={flightSeatSaving || assigned < passengers} onClick={saveFlightSeats}>
+                      {flightSeatSaving ? "Saving…" : "Save seats"}
+                    </Button>
+                  </DialogFooter>
+                </div>
+              );
+            })()}
+            {!flightSeatMap && flightSeatModalOpen && <p className="text-sm text-muted-foreground py-4">Loading seat map…</p>}
+          </DialogContent>
+        </Dialog>
+
+        {/* Flight ticket modal — redesigned with colours and download */}
+        <Dialog open={flightTicketModalOpen} onOpenChange={(o) => !o && (setFlightTicketModalOpen(false), setFlightTicketData(null))}>
+          <DialogContent className="rounded-2xl max-w-lg max-h-[90vh] overflow-y-auto p-0" aria-describedby={undefined}>
+            <DialogHeader className="sr-only">
+              <DialogTitle>Flight ticket</DialogTitle>
+            </DialogHeader>
+            {flightTicketLoading && <p className="text-sm text-muted-foreground py-8 px-6">Loading…</p>}
+            {!flightTicketLoading && flightTicketData && (
+              <>
+                <div className="rounded-t-2xl bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-500 px-6 py-5 text-white shadow-lg">
+                  <p className="text-sm font-medium opacity-90">Boarding pass</p>
+                  <p className="text-2xl font-bold tracking-tight mt-0.5">{flightTicketData.flight.airlineName}</p>
+                  <p className="text-xs font-mono mt-2 opacity-90">Ref: {flightTicketData.bookingRef}</p>
+                </div>
+                <div className="px-6 py-4 space-y-4">
+                  <div className="flex items-center gap-3 rounded-xl bg-slate-50 border border-slate-200 p-4">
+                    <div className="flex-1 text-center">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">From</p>
+                      <p className="font-semibold text-foreground mt-0.5">{flightTicketData.flight.routeFrom}</p>
+                      <p className="text-sm text-muted-foreground mt-1">{flightTicketData.flight.departureTime}</p>
+                    </div>
+                    <div className="shrink-0 w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                      <Plane className="h-5 w-5 text-indigo-600 rotate-90" />
+                    </div>
+                    <div className="flex-1 text-center">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">To</p>
+                      <p className="font-semibold text-foreground mt-0.5">{flightTicketData.flight.routeTo}</p>
+                      <p className="text-sm text-muted-foreground mt-1">{flightTicketData.flight.arrivalTime}</p>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 overflow-hidden">
+                    <div className="bg-slate-100 px-4 py-2 border-b border-slate-200">
+                      <p className="text-sm font-semibold text-foreground">Flight {flightTicketData.flight.flightNumber} · {flightTicketData.flight.travelDate}</p>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50/80">
+                          <th className="text-left font-medium text-muted-foreground py-2.5 px-4">Passenger</th>
+                          <th className="text-left font-medium text-muted-foreground py-2.5 px-4">Seat</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {flightTicketData.passengers.map((p, i) => (
+                          <tr key={i} className="border-b border-slate-100 last:border-0">
+                            <td className="py-2.5 px-4 font-medium text-foreground">{p.name}</td>
+                            <td className="py-2.5 px-4 font-mono font-semibold text-indigo-600">{p.seatNumber || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="rounded-xl bg-amber-50 border-2 border-amber-200 p-4 text-center">
+                    <p className="text-xs font-medium text-amber-800 uppercase tracking-wider">Show at gate</p>
+                    <p className="text-2xl font-mono font-bold text-amber-900 mt-1 tracking-widest">{flightTicketData.otp}</p>
+                    <p className="text-xs text-amber-700 mt-1">Verification: {flightTicketData.verificationCode}</p>
+                  </div>
+                  <Button type="button" variant="outline" className="w-full rounded-xl gap-2" onClick={() => flightTicketData && downloadFlightTicket(flightTicketData)}>
+                    <Download className="h-4 w-4" />
+                    Download ticket
+                  </Button>
+                </div>
+              </>
+            )}
+            {!flightTicketLoading && !flightTicketData && flightTicketModalOpen && <p className="text-sm text-muted-foreground py-8 px-6">Could not load ticket.</p>}
+          </DialogContent>
+        </Dialog>
+
+        {/* Experience ticket modal — same page, with download */}
+        <Dialog open={experienceTicketModalOpen} onOpenChange={(o) => !o && (setExperienceTicketModalOpen(false), setExperienceTicketData(null))}>
+          <DialogContent className="rounded-2xl max-w-[400px] p-0 overflow-hidden" aria-describedby={undefined}>
+            <DialogHeader className="sr-only">
+              <DialogTitle>Experience ticket</DialogTitle>
+            </DialogHeader>
+            {experienceTicketData && (
+              <>
+                <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 text-white px-5 py-4 text-center">
+                  <p className="text-[11px] font-medium tracking-[0.2em] opacity-90">WANDERLUST</p>
+                  <p className="text-lg font-bold mt-1">Experience ticket</p>
+                </div>
+                <div className="border-t-2 border-dashed border-slate-200" />
+                <div className="p-5 space-y-0">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3 text-center mb-4">
+                    <p className="text-[10px] uppercase tracking-wider text-emerald-800 font-medium">Booking reference</p>
+                    <p className="text-base font-bold font-mono text-foreground mt-1">{experienceTicketData.bookingRef}</p>
+                  </div>
+                  <div className="flex justify-between py-2.5 border-b border-slate-100 text-sm">
+                    <span className="text-muted-foreground">Experience</span>
+                    <span className="font-semibold text-foreground">{experienceTicketData.experienceName}</span>
+                  </div>
+                  <div className="flex justify-between py-2.5 border-b border-slate-100 text-sm">
+                    <span className="text-muted-foreground">Date</span>
+                    <span className="font-semibold text-foreground">{experienceTicketData.slotDate}</span>
+                  </div>
+                  <div className="flex justify-between py-2.5 border-b border-slate-100 text-sm">
+                    <span className="text-muted-foreground">Time</span>
+                    <span className="font-semibold text-foreground">{experienceTicketData.slotTime}</span>
+                  </div>
+                  <div className="flex justify-between py-2.5 border-b border-slate-100 text-sm">
+                    <span className="text-muted-foreground">Participants</span>
+                    <span className="font-semibold text-foreground">{experienceTicketData.participantsCount}</span>
+                  </div>
+                  <div className="flex justify-between py-2.5 text-sm">
+                    <span className="text-muted-foreground">Amount paid</span>
+                    <span className="font-semibold text-emerald-600">₹{(experienceTicketData.totalCents / 100).toFixed(0)}</span>
+                  </div>
+                  <div className="h-9 my-4 rounded" style={{ background: "repeating-linear-gradient(90deg, #0f172a 0, #0f172a 2px, transparent 2px, transparent 6px)" }} aria-hidden />
+                  <Button type="button" variant="outline" className="w-full rounded-xl gap-2" onClick={() => downloadExperienceTicket(experienceTicketData)}>
+                    <Download className="h-4 w-4" />
+                    Download ticket
+                  </Button>
+                </div>
+                <div className="bg-slate-50 px-5 py-3 text-center text-[11px] text-muted-foreground">
+                  Print or save as PDF · Wanderlust
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Event ticket modal — same page, with download */}
+        <Dialog open={eventTicketModalOpen} onOpenChange={(o) => !o && (setEventTicketModalOpen(false), setEventTicketData(null))}>
+          <DialogContent className="rounded-2xl max-w-[400px] p-0 overflow-hidden" aria-describedby={undefined}>
+            <DialogHeader className="sr-only">
+              <DialogTitle>Event ticket</DialogTitle>
+            </DialogHeader>
+            {eventTicketData && (
+              <>
+                <div className="bg-gradient-to-br from-violet-600 to-violet-800 text-white px-5 py-4 text-center">
+                  <p className="text-[11px] font-medium tracking-[0.2em] opacity-90">WANDERLUST</p>
+                  <p className="text-lg font-bold mt-1">Event ticket</p>
+                </div>
+                <div className="border-t-2 border-dashed border-slate-200" />
+                <div className="p-5 space-y-0">
+                  <div className="bg-violet-50 border border-violet-200 rounded-lg px-4 py-3 text-center mb-4">
+                    <p className="text-[10px] uppercase tracking-wider text-violet-800 font-medium">Booking reference</p>
+                    <p className="text-base font-bold font-mono text-foreground mt-1">{eventTicketData.bookingRef}</p>
+                  </div>
+                  <div className="flex justify-between py-2.5 border-b border-slate-100 text-sm">
+                    <span className="text-muted-foreground">Event</span>
+                    <span className="font-semibold text-foreground">{eventTicketData.eventName}</span>
+                  </div>
+                  <div className="flex justify-between py-2.5 border-b border-slate-100 text-sm">
+                    <span className="text-muted-foreground">Venue</span>
+                    <span className="font-semibold text-foreground">{eventTicketData.venueName}</span>
+                  </div>
+                  <div className="flex justify-between py-2.5 border-b border-slate-100 text-sm">
+                    <span className="text-muted-foreground">Date</span>
+                    <span className="font-semibold text-foreground">{eventTicketData.startDate}{eventTicketData.endDate !== eventTicketData.startDate ? ` – ${eventTicketData.endDate}` : ""}</span>
+                  </div>
+                  <div className="flex justify-between py-2.5 border-b border-slate-100 text-sm">
+                    <span className="text-muted-foreground">Time</span>
+                    <span className="font-semibold text-foreground">{eventTicketData.startTime} – {eventTicketData.endTime}</span>
+                  </div>
+                  <div className="flex justify-between py-2.5 text-sm">
+                    <span className="text-muted-foreground">Amount paid</span>
+                    <span className="font-semibold text-violet-600">₹{(eventTicketData.totalCents / 100).toFixed(0)}</span>
+                  </div>
+                  <div className="h-9 my-4 rounded" style={{ background: "repeating-linear-gradient(90deg, #0f172a 0, #0f172a 2px, transparent 2px, transparent 6px)" }} aria-hidden />
+                  <Button type="button" variant="outline" className="w-full rounded-xl gap-2" onClick={() => downloadEventTicket(eventTicketData)}>
+                    <Download className="h-4 w-4" />
+                    Download ticket
+                  </Button>
+                </div>
+                <div className="bg-slate-50 px-5 py-3 text-center text-[11px] text-muted-foreground">
+                  Print or save as PDF · Wanderlust
+                </div>
+              </>
+            )}
           </DialogContent>
         </Dialog>
       </div>

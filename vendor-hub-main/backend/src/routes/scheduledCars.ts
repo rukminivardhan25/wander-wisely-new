@@ -13,12 +13,22 @@ async function ensureListingOwned(listingId: string, vendorId: string): Promise<
   return r.rows.length > 0;
 }
 
+/** Parse "YYYY-MM-DD to YYYY-MM-DD" or "YYYY-MM-DD to YYYY-MM-DD, ..." from days_available text. */
+function parseDateRangeFromDaysAvailable(daysAvailable: string | null): { from: string; to: string } | null {
+  if (!daysAvailable || typeof daysAvailable !== "string") return null;
+  const match = daysAvailable.trim().match(/^(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})/);
+  if (!match) return null;
+  return { from: match[1], to: match[2] };
+}
+
 /**
  * GET /api/listings/:listingId/scheduled-cars?date=YYYY-MM-DD
  * Returns cars (with their operating areas) that are scheduled for the given date.
  * Only dates are considered (start_time/end_time are ignored for inclusion).
  * - Local: area included if from_date <= date <= to_date, or if both dates are NULL (any day).
+ *   When from_date/to_date are NULL, falls back to parsing days_available for "YYYY-MM-DD to YYYY-MM-DD".
  * - Intercity: area included only on the start date (from_date = date).
+ *   When from_date is NULL, falls back to first date parsed from days_available.
  * Car status (active/inactive) is ignored so the vendor sees all scheduled cars for the date.
  */
 router.get("/", async (req: Request, res: Response): Promise<void> => {
@@ -42,6 +52,7 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
     const result = await query<{
       car_id: string;
       car_name: string;
+      car_registration_number: string | null;
       area_id: string;
       area_type: string;
       city_name: string | null;
@@ -49,37 +60,50 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       to_city: string | null;
       from_date: string | null;
       to_date: string | null;
+      days_available: string | null;
       start_time: string | null;
       end_time: string | null;
       base_fare_cents: number | null;
       price_per_km_cents: number | null;
     }>(
-      `SELECT c.id AS car_id, c.name AS car_name, a.id AS area_id, a.area_type,
-       a.city_name, a.from_city, a.to_city, a.from_date::text, a.to_date::text,
+      `SELECT c.id AS car_id, c.name AS car_name, c.registration_number AS car_registration_number,
+       a.id AS area_id, a.area_type, a.city_name, a.from_city, a.to_city,
+       a.from_date::text, a.to_date::text, a.days_available,
        a.start_time::text, a.end_time::text, a.base_fare_cents, a.price_per_km_cents
        FROM cars c
        JOIN car_operating_areas a ON a.car_id = c.id
        WHERE c.listing_id = $1
-         AND (
-           (LOWER(COALESCE(a.area_type, 'local')) = 'local'
-             AND (a.from_date IS NULL OR a.from_date <= $2::date)
-             AND (a.to_date IS NULL OR a.to_date >= $2::date))
-           OR
-           (LOWER(COALESCE(a.area_type, 'intercity')) = 'intercity'
-             AND (a.from_date IS NOT NULL AND (a.from_date::date = $2::date))
-         )
        ORDER BY c.name, a.area_type`,
-      [listingId, dateParam]
+      [listingId]
     );
-    const byCar = new Map<string, { carId: string; carName: string; areas: typeof result.rows }>();
-    for (const row of result.rows) {
+    const isLocal = (t: string) => (t || "local").toLowerCase() === "local";
+    const matchesDate = (row: (typeof result.rows)[0]): boolean => {
+      const fromDate = row.from_date?.trim() || null;
+      const toDate = row.to_date?.trim() || null;
+      const parsed = parseDateRangeFromDaysAvailable(row.days_available);
+      if (isLocal(row.area_type)) {
+        if (fromDate && toDate) return fromDate <= dateParam && toDate >= dateParam;
+        if (parsed) return parsed.from <= dateParam && parsed.to >= dateParam;
+        return true;
+      }
+      if ((row.area_type || "").toLowerCase() === "intercity") {
+        if (fromDate) return fromDate === dateParam;
+        if (parsed) return parsed.from === dateParam;
+        return false;
+      }
+      return false;
+    };
+    const matchingRows = result.rows.filter(matchesDate);
+    const byCar = new Map<string, { carId: string; carName: string; registrationNumber: string | null; areas: typeof matchingRows }>();
+    for (const row of matchingRows) {
       const key = row.car_id;
-      if (!byCar.has(key)) byCar.set(key, { carId: row.car_id, carName: row.car_name, areas: [] });
+      if (!byCar.has(key)) byCar.set(key, { carId: row.car_id, carName: row.car_name, registrationNumber: row.car_registration_number ?? null, areas: [] });
       byCar.get(key)!.areas.push(row);
     }
-    const cars = Array.from(byCar.values()).map(({ carId, carName, areas }) => ({
+    const cars = Array.from(byCar.values()).map(({ carId, carName, registrationNumber, areas }) => ({
       carId,
       carName,
+      registrationNumber: registrationNumber ?? undefined,
       areas: areas.map((a) => ({
         areaId: a.area_id,
         areaType: a.area_type,

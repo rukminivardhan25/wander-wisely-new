@@ -100,7 +100,7 @@ export default function Customers() {
               {customers.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-6 py-12 text-center text-muted-foreground">
-                    No customers yet. Use “Refresh from bookings” to sync customers from your transport bookings (last 12 months).
+                    No customers yet. Use “Refresh from bookings” to sync customers from your bus, car, and flight bookings (last 12 months).
                   </td>
                 </tr>
               ) : (

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
-import { ArrowLeft, Bus, Car, MapPin, DollarSign, Plus, Settings2, Check, Eye, Trash2, Shield, Calendar, Clock } from "lucide-react";
+import { ArrowLeft, Bus, Car, Plane, MapPin, DollarSign, Plus, Settings2, Check, Eye, Trash2, Shield, Calendar, Clock } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -80,6 +80,18 @@ interface CarRow {
   car_type: string;
   seats: number;
   ac_type: string | null;
+  status: string;
+  verification_token?: string | null;
+  verification_status?: string | null;
+}
+
+/** Flight row for Fleet tab (from API: camelCase). */
+interface FlightRow {
+  id: string;
+  flightNumber: string;
+  airlineName: string;
+  aircraftType: string;
+  totalSeats: number;
   status: string;
   verification_token?: string | null;
   verification_status?: string | null;
@@ -290,8 +302,15 @@ export default function TransportListing() {
   const [carVerifyToken, setCarVerifyToken] = useState<string | null>(null);
   const [generatingCarToken, setGeneratingCarToken] = useState(false);
   const [carTokenCopied, setCarTokenCopied] = useState(false);
+
+  const [flights, setFlights] = useState<FlightRow[]>([]);
+  const [verifyFlightModal, setVerifyFlightModal] = useState<FlightRow | null>(null);
+  const [flightVerifyToken, setFlightVerifyToken] = useState<string | null>(null);
+  const [generatingFlightToken, setGeneratingFlightToken] = useState(false);
+  const [flightTokenCopied, setFlightTokenCopied] = useState(false);
   const [fleetCarStatusFilter, setFleetCarStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [fleetCarSort, setFleetCarSort] = useState<"name" | "status" | "seats">("name");
+  const [fleetFlightStatusFilter, setFleetFlightStatusFilter] = useState<"all" | "active" | "inactive">("all");
 
   useEffect(() => {
     if (!listingId) return;
@@ -305,18 +324,23 @@ export default function TransportListing() {
           setLoading(false);
           return;
         }
-        const [busesResult, routesResult, driversResult, carsResult, citiesResult] = await Promise.allSettled([
+        const [busesResult, routesResult, driversResult, carsResult, citiesResult, flightsResult] = await Promise.allSettled([
           vendorFetch<{ buses: BusRow[] }>(`/api/listings/${listingId}/buses`),
           vendorFetch<{ routes: RouteRow[] }>(`/api/listings/${listingId}/routes`),
           vendorFetch<{ drivers: DriverRow[] }>(`/api/listings/${listingId}/drivers`),
           vendorFetch<{ cars: CarRow[] }>(`/api/listings/${listingId}/cars`),
           vendorFetch<{ cities: CityRow[] }>(`/api/cities`),
+          vendorFetch<{ flights: { id: string; flightNumber: string; airlineName: string; aircraftType: string; totalSeats: number; status: string; verificationToken?: string; verificationStatus?: string }[] }>(`/api/listings/${listingId}/flights`),
         ]);
         if (busesResult.status === "fulfilled") setBuses(busesResult.value.buses ?? []);
         if (routesResult.status === "fulfilled") setRoutes(routesResult.value.routes ?? []);
         if (driversResult.status === "fulfilled") setDrivers(driversResult.value.drivers ?? []);
         if (carsResult.status === "fulfilled") setCars(carsResult.value.cars ?? []);
         if (citiesResult.status === "fulfilled") setCities(citiesResult.value.cities ?? []);
+        if (flightsResult.status === "fulfilled") {
+          const raw = flightsResult.value.flights ?? [];
+          setFlights(raw.map((f) => ({ id: f.id, flightNumber: f.flightNumber, airlineName: f.airlineName, aircraftType: f.aircraftType, totalSeats: f.totalSeats, status: f.status, verification_token: f.verificationToken ?? null, verification_status: f.verificationStatus ?? null })));
+        }
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Listing not found or not a transport listing.";
         setError(msg);
@@ -364,6 +388,13 @@ export default function TransportListing() {
       return (a.seats ?? 0) - (b.seats ?? 0);
     });
   }, [cars, fleetCarStatusFilter, fleetCarSort]);
+
+  const filteredFlights = useMemo(() => {
+    let list = flights;
+    if (fleetFlightStatusFilter === "active") list = list.filter((f) => f.status === "active");
+    else if (fleetFlightStatusFilter === "inactive") list = list.filter((f) => f.status === "inactive");
+    return list;
+  }, [flights, fleetFlightStatusFilter]);
 
   // When landing on Fleet from wizard (after adding driver), form is already visible inline
   useEffect(() => {
@@ -424,6 +455,8 @@ export default function TransportListing() {
     } else if (type === "car") {
       setShowCarSetupFlow(true);
       openAddCar();
+    } else if (type === "flight") {
+      navigate(`/listings/${listingId}/transport/flight`);
     } else {
       navigate(`/listings/${listingId}/transport/vehicle/${type}`);
     }
@@ -470,9 +503,9 @@ export default function TransportListing() {
     }
     setBusSaving(true);
     const payload = {
-      name: busForm.name || "New Bus",
+          name: busForm.name || "New Bus",
       bus_number: busForm.bus_number.trim() || null,
-      bus_type: busForm.bus_type,
+          bus_type: busForm.bus_type,
       ac_type: busForm.ac_type,
       registration_number: busForm.registration_number.trim() || null,
       manufacturer: (busForm.manufacturer === "Other" ? (busForm.manufacturer_other?.trim() || null) : (busForm.manufacturer?.trim() || null)) ?? null,
@@ -482,11 +515,11 @@ export default function TransportListing() {
       has_entertainment: busForm.has_entertainment,
       has_toilet: busForm.has_toilet,
       photo_url: busForm.photo_url.trim() || null,
-      layout_type: busForm.layout_type,
-      rows: busForm.rows,
-      left_cols: busForm.left_cols,
-      right_cols: busForm.right_cols,
-      has_aisle: busForm.has_aisle,
+          layout_type: busForm.layout_type,
+          rows: busForm.rows,
+          left_cols: busForm.left_cols,
+          right_cols: busForm.right_cols,
+          has_aisle: busForm.has_aisle,
       base_price_per_seat_cents: busForm.base_price_per_seat_cents ?? 0,
       status: "inactive",
     };
@@ -883,6 +916,49 @@ export default function TransportListing() {
     });
   };
 
+  const handleDeleteFlight = async (flightIdToDelete: string) => {
+    if (!listingId || !window.confirm("Remove this flight from the fleet? This cannot be undone.")) return;
+    try {
+      await vendorFetch(`/api/listings/${listingId}/flights/${flightIdToDelete}`, { method: "DELETE" });
+      const { flights: next } = await vendorFetch<{ flights: { id: string; flightNumber: string; airlineName: string; aircraftType: string; totalSeats: number; status: string; verificationToken?: string; verificationStatus?: string }[] }>(`/api/listings/${listingId}/flights`);
+      setFlights(next.map((f) => ({ id: f.id, flightNumber: f.flightNumber, airlineName: f.airlineName, aircraftType: f.aircraftType, totalSeats: f.totalSeats, status: f.status, verification_token: f.verificationToken ?? null, verification_status: f.verificationStatus ?? null })));
+      if (verifyFlightModal?.id === flightIdToDelete) setVerifyFlightModal(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete flight");
+    }
+  };
+
+  const openVerifyFlightModal = (flight: FlightRow) => {
+    setVerifyFlightModal(flight);
+    setFlightVerifyToken(flight.verification_token ?? null);
+    setFlightTokenCopied(false);
+  };
+
+  const handleGenerateFlightToken = async () => {
+    if (!listingId || !verifyFlightModal) return;
+    setGeneratingFlightToken(true);
+    try {
+      const data = await vendorFetch<{ verification_token: string }>(
+        `/api/listings/${listingId}/flights/${verifyFlightModal.id}/generate-verification-token`,
+        { method: "POST" }
+      );
+      setFlightVerifyToken(data.verification_token);
+      const { flights: next } = await vendorFetch<{ flights: { id: string; flightNumber: string; airlineName: string; aircraftType: string; totalSeats: number; status: string; verificationToken?: string; verificationStatus?: string }[] }>(`/api/listings/${listingId}/flights`);
+      setFlights(next.map((f) => ({ id: f.id, flightNumber: f.flightNumber, airlineName: f.airlineName, aircraftType: f.aircraftType, totalSeats: f.totalSeats, status: f.status, verification_token: f.verificationToken ?? null, verification_status: f.verificationStatus ?? null })));
+    } finally {
+      setGeneratingFlightToken(false);
+    }
+  };
+
+  const copyFlightToken = () => {
+    const token = flightVerifyToken ?? verifyFlightModal?.verification_token;
+    if (!token) return;
+    navigator.clipboard.writeText(token).then(() => {
+      setFlightTokenCopied(true);
+      setTimeout(() => setFlightTokenCopied(false), 2000);
+    });
+  };
+
   if (loading) return <div className="p-6 text-muted-foreground">Loading…</div>;
   if (error && !listing) {
     return (
@@ -950,6 +1026,9 @@ export default function TransportListing() {
             <TabsTrigger value="car" className="rounded-lg gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Car className="h-4 w-4" /> Car
             </TabsTrigger>
+            <TabsTrigger value="flight" className="rounded-lg gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <Plane className="h-4 w-4" /> Flight
+            </TabsTrigger>
             <TabsTrigger value="all" className="rounded-lg gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               All
             </TabsTrigger>
@@ -957,7 +1036,9 @@ export default function TransportListing() {
         </Tabs>
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base"><Bus className="h-4 w-4" /> Fleet</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base">
+              {fleetVehicleTypeFilter === "flight" ? <Plane className="h-4 w-4" /> : <Bus className="h-4 w-4" />} Fleet
+            </CardTitle>
             <div className="flex flex-wrap gap-2 mt-2">
               {(fleetVehicleTypeFilter === "bus" || fleetVehicleTypeFilter === "all") && buses.length > 0 && (
                 <>
@@ -1019,6 +1100,56 @@ export default function TransportListing() {
                   </table>
                 </div>
               )
+            ) : fleetVehicleTypeFilter === "flight" ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[#E5E7EB] bg-muted/30">
+                      <th className="text-left font-medium py-3 px-4">Flight</th>
+                      <th className="text-left font-medium py-3 px-4">Airline</th>
+                      <th className="text-left font-medium py-3 px-4">Route</th>
+                      <th className="text-left font-medium py-3 px-4">Aircraft</th>
+                      <th className="text-left font-medium py-3 px-4">Seats</th>
+                      <th className="text-left font-medium py-3 px-4">Status</th>
+                      <th className="text-right font-medium py-3 px-4 w-24" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredFlights.map((f) => (
+                      <tr key={f.id} className="border-b border-[#E5E7EB] hover:bg-muted/20 transition-colors">
+                        <td className="py-3 px-4 font-medium text-foreground font-mono">{f.flightNumber}</td>
+                        <td className="py-3 px-4 text-muted-foreground">{f.airlineName}</td>
+                        <td className="py-3 px-4 text-muted-foreground">—</td>
+                        <td className="py-3 px-4 text-muted-foreground">{f.aircraftType}</td>
+                        <td className="py-3 px-4 text-muted-foreground">{f.totalSeats}</td>
+                        <td className="py-3 px-4">
+                          <span className={cn("inline-flex text-xs font-medium px-2 py-0.5 rounded-full capitalize", f.status === "active" ? "bg-[#22C55E]/10 text-[#22C55E]" : "bg-muted text-muted-foreground")}>
+                            {f.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className="inline-flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" asChild title="View flight">
+                              <Link to={`/listings/${listingId}/transport/flight/${f.id}`}><Eye className="h-4 w-4" /></Link>
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" title="Verify flight" onClick={() => openVerifyFlightModal(f)}>
+                              <Shield className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50" title="Delete flight" onClick={() => handleDeleteFlight(f.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="flex justify-center py-4">
+                  <Button asChild variant="outline" size="sm" className="rounded-xl gap-2">
+                    <Link to={`/listings/${listingId}/transport/flight`}>Manage flights</Link>
+                  </Button>
+                </div>
+              </div>
             ) : fleetVehicleTypeFilter !== "bus" && fleetVehicleTypeFilter !== "all" ? (
               <p className="text-sm text-muted-foreground p-6">No {fleetVehicleTypeFilter}s yet. Vehicle setup coming soon.</p>
             ) : buses.length === 0 ? (
@@ -1106,10 +1237,13 @@ export default function TransportListing() {
             <TabsTrigger value="car" className="rounded-lg gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Car className="h-4 w-4" /> Car
             </TabsTrigger>
+            <TabsTrigger value="flight" className="rounded-lg gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <Plane className="h-4 w-4" /> Flight
+            </TabsTrigger>
             <TabsTrigger value="all" className="rounded-lg gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               All
             </TabsTrigger>
-          </TabsList>
+        </TabsList>
         </Tabs>
       )}
 
@@ -1117,11 +1251,14 @@ export default function TransportListing() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Bus className="h-5 w-5" /> Fleet</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                {fleetVehicleTypeFilter === "flight" ? <Plane className="h-5 w-5" /> : <Bus className="h-5 w-5" />} Fleet
+              </CardTitle>
               <p className="text-sm text-muted-foreground">
                 {fleetVehicleTypeFilter === "bus" && "Your buses for this listing. Add a bus, then fill its details in Bus info, Driver info, and Routes & pricing."}
                 {fleetVehicleTypeFilter === "car" && "Your cars for this listing. Add a car, then complete Car info, Driver info, and Operating Cities & pricing."}
-                {fleetVehicleTypeFilter === "all" && "Your buses and cars. Select Bus or Car above to filter, or add a vehicle below."}
+                {fleetVehicleTypeFilter === "flight" && "Your flights. Add flights with flight number, airline, routes and schedules. Manage them in the dedicated Flights page."}
+                {fleetVehicleTypeFilter === "all" && "Your buses, cars and flights. Select a type above to filter, or add a vehicle below."}
               </p>
               <div className="flex flex-wrap items-center gap-2 mt-2 justify-between">
                 <div className="flex flex-wrap gap-2">
@@ -1165,6 +1302,16 @@ export default function TransportListing() {
                       </Select>
                     </>
                   )}
+                  {fleetVehicleTypeFilter === "flight" && (
+                    <Select value={fleetFlightStatusFilter} onValueChange={(v: "all" | "active" | "inactive") => setFleetFlightStatusFilter(v)}>
+                      <SelectTrigger className="w-[130px] rounded-lg h-9"><SelectValue placeholder="Status" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
                 <Button type="button" variant="outline" onClick={() => setAddVehicleTypeModalOpen(true)} className="rounded-xl shrink-0">
                   Add Vehicle
@@ -1206,7 +1353,7 @@ export default function TransportListing() {
                               <span className="inline-flex items-center justify-end gap-1">
                                 <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" asChild title="View car">
                                   <Link to={`/listings/${listingId}/transport/car/${c.id}`}><Eye className="h-4 w-4" /></Link>
-                                </Button>
+            </Button>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" title="Verify car" onClick={() => openVerifyCarModal(c)}>
                                   <Shield className="h-4 w-4" />
                                 </Button>
@@ -1219,8 +1366,60 @@ export default function TransportListing() {
                         ))}
                       </tbody>
                     </table>
-                  </div>
+          </div>
                 )
+              ) : fleetVehicleTypeFilter === "flight" ? (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-[#E5E7EB] bg-muted/30">
+                          <th className="text-left font-medium py-3 px-4">Flight</th>
+                          <th className="text-left font-medium py-3 px-4">Airline</th>
+                          <th className="text-left font-medium py-3 px-4">Route</th>
+                          <th className="text-left font-medium py-3 px-4">Aircraft</th>
+                          <th className="text-left font-medium py-3 px-4">Seats</th>
+                          <th className="text-left font-medium py-3 px-4">Status</th>
+                          <th className="text-right font-medium py-3 px-4 w-24" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredFlights.map((f) => (
+                          <tr key={f.id} className="border-b border-[#E5E7EB] hover:bg-muted/20 transition-colors">
+                            <td className="py-3 px-4 font-medium text-foreground font-mono">{f.flightNumber}</td>
+                            <td className="py-3 px-4 text-muted-foreground">{f.airlineName}</td>
+                            <td className="py-3 px-4 text-muted-foreground">—</td>
+                            <td className="py-3 px-4 text-muted-foreground">{f.aircraftType}</td>
+                            <td className="py-3 px-4 text-muted-foreground">{f.totalSeats}</td>
+                            <td className="py-3 px-4">
+                              <span className={cn("inline-flex text-xs font-medium px-2 py-0.5 rounded-full capitalize", f.status === "active" ? "bg-[#22C55E]/10 text-[#22C55E]" : "bg-muted text-muted-foreground")}>
+                                {f.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <span className="inline-flex items-center justify-end gap-1">
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" asChild title="View flight">
+                                  <Link to={`/listings/${listingId}/transport/flight/${f.id}`}><Eye className="h-4 w-4" /></Link>
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" title="Verify flight" onClick={() => openVerifyFlightModal(f)}>
+                                  <Shield className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50" title="Delete flight" onClick={() => handleDeleteFlight(f.id)}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    </div>
+                  <div className="flex justify-center pt-2">
+                    <Button asChild variant="outline" size="sm" className="rounded-xl gap-2">
+                      <Link to={`/listings/${listingId}/transport/flight`}>Manage flights</Link>
+                    </Button>
+                  </div>
+                </>
               ) : fleetVehicleTypeFilter !== "bus" && fleetVehicleTypeFilter !== "all" ? (
                 <div className="flex flex-col items-center gap-3 py-8 text-center">
                   <p className="text-sm text-muted-foreground">No {fleetVehicleTypeFilter}s yet. Vehicle setup coming soon.</p>
@@ -1251,7 +1450,7 @@ export default function TransportListing() {
                             <td className="py-3 px-4">
                               <span className={cn("inline-flex text-xs font-medium px-2 py-0.5 rounded-full capitalize", b.status === "active" ? "bg-[#22C55E]/10 text-[#22C55E]" : "bg-muted text-muted-foreground")}>
                                 {b.status}
-                              </span>
+                    </span>
                             </td>
                             <td className="py-3 px-4 text-right">
                               <span className="inline-flex items-center justify-end gap-1">
@@ -1273,8 +1472,8 @@ export default function TransportListing() {
                   </div>
                 </>
               )}
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
           <Dialog open={addVehicleTypeModalOpen} onOpenChange={setAddVehicleTypeModalOpen}>
             <DialogContent className="rounded-2xl max-w-sm">
               <DialogHeader>
@@ -1285,8 +1484,8 @@ export default function TransportListing() {
                   <Button key={value} variant="outline" className="justify-start rounded-lg" onClick={() => handleAddVehicleTypeSelect(value)}>
                     {label}
                   </Button>
-                ))}
-              </div>
+            ))}
+          </div>
             </DialogContent>
           </Dialog>
         </>
@@ -1433,32 +1632,32 @@ export default function TransportListing() {
                   <p className="text-sm text-muted-foreground">Preview: {totalSeatsPreview} seats</p>
                   <div>
                     <Label className="block mb-2">Bus structure</Label>
-                    <div className="bg-slate-100 rounded-xl p-3 border border-slate-200">
-                      <div className="bg-slate-700 text-slate-200 rounded-t-lg py-2 text-center text-xs font-medium mb-2">Driver · Front</div>
-                      {Array.from({ length: seatPreview.rows }, (_, rowIndex) => (
-                        <div key={rowIndex} className="flex items-stretch gap-1 mb-1">
-                          <div className="flex gap-0.5 flex-1">
-                            {Array.from({ length: seatPreview.left }, (_, col) => (
-                              <div key={col} className="flex-1 min-w-[1.25rem] py-1.5 rounded bg-emerald-500 text-[10px] font-bold text-white text-center" />
-                            ))}
-                          </div>
-                          {seatPreview.aisle && <div className="w-1.5 bg-slate-300 rounded flex-shrink-0" />}
-                          <div className="flex gap-0.5 flex-1">
-                            {Array.from({ length: seatPreview.right }, (_, col) => (
-                              <div key={col} className="flex-1 min-w-[1.25rem] py-1.5 rounded bg-emerald-500 text-[10px] font-bold text-white text-center" />
-                            ))}
-                          </div>
+                  <div className="bg-slate-100 rounded-xl p-3 border border-slate-200">
+                    <div className="bg-slate-700 text-slate-200 rounded-t-lg py-2 text-center text-xs font-medium mb-2">Driver · Front</div>
+                    {Array.from({ length: seatPreview.rows }, (_, rowIndex) => (
+                      <div key={rowIndex} className="flex items-stretch gap-1 mb-1">
+                        <div className="flex gap-0.5 flex-1">
+                          {Array.from({ length: seatPreview.left }, (_, col) => (
+                            <div key={col} className="flex-1 min-w-[1.25rem] py-1.5 rounded bg-emerald-500 text-[10px] font-bold text-white text-center" />
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                        {seatPreview.aisle && <div className="w-1.5 bg-slate-300 rounded flex-shrink-0" />}
+                        <div className="flex gap-0.5 flex-1">
+                          {Array.from({ length: seatPreview.right }, (_, col) => (
+                            <div key={col} className="flex-1 min-w-[1.25rem] py-1.5 rounded bg-emerald-500 text-[10px] font-bold text-white text-center" />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
+                </div>
                   <div>
                     <Label>Photo URL</Label>
                     {busForm.photo_url ? (
                         <div className="flex flex-col gap-2">
                           <img src={busForm.photo_url} alt="Bus" className="rounded-lg object-cover max-h-32 w-full" />
                           <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => setBusForm((f) => ({ ...f, photo_url: "" }))}>Remove photo</Button>
-                        </div>
+              </div>
                       ) : null}
                       <input
                         type="file"
@@ -1493,10 +1692,10 @@ export default function TransportListing() {
                 </div>
               <Button type="button" onClick={handleSaveBus} className="rounded-xl" disabled={busSaving}>
                 {busSaving ? "Saving…" : "Save bus"}
-              </Button>
-                </div>
-            </CardContent>
-          </Card>
+            </Button>
+          </div>
+                </CardContent>
+              </Card>
         </TabsContent>
 
         <TabsContent value="operator" className="mt-4">
@@ -1533,7 +1732,7 @@ export default function TransportListing() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground mt-1">Assigned drivers show on that bus&apos;s detail page (eye icon).</p>
-                </div>
+          </div>
               )}
               <Button type="button" onClick={handleSaveDriver} disabled={driverSaving} className="rounded-xl">Add driver</Button>
             </CardContent>
@@ -1558,31 +1757,31 @@ export default function TransportListing() {
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-4">
+              <div className="space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <Label>From</Label>
-                      <Input className="mt-1 rounded-xl" value={routeForm.from_place} onChange={(e) => setRouteForm((f) => ({ ...f, from_place: e.target.value }))} placeholder="City or station" />
+                <div>
+                  <Label>From</Label>
+                  <Input className="mt-1 rounded-xl" value={routeForm.from_place} onChange={(e) => setRouteForm((f) => ({ ...f, from_place: e.target.value }))} placeholder="City or station" />
+                </div>
+                <div>
+                  <Label>To</Label>
+                  <Input className="mt-1 rounded-xl" value={routeForm.to_place} onChange={(e) => setRouteForm((f) => ({ ...f, to_place: e.target.value }))} placeholder="City or station" />
                     </div>
-                    <div>
-                      <Label>To</Label>
-                      <Input className="mt-1 rounded-xl" value={routeForm.to_place} onChange={(e) => setRouteForm((f) => ({ ...f, to_place: e.target.value }))} placeholder="City or station" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Distance (km)</Label>
-                      <Input type="number" min={0} className="mt-1 rounded-xl" value={routeForm.distance_km} onChange={(e) => setRouteForm((f) => ({ ...f, distance_km: e.target.value }))} />
-                    </div>
-                    <div>
-                      <Label>Duration (min)</Label>
-                      <Input type="number" min={0} className="mt-1 rounded-xl" value={routeForm.duration_minutes} onChange={(e) => setRouteForm((f) => ({ ...f, duration_minutes: e.target.value }))} />
-                    </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Distance (km)</Label>
+                    <Input type="number" min={0} className="mt-1 rounded-xl" value={routeForm.distance_km} onChange={(e) => setRouteForm((f) => ({ ...f, distance_km: e.target.value }))} />
                   </div>
                   <div>
+                    <Label>Duration (min)</Label>
+                    <Input type="number" min={0} className="mt-1 rounded-xl" value={routeForm.duration_minutes} onChange={(e) => setRouteForm((f) => ({ ...f, duration_minutes: e.target.value }))} />
+                  </div>
+                </div>
+                <div>
                     <Label>Price per seat (₹)</Label>
                     <Input type="number" min={0} className="mt-1 rounded-xl" value={routeForm.price_per_seat_rupees} onChange={(e) => setRouteForm((f) => ({ ...f, price_per_seat_rupees: e.target.value }))} placeholder="Price for this route" />
-                  </div>
+                </div>
                   {buses.length > 0 && (
                     <div>
                       <Label className="text-muted-foreground">Assign to bus (by registration number)</Label>
@@ -1596,7 +1795,7 @@ export default function TransportListing() {
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground mt-1">Each bus is identified by its registration number. Assigned routes and prices show on that bus&apos;s detail page.</p>
-                    </div>
+              </div>
                   )}
                   <Button type="button" onClick={handleSaveRoute} className="rounded-xl">Save route</Button>
                 </div>
@@ -1627,11 +1826,11 @@ export default function TransportListing() {
           </TabsList>
 
           <TabsContent value="carinfo" className="mt-4">
-            <Card>
-              <CardHeader>
+          <Card>
+            <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Car className="h-5 w-5" /> Car info</CardTitle>
                 <p className="text-sm text-muted-foreground">Enter car details. Save to add the car to your fleet, then continue to Driver Info and Operating Cities & Pricing.</p>
-              </CardHeader>
+            </CardHeader>
               <CardContent className="space-y-6">
                 {carModalError && (
                   <div className="p-3 rounded-xl bg-destructive/10 text-destructive text-sm flex items-center justify-between gap-2">
@@ -1759,15 +1958,15 @@ export default function TransportListing() {
                   {carSaving ? "Saving…" : "Save car"}
                 </Button>
               </CardContent>
-            </Card>
-          </TabsContent>
+          </Card>
+        </TabsContent>
 
           <TabsContent value="operator" className="mt-4">
-            <Card>
-              <CardHeader>
+          <Card>
+            <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Settings2 className="h-5 w-5" /> Driver Info</CardTitle>
                 <p className="text-sm text-muted-foreground">Drivers are managed per car. Open a car from the Fleet table (eye icon) to add or edit drivers for that car. You can also add a driver below and assign them to a car.</p>
-              </CardHeader>
+            </CardHeader>
               <CardContent className="space-y-4">
                 {!carJustAddedId ? (
                   <p className="text-sm text-muted-foreground">Save the car in Car info first, then add drivers here.</p>
@@ -1805,15 +2004,15 @@ export default function TransportListing() {
                   </>
                 )}
               </CardContent>
-            </Card>
-          </TabsContent>
+          </Card>
+        </TabsContent>
 
           <TabsContent value="cities" className="mt-4">
-            <Card>
-              <CardHeader>
+          <Card>
+            <CardHeader>
                 <CardTitle className="flex items-center gap-2"><MapPin className="h-5 w-5" /> Operating Cities & Pricing</CardTitle>
                 <p className="text-sm text-muted-foreground">Add cities where this car runs (within city) and/or From → To routes. Set price per km; optionally set available dates and time window.</p>
-              </CardHeader>
+            </CardHeader>
               <CardContent className="space-y-6">
                 {!carJustAddedId ? (
                   <p className="text-sm text-muted-foreground">Save the car in Car info first, then add operating cities here.</p>
@@ -1957,9 +2156,9 @@ export default function TransportListing() {
                   </>
                 )}
               </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+          </Card>
+        </TabsContent>
+      </Tabs>
       )}
 
       <Dialog open={!!verifyBusModal} onOpenChange={(open) => !open && setVerifyBusModal(null)}>
@@ -2045,6 +2244,58 @@ export default function TransportListing() {
                         {carTokenCopied ? <Check size={14} /> : "Copy"}
                       </Button>
                     </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!verifyFlightModal} onOpenChange={(open) => !open && setVerifyFlightModal(null)}>
+        <DialogContent className="rounded-2xl max-w-md p-0 overflow-hidden">
+          {verifyFlightModal && (
+            <>
+              <div className="bg-sidebar text-sidebar-foreground px-5 py-4">
+                <DialogHeader>
+                  <DialogTitle className="text-lg font-semibold">Flight Verification</DialogTitle>
+                </DialogHeader>
+                <p className="text-sm text-sidebar-foreground/80 mt-0.5">{verifyFlightModal.airlineName} · {verifyFlightModal.flightNumber}</p>
+              </div>
+              <div className="p-5 space-y-4">
+                <div>
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Status</h4>
+                  <p className="text-sm font-medium capitalize">
+                    {verifyFlightModal.verification_status === "pending" && "Pending request"}
+                    {verifyFlightModal.verification_status === "approved" && "Approved"}
+                    {verifyFlightModal.verification_status === "rejected" && "Rejected"}
+                    {(!verifyFlightModal.verification_status || verifyFlightModal.verification_status === "no_request") && "No request"}
+                  </p>
+                  {(verifyFlightModal.verification_status === "pending" || verifyFlightModal.verification_status === "approved" || verifyFlightModal.verification_status === "rejected") && (
+                    <span className={cn(
+                      "inline-flex text-xs font-medium px-2 py-0.5 rounded-full mt-1",
+                      verifyFlightModal.verification_status === "approved" && "bg-emerald-500/20 text-emerald-800",
+                      verifyFlightModal.verification_status === "pending" && "bg-amber-500/20 text-amber-800",
+                      verifyFlightModal.verification_status === "rejected" && "bg-red-500/20 text-red-800"
+                    )}>
+                      {verifyFlightModal.verification_status === "pending" ? "Pending request" : verifyFlightModal.verification_status}
+                    </span>
+                  )}
+                </div>
+                {!(flightVerifyToken ?? verifyFlightModal.verification_token) ? (
+                  <Button type="button" onClick={handleGenerateFlightToken} disabled={generatingFlightToken} className="rounded-lg w-full">
+                    {generatingFlightToken ? "Generating…" : "Generate verification token"}
+                  </Button>
+                ) : (
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Token</h4>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-mono text-foreground break-all flex-1 min-w-0">{flightVerifyToken ?? verifyFlightModal.verification_token}</p>
+                      <Button type="button" variant="outline" size="sm" onClick={copyFlightToken} className="rounded-lg shrink-0">
+                        {flightTokenCopied ? <Check size={14} /> : "Copy"}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Token generated. Copy and share with admin for verification. Status will update when reviewed.</p>
                   </div>
                 )}
               </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Edit, Trash2, Bus, Shield, Copy, Check } from "lucide-react";
+import { Edit, Trash2, Bus, Shield, Copy, Check, Compass, PartyPopper } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { vendorFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -128,9 +128,19 @@ export default function Listings() {
             transition={{ delay: i * 0.08 }}
             className="bg-card rounded-2xl shadow-card border border-border/50 overflow-hidden hover:shadow-card-hover transition-shadow"
           >
-            <div className="h-36 vendor-gradient flex items-center justify-center">
-              <span className="text-primary-foreground/40 text-sm font-medium">Cover Image</span>
-            </div>
+            {l.type === "experience" ? (
+              <div className="h-36 bg-emerald-500/20 flex items-center justify-center">
+                <Compass className="h-12 w-12 text-emerald-600/80" />
+              </div>
+            ) : l.type === "event" ? (
+              <div className="h-36 bg-violet-500/20 flex items-center justify-center">
+                <PartyPopper className="h-12 w-12 text-violet-600/80" />
+              </div>
+            ) : (
+              <div className="h-36 vendor-gradient flex items-center justify-center">
+                <span className="text-primary-foreground/40 text-sm font-medium">Cover Image</span>
+              </div>
+            )}
             <div className="p-5">
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -159,9 +169,56 @@ export default function Listings() {
                     </span>
                   )
                 )}
-                <button type="button" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                  <Edit size={14} /> Edit
-                </button>
+                {l.type === "experience" && (
+                  (l.verification_status === "approved" || l.verification_status === "verified") ? (
+                    <Link
+                      to={`/listings/${l.id}/experience`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                    >
+                      <Compass size={14} /> Manage
+                    </Link>
+                  ) : (
+                    <span
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted text-muted-foreground"
+                      title="Generate token and verify to publish this experience"
+                    >
+                      <Compass size={14} /> Verify first to publish
+                    </span>
+                  )
+                )}
+                {l.type === "event" && (
+                  (l.verification_status === "approved" || l.verification_status === "verified") ? (
+                    <Link
+                      to={`/listings/${l.id}/event`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-violet-500/10 text-violet-700 dark:text-violet-400 hover:bg-violet-500/20 transition-colors"
+                    >
+                      <PartyPopper size={14} /> Manage
+                    </Link>
+                  ) : (
+                    <span
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted text-muted-foreground"
+                      title="Generate token and verify to publish this event"
+                    >
+                      <PartyPopper size={14} /> Verify first to publish
+                    </span>
+                  )
+                )}
+                {l.type === "experience" && (
+                  <Link
+                    to={`/listings/${l.id}/experience/edit`}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  >
+                    <Edit size={14} /> Edit
+                  </Link>
+                )}
+                {l.type === "event" && (
+                  <Link
+                    to={`/listings/${l.id}/event/edit`}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  >
+                    <Edit size={14} /> Edit
+                  </Link>
+                )}
                 <button
                   type="button"
                   disabled={deletingId === l.id}

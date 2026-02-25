@@ -35,6 +35,23 @@ const DOCUMENT_TYPES = [
   { label: "Health & Safety Certificate", type: "health_safety" },
 ] as const;
 
+const EVENT_DOCUMENT_TYPES = [
+  { label: "Government Permission / NOC", type: "government_permission_noc" },
+  { label: "Business Registration Certificate", type: "business_registration_certificate" },
+  { label: "Venue Authorization Proof", type: "venue_authorization_proof" },
+  { label: "Insurance / Liability Document", type: "insurance_liability" },
+  { label: "Event Permit", type: "event_permit" },
+  { label: "Fire Safety Certificate", type: "fire_safety_certificate" },
+  { label: "Other document", type: "other" },
+] as const;
+
+const EXPERIENCE_DOCUMENT_TYPES = [
+  { label: "Government ID", type: "government_id" },
+  { label: "Business / Activity Proof", type: "business_activity_proof" },
+  { label: "Location Authorization", type: "location_authorization" },
+  { label: "Digital Declaration", type: "digital_declaration" },
+] as const;
+
 const BUS_DOCUMENT_TYPES = [
   { label: "Insurance", type: "insurance" },
   { label: "Other document", type: "other" },
@@ -44,6 +61,14 @@ const CAR_DOCUMENT_TYPES = [
   { label: "Insurance", type: "insurance" },
   { label: "RC (Registration Certificate)", type: "rc" },
   { label: "Driver license", type: "driver_license" },
+] as const;
+
+const FLIGHT_DOCUMENT_TYPES = [
+  { label: "AOC (Air Operator Certificate)", type: "aoc" },
+  { label: "Aircraft Insurance", type: "insurance" },
+  { label: "Aircraft Registration", type: "aircraft_registration" },
+  { label: "Airworthiness Certificate", type: "airworthiness" },
+  { label: "Other document", type: "other" },
 ] as const;
 
 const statusConfig: Record<string, { icon: typeof CheckCircle; color: string }> = {
@@ -91,6 +116,15 @@ type ResolvedCar = {
   verification_status: string;
 };
 
+type ResolvedFlight = {
+  flight_id: string;
+  flight_number: string;
+  airline_name: string;
+  listing_id: string;
+  listing_name: string;
+  verification_status: string;
+};
+
 export default function Verification() {
   const [category, setCategory] = useState<"company" | "vehicles">("company");
   const [selectedType, setSelectedType] = useState<string | null>(null);
@@ -120,11 +154,25 @@ export default function Verification() {
   const [carUploadingType, setCarUploadingType] = useState<string | null>(null);
   const carFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
+  const [flightTokenInput, setFlightTokenInput] = useState("");
+  const [resolvedFlight, setResolvedFlight] = useState<ResolvedFlight | null>(null);
+  const [flightValidating, setFlightValidating] = useState(false);
+  const [flightSending, setFlightSending] = useState(false);
+  const [flightDocuments, setFlightDocuments] = useState<Doc[]>([]);
+  const [flightUploadingType, setFlightUploadingType] = useState<string | null>(null);
+  const flightFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
   const listingId = resolvedListing?.listing_id ?? null;
   const verificationStatus = resolvedListing?.verification_status ?? "no_request";
   const canSendRequest = !!resolvedListing && (verificationStatus === "no_request" || verificationStatus === "rejected") && !!resolvedListing.listing_id;
+  const companyDocTypes =
+    selectedType === "experience"
+      ? EXPERIENCE_DOCUMENT_TYPES
+      : selectedType === "event"
+        ? EVENT_DOCUMENT_TYPES
+        : DOCUMENT_TYPES;
   const uploadedCount = documents.length;
-  const progress = DOCUMENT_TYPES.length ? (uploadedCount / DOCUMENT_TYPES.length) * 100 : 0;
+  const progress = companyDocTypes.length ? (uploadedCount / companyDocTypes.length) * 100 : 0;
 
   useEffect(() => {
     if (!listingId) {
@@ -181,8 +229,28 @@ export default function Verification() {
     return () => { cancelled = true; };
   }, [resolvedCar?.car_id, resolvedCar?.listing_id]);
 
+  useEffect(() => {
+    if (!resolvedFlight?.flight_id || !resolvedFlight?.listing_id) {
+      setFlightDocuments([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await vendorFetch<{ documents: Doc[] }>(
+          `/api/verification/flight-documents/${resolvedFlight.flight_id}?listing_id=${encodeURIComponent(resolvedFlight.listing_id)}`
+        );
+        if (!cancelled) setFlightDocuments(data.documents || []);
+      } catch {
+        if (!cancelled) setFlightDocuments([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [resolvedFlight?.flight_id, resolvedFlight?.listing_id]);
+
   const getBusDocByType = (type: string) => busDocuments.find((d) => d.document_type === type);
   const getCarDocByType = (type: string) => carDocuments.find((d) => d.document_type === type);
+  const getFlightDocByType = (type: string) => flightDocuments.find((d) => d.document_type === type);
 
   const handleBusFileChange = async (documentType: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -457,6 +525,100 @@ export default function Verification() {
     }
   };
 
+  const handleValidateFlightToken = async () => {
+    const token = flightTokenInput.trim();
+    if (!token) {
+      setMessage({ type: "error", text: "Paste your flight verification token." });
+      return;
+    }
+    setFlightValidating(true);
+    setMessage(null);
+    setResolvedFlight(null);
+    try {
+      const data = await vendorFetch<ResolvedFlight>(`/api/verification/resolve-flight-token?token=${encodeURIComponent(token)}`);
+      setResolvedFlight(data);
+      setMessage({ type: "success", text: `Token valid for flight "${data.flight_number}". Upload required documents and send request below.` });
+    } catch (e) {
+      setMessage({ type: "error", text: e instanceof Error ? e.message : "Invalid token or flight not found." });
+    } finally {
+      setFlightValidating(false);
+    }
+  };
+
+  const handleFlightFileChange = async (documentType: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !resolvedFlight) return;
+    const isImage = file.type.startsWith("image/");
+    const isPdf = file.type === "application/pdf";
+    if (!isImage && !isPdf) {
+      setMessage({ type: "error", text: "Please upload an image (JPEG, PNG, etc.) or PDF (max 10MB)." });
+      return;
+    }
+    setMessage(null);
+    setFlightUploadingType(documentType);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      try {
+        const payload = isImage ? { image: dataUrl } : { file: dataUrl };
+        const { url } = await vendorFetch<{ url: string }>("/api/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        await vendorFetch("/api/verification/flight-documents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            flight_id: resolvedFlight.flight_id,
+            listing_id: resolvedFlight.listing_id,
+            document_type: documentType,
+            file_name: file.name,
+            file_url: url,
+          }),
+        });
+        const data = await vendorFetch<{ documents: Doc[] }>(
+          `/api/verification/flight-documents/${resolvedFlight.flight_id}?listing_id=${encodeURIComponent(resolvedFlight.listing_id)}`
+        );
+        setFlightDocuments(data.documents || []);
+        setMessage({ type: "success", text: "Document uploaded." });
+      } catch {
+        setFlightDocuments((prev) => [
+          ...prev.filter((d) => d.document_type !== documentType),
+          { id: `doc-${Date.now()}`, document_type: documentType, file_name: file.name, file_url: "", created_at: new Date().toISOString() },
+        ]);
+        setMessage({ type: "success", text: "Document added (demo). Backend integration pending." });
+      } finally {
+        setFlightUploadingType(null);
+      }
+    };
+    reader.onerror = () => {
+      setMessage({ type: "error", text: "Failed to read file." });
+      setFlightUploadingType(null);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleSendFlightRequest = async () => {
+    if (!resolvedFlight || (resolvedFlight.verification_status !== "no_request" && resolvedFlight.verification_status !== "rejected")) return;
+    setFlightSending(true);
+    setMessage(null);
+    try {
+      const data = await vendorFetch<{ message: string; verification_status: string }>("/api/verification/send-flight-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ flight_id: resolvedFlight.flight_id, listing_id: resolvedFlight.listing_id }),
+      });
+      setResolvedFlight((prev) => (prev ? { ...prev, verification_status: "pending" } : null));
+      setMessage({ type: "success", text: data?.message ?? "Verification request sent. Admin will review and respond." });
+    } catch (e) {
+      setMessage({ type: "error", text: e instanceof Error ? e.message : "Failed to send verification request." });
+    } finally {
+      setFlightSending(false);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
@@ -596,7 +758,9 @@ export default function Verification() {
               {/* Progress */}
               <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-medium text-foreground">Documents for this company</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {selectedType === "event" ? "Documents for this event" : "Documents for this company"}
+                  </p>
                   <p className="text-sm font-semibold text-accent">{Math.round(progress)}%</p>
                 </div>
                 <div className="h-3 rounded-full bg-muted overflow-hidden">
@@ -607,12 +771,12 @@ export default function Verification() {
                     className="h-full rounded-full gold-gradient"
                   />
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">{uploadedCount} of {DOCUMENT_TYPES.length} documents uploaded</p>
+                <p className="text-xs text-muted-foreground mt-2">{uploadedCount} of {companyDocTypes.length} documents uploaded</p>
               </div>
 
               {/* Documents */}
               <div className="space-y-3">
-                {DOCUMENT_TYPES.map((doc, i) => {
+                {companyDocTypes.map((doc, i) => {
                   const uploaded = getDocByType(doc.type);
                   const status = uploaded ? "Uploaded" : "Not Uploaded";
                   const cfg = statusConfig[status];
@@ -662,7 +826,11 @@ export default function Verification() {
 
               {/* Send verification request */}
               <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6">
-                <p className="text-sm text-muted-foreground mb-4">Upload the related documents for this company above, then send the verification request to admin. They will review and approve or reject.</p>
+                <p className="text-sm text-muted-foreground mb-4">
+                  {selectedType === "event"
+                    ? "Upload the event-related documents above (Government NOC, venue authorization, insurance, etc.), then send the verification request to admin. They will review and approve or reject."
+                    : "Upload the related documents for this company above, then send the verification request to admin. They will review and approve or reject."}
+                </p>
                 <button
                   type="button"
                   disabled={!canSendRequest || sending}
@@ -706,6 +874,8 @@ export default function Verification() {
                       setResolvedBus(null);
                       setCarTokenInput("");
                       setResolvedCar(null);
+                      setFlightTokenInput("");
+                      setResolvedFlight(null);
                       setMessage(null);
                     }}
                     className={cn(
@@ -782,12 +952,119 @@ export default function Verification() {
             </div>
           )}
 
-          {(selectedVehicleType === "flight" || selectedVehicleType === "train") && (
-            <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6 text-center">
-              <p className="text-sm font-medium text-foreground">
-                Verification for {selectedVehicleType === "flight" ? "Flight" : "Train"} is coming soon.
+          {selectedVehicleType === "flight" && (
+            <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6 space-y-4">
+              <label className="block text-sm font-medium text-foreground">Paste flight verification token</label>
+              <p className="text-xs text-muted-foreground">
+                Generate a token in <strong>My Listings</strong> → open a transport listing → <strong>Manage Fleet</strong> → <strong>Flight</strong> tab → <strong>Verify</strong> (shield) → Generate token, then copy and paste it here.
               </p>
-              <p className="text-xs text-muted-foreground mt-1">Select Buses or Car above to verify your fleet.</p>
+              <div className="flex gap-2 flex-wrap">
+                <input
+                  type="text"
+                  placeholder="e.g. FLIGHT-XXXX-XXXX"
+                  className="flex-1 min-w-[200px] rounded-lg border border-border bg-background px-3 py-2 text-foreground font-mono placeholder:text-muted-foreground"
+                  value={flightTokenInput}
+                  onChange={(e) => {
+                    setFlightTokenInput(e.target.value);
+                    setResolvedFlight(null);
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={flightValidating || !flightTokenInput.trim()}
+                  onClick={handleValidateFlightToken}
+                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {flightValidating ? "Validating…" : "Validate token"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {selectedVehicleType === "flight" && resolvedFlight && (
+            <>
+              <div className="flex items-center gap-2 rounded-lg bg-muted/50 border border-border p-4">
+                <CheckCircle size={20} className="text-success" />
+                <span className="text-sm font-medium">Flight: <strong>{resolvedFlight.flight_number}</strong> ({resolvedFlight.airline_name}) · Listing: {resolvedFlight.listing_name}</span>
+              </div>
+
+              <div className={cn(
+                "rounded-lg border p-4 flex items-center gap-2",
+                resolvedFlight.verification_status === "no_request" && "bg-muted/50 border-border text-muted-foreground",
+                resolvedFlight.verification_status === "approved" && "bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-400",
+                resolvedFlight.verification_status === "rejected" && "bg-red-500/10 border-red-500/30 text-red-700 dark:text-red-400",
+                resolvedFlight.verification_status === "pending" && "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400"
+              )}>
+                <span className="font-medium">
+                  Status: {resolvedFlight.verification_status === "no_request"
+                    ? "No request"
+                    : resolvedFlight.verification_status === "pending"
+                      ? "Pending request"
+                      : resolvedFlight.verification_status === "approved"
+                        ? "Approved"
+                        : "Rejected"}
+                </span>
+                {resolvedFlight.verification_status === "no_request" && (
+                  <span className="text-sm opacity-90">— Add required documents below, then click &quot;Send verification request&quot;.</span>
+                )}
+                {resolvedFlight.verification_status === "rejected" && (
+                  <span className="text-sm opacity-90">— Add or replace documents and click &quot;Send verification request&quot; to re-request.</span>
+                )}
+              </div>
+
+              {(resolvedFlight.verification_status === "no_request" || resolvedFlight.verification_status === "rejected") && (
+                <>
+                  <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6">
+                    <h4 className="font-medium text-foreground mb-2">Flight documents (required)</h4>
+                    <p className="text-sm text-muted-foreground mb-4">Upload AOC, Aircraft Insurance, Aircraft Registration, Airworthiness Certificate, and any other docs. These will be sent with your verification request.</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {FLIGHT_DOCUMENT_TYPES.map(({ label, type }) => {
+                        const doc = getFlightDocByType(type);
+                        const uploading = flightUploadingType === type;
+                        return (
+                          <div key={type} className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 p-3">
+                            <input
+                              ref={(el) => { flightFileInputRefs.current[type] = el; }}
+                              type="file"
+                              accept="image/*,.pdf"
+                              className="hidden"
+                              onChange={(e) => handleFlightFileChange(type, e)}
+                            />
+                            <button
+                              type="button"
+                              disabled={!!uploading}
+                              onClick={() => flightFileInputRefs.current[type]?.click()}
+                              className="flex-shrink-0 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
+                            >
+                              {uploading ? "Uploading…" : doc ? "Replace" : "Upload"}
+                            </button>
+                            <span className="text-sm text-muted-foreground truncate">{doc ? doc.file_name : label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6">
+                    <p className="text-sm text-muted-foreground mb-4">Send this flight for verification. Admin will see flight details, routes & pricing, seat structure, and all uploaded documents.</p>
+                    <button
+                      type="button"
+                      disabled={flightSending}
+                      onClick={handleSendFlightRequest}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                    >
+                      <Send size={18} />
+                      {flightSending ? "Sending…" : "Send verification request"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {selectedVehicleType === "train" && (
+            <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6 text-center">
+              <p className="text-sm font-medium text-foreground">Verification for Train is coming soon.</p>
+              <p className="text-xs text-muted-foreground mt-1">Select Buses, Car, or Flight above to verify your fleet.</p>
             </div>
           )}
 
@@ -962,6 +1239,13 @@ export default function Verification() {
             <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/30 p-4 text-amber-700 dark:text-amber-400">
               <AlertCircle size={20} />
               <span>Paste your bus token and click <strong>Validate token</strong> to continue.</span>
+            </div>
+          )}
+
+          {selectedVehicleType === "flight" && !resolvedFlight && flightTokenInput.trim() && !flightValidating && (
+            <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/30 p-4 text-amber-700 dark:text-amber-400">
+              <AlertCircle size={20} />
+              <span>Paste your flight token and click <strong>Validate token</strong> to continue.</span>
             </div>
           )}
         </>

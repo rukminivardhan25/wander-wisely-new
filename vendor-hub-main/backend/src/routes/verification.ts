@@ -6,6 +6,16 @@ const router = Router();
 router.use(authMiddleware);
 
 const DOCUMENT_TYPES = ["business_license", "owner_id", "tax_document", "health_safety"] as const;
+const EXPERIENCE_DOCUMENT_TYPES = ["government_id", "business_activity_proof", "location_authorization", "digital_declaration"] as const;
+const EVENT_DOCUMENT_TYPES = [
+  "government_permission_noc",
+  "business_registration_certificate",
+  "venue_authorization_proof",
+  "insurance_liability",
+  "event_permit",
+  "fire_safety_certificate",
+  "other",
+] as const;
 
 /** Check if vendor owns the listing */
 async function vendorOwnsListing(listingId: string, vendorId: string): Promise<boolean> {
@@ -222,7 +232,7 @@ router.get("/documents/:listingId", async (req: Request, res: Response): Promise
   }
 });
 
-/** Add a document for a listing (file_url from /api/upload or similar) */
+/** Add a document for a listing (file_url from /api/upload or similar). For experience listings, accepts experience-specific document types. */
 router.post("/documents", async (req: Request, res: Response): Promise<void> => {
   try {
     const vendorId = req.vendorId!;
@@ -231,13 +241,27 @@ router.post("/documents", async (req: Request, res: Response): Promise<void> => 
       res.status(400).json({ error: "Missing listing_id, document_type, file_name, or file_url" });
       return;
     }
-    if (!DOCUMENT_TYPES.includes(document_type as (typeof DOCUMENT_TYPES)[number])) {
-      res.status(400).json({ error: "Invalid document_type. Use: " + DOCUMENT_TYPES.join(", ") });
-      return;
-    }
     const owns = await vendorOwnsListing(listing_id, vendorId);
     if (!owns) {
       res.status(404).json({ error: "Listing not found" });
+      return;
+    }
+    const listingRow = await query<{ type: string }>("SELECT type FROM listings WHERE id = $1", [listing_id]);
+    const listingType = listingRow.rows[0]?.type?.toLowerCase() ?? "";
+    const allowedTypes =
+      listingType === "experience"
+        ? [...EXPERIENCE_DOCUMENT_TYPES]
+        : listingType === "event"
+          ? [...EVENT_DOCUMENT_TYPES]
+          : [...DOCUMENT_TYPES];
+    if (!(allowedTypes as readonly string[]).includes(document_type)) {
+      const msg =
+        listingType === "experience"
+          ? "Invalid document_type for experience. Use: " + EXPERIENCE_DOCUMENT_TYPES.join(", ")
+          : listingType === "event"
+            ? "Invalid document_type for event. Use: " + EVENT_DOCUMENT_TYPES.join(", ")
+            : "Invalid document_type. Use: " + DOCUMENT_TYPES.join(", ");
+      res.status(400).json({ error: msg });
       return;
     }
     try {
@@ -525,6 +549,125 @@ router.post("/car-documents", async (req: Request, res: Response): Promise<void>
     }
     console.error("Car document add error:", err);
     res.status(500).json({ error: "Failed to add document" });
+  }
+});
+
+/** Resolve flight verification token. Query: ?token=FLT-XXXX-XXXX. Returns flight info if token matches a flight in vendor's listing. */
+router.get("/resolve-flight-token", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const vendorId = req.vendorId!;
+    const token = (req.query.token as string)?.trim();
+    if (!token) {
+      res.status(400).json({ error: "Missing token query" });
+      return;
+    }
+    let result: { rows: { flight_id: string; flight_number: string; airline_name: string; listing_id: string; listing_name: string; verification_status: string | null }[] };
+    try {
+      result = await query<{
+        flight_id: string;
+        flight_number: string;
+        airline_name: string;
+        listing_id: string;
+        listing_name: string;
+        verification_status: string | null;
+      }>(
+        `SELECT f.id AS flight_id, f.flight_number, f.airline_name, f.listing_id, f.verification_status,
+          l.name AS listing_name
+         FROM flights f
+         JOIN listings l ON l.id = f.listing_id AND l.vendor_id = $2
+         WHERE f.verification_token = $1`,
+        [token, vendorId]
+      );
+    } catch (e) {
+      const code = e && typeof e === "object" && "code" in e ? String((e as { code: string }).code) : "";
+      if (code === "42P01") {
+        res.status(503).json({ error: "Flights table not set up. Run schema 034_flights.sql and 037_flights_verification.sql." });
+        return;
+      }
+      throw e;
+    }
+    if (result.rows.length === 0) {
+      try {
+        result = await query<{
+          flight_id: string;
+          flight_number: string;
+          airline_name: string;
+          listing_id: string;
+          listing_name: string;
+          verification_status: string | null;
+        }>(
+          `SELECT f.id AS flight_id, f.flight_number, f.airline_name, f.listing_id, f.verification_status,
+            l.name AS listing_name
+           FROM flights f
+           JOIN listings l ON l.id = f.listing_id
+           INNER JOIN vendor_listings vl ON vl.listing_id = f.listing_id AND vl.vendor_id = $2
+           WHERE f.verification_token = $1`,
+          [token, vendorId]
+        );
+      } catch {
+        // ignore
+      }
+    }
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: "Invalid token or flight does not belong to you" });
+      return;
+    }
+    const row = result.rows[0];
+    res.json({
+      flight_id: row.flight_id,
+      flight_number: row.flight_number,
+      airline_name: row.airline_name,
+      listing_id: row.listing_id,
+      listing_name: row.listing_name,
+      verification_status: row.verification_status ?? "no_request",
+    });
+  } catch (err) {
+    console.error("Resolve flight token error:", err);
+    res.status(500).json({ error: "Failed to resolve token" });
+  }
+});
+
+/** Send verification request for a flight. Body: { flight_id, listing_id }. Flight must have a token and belong to vendor's listing. */
+router.post("/send-flight-request", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const vendorId = req.vendorId!;
+    const body = req.body as { flight_id?: string; listing_id?: string };
+    const { flight_id, listing_id } = body;
+    if (!flight_id || !listing_id) {
+      res.status(400).json({ error: "Missing flight_id or listing_id" });
+      return;
+    }
+    const owns = await vendorOwnsListing(listing_id, vendorId);
+    if (!owns) {
+      res.status(404).json({ error: "Listing not found" });
+      return;
+    }
+    const row = await query<{ verification_token: string | null; verification_status: string | null }>(
+      "SELECT verification_token, verification_status FROM flights WHERE id = $1 AND listing_id = $2",
+      [flight_id, listing_id]
+    );
+    if (row.rows.length === 0) {
+      res.status(404).json({ error: "Flight not found" });
+      return;
+    }
+    if (!row.rows[0].verification_token) {
+      res.status(400).json({ error: "Generate a verification token for this flight first (Fleet → Flight → Verify)" });
+      return;
+    }
+    const status = row.rows[0].verification_status ?? "no_request";
+    if (status === "pending") {
+      res.json({ message: "Verification request already sent", verification_status: "pending" });
+      return;
+    }
+    if (status === "approved") {
+      res.status(400).json({ error: "This flight is already approved" });
+      return;
+    }
+    await query("UPDATE flights SET verification_status = 'pending', updated_at = now() WHERE id = $1 AND listing_id = $2", [flight_id, listing_id]);
+    res.json({ message: status === "rejected" ? "Re-verification request sent" : "Verification request sent", verification_status: "pending" });
+  } catch (err) {
+    console.error("Verification send-flight-request error:", err);
+    res.status(500).json({ error: "Failed to send flight verification request" });
   }
 });
 
