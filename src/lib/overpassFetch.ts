@@ -59,8 +59,13 @@ export async function overpassFetch<T = { elements?: unknown[] }>(
       try {
         const res = await attempt();
         if (!res.ok) {
-          const text = await res.text();
-          throw new Error(`Map service error ${res.status}: ${text.slice(0, 150)}`);
+          throw new Error(
+            res.status === 400
+              ? "Restaurant data isn't available for this spot right now. Try again in a moment or another area."
+              : res.status === 429
+                ? "Too many requests. Please wait a moment and try again."
+                : `Map service error (${res.status}). Try again later.`
+          );
         }
         return (await res.json()) as T;
       } catch (err) {
@@ -88,7 +93,8 @@ export async function overpassFetch<T = { elements?: unknown[] }>(
     if (lastError.message.includes("fetch") || lastError.message.includes("Failed to fetch")) {
       throw new Error("Unable to reach map service. Check your connection and try again.");
     }
-    throw lastError;
+    if (lastError.message.startsWith("Map service")) throw lastError;
+    throw new Error("Map data is temporarily unavailable for this area. Try another location or use your current location.");
   }
-  throw new Error("Unable to fetch places. Try again.");
+  throw new Error("Map data is temporarily unavailable. Try another location or use your current location.");
 }

@@ -28,6 +28,7 @@ const schemaFiles = [
   "040_events.sql",
   "041_event_bookings.sql",
   "042_experiences_drop_discount.sql",
+  "047_experience_schedule_template.sql",
 ];
 
 async function run() {

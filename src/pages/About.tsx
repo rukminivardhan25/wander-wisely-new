@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Globe, Heart, Shield, Users, Sparkles } from "lucide-react";
+import { Globe, Heart, Shield, Sparkles, Users } from "lucide-react";
 import Layout from "@/components/Layout";
 
 const values = [

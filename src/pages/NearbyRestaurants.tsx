@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import {
   MapPin,
@@ -23,6 +24,7 @@ import {
   geocode,
   reverseGeocode,
   fetchNearbyRestaurants,
+  searchLocationSuggestions,
   googleMapsPlaceUrl,
   googleMapsDirectionsFromCurrentUrl,
   type GeoResult,
@@ -70,11 +72,46 @@ export function NearbyRestaurantsContent({
   const [userCoords, setUserCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [geo, setGeo] = useState<GeoResult | null>(null);
   const [restaurants, setRestaurants] = useState<RestaurantResult[]>([]);
+  const [sampleListings, setSampleListings] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [detailRestaurant, setDetailRestaurant] = useState<RestaurantResult | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<GeoResult[]>([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const inputWrapRef = useRef<HTMLDivElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  useEffect(() => {
+    const q = locationQuery.trim();
+    if (q.length < 2) {
+      setSuggestions([]);
+      setSuggestionsOpen(false);
+      return;
+    }
+    const t = setTimeout(() => {
+      setSuggestionsLoading(true);
+      searchLocationSuggestions(q)
+        .then((list) => {
+          setSuggestions(list);
+          setSuggestionsOpen(list.length > 0);
+        })
+        .catch(() => {
+          setSuggestions([]);
+          setSuggestionsOpen(false);
+        })
+        .finally(() => setSuggestionsLoading(false));
+    }, 350);
+    return () => clearTimeout(t);
+  }, [locationQuery]);
+
+  const chooseSuggestion = useCallback((item: GeoResult) => {
+    setLocationQuery(item.displayName);
+    setSuggestions([]);
+    setSuggestionsOpen(false);
+  }, []);
 
   const searchLocation = useCallback(async () => {
     const query = locationQuery.trim();
@@ -85,6 +122,7 @@ export function NearbyRestaurantsContent({
     setLoading(true);
     setError("");
     setRestaurants([]);
+    setSampleListings(false);
     setGeo(null);
     try {
       const result = await geocode(query);
@@ -94,11 +132,17 @@ export function NearbyRestaurantsContent({
         return;
       }
       setGeo(result);
-      const list = await fetchNearbyRestaurants(result.lat, result.lon, 2500);
+      const { list, fallback } = await fetchNearbyRestaurants(result.lat, result.lon, 250);
       setRestaurants(list);
+      setSampleListings(fallback === true);
       if (list.length === 0) setError("No restaurants found nearby. Try another area.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load restaurants. Try again.");
+      const msg = e instanceof Error ? e.message : "";
+      setError(
+        msg.includes("Map service") || msg.includes("unavailable") || msg.includes("Try another location") || msg.includes("isn't available")
+          ? msg
+          : "Couldn't load restaurants for this area. Try another location or use your current location."
+      );
       setRestaurants([]);
     } finally {
       setLoading(false);
@@ -113,6 +157,7 @@ export function NearbyRestaurantsContent({
     setLocationLoading(true);
     setError("");
     setRestaurants([]);
+    setSampleListings(false);
     setGeo(null);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
@@ -126,11 +171,17 @@ export function NearbyRestaurantsContent({
           const addressForBar = reversed?.displayName ?? "Your location";
           setLocationQuery(addressForBar);
           setGeo(reversed ?? { lat, lon, displayName: "Your location" });
-          const list = await fetchNearbyRestaurants(lat, lon, 2500);
+          const { list, fallback } = await fetchNearbyRestaurants(lat, lon, 250);
           setRestaurants(list);
+          setSampleListings(fallback === true);
           if (list.length === 0) setError("No restaurants found nearby.");
         } catch (e) {
-          setError(e instanceof Error ? e.message : "Failed to load restaurants.");
+          const msg = e instanceof Error ? e.message : "";
+          setError(
+            msg.includes("Map service") || msg.includes("unavailable") || msg.includes("Try another location") || msg.includes("isn't available")
+              ? msg
+              : "Couldn't load restaurants for this area. Try another location or use your current location."
+          );
           setLocationQuery("Your location");
           setGeo({ lat, lon, displayName: "Your location" });
         } finally {
@@ -158,6 +209,66 @@ export function NearbyRestaurantsContent({
     if (defaultLocation) setLocationQuery((q) => q || defaultLocation);
   }, [defaultLocation]);
 
+  const updateDropdownPosition = useCallback(() => {
+    if (!inputWrapRef.current) return;
+    const rect = inputWrapRef.current.getBoundingClientRect();
+    setDropdownPosition({
+      top: rect.bottom + 6,
+      left: rect.left,
+      width: Math.max(rect.width, 200),
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!suggestionsOpen) {
+      setDropdownPosition(null);
+      return;
+    }
+    updateDropdownPosition();
+    window.addEventListener("scroll", updateDropdownPosition, true);
+    window.addEventListener("resize", updateDropdownPosition);
+    return () => {
+      window.removeEventListener("scroll", updateDropdownPosition, true);
+      window.removeEventListener("resize", updateDropdownPosition);
+    };
+  }, [suggestionsOpen, updateDropdownPosition]);
+
+  const suggestionsDropdown = suggestionsOpen && dropdownPosition && typeof document !== "undefined" && (
+    <ul
+      role="listbox"
+      className="bg-white border-2 border-slate-200 rounded-xl shadow-xl max-h-60 overflow-y-auto py-1"
+      style={{
+        position: "fixed",
+        top: dropdownPosition.top,
+        left: dropdownPosition.left,
+        width: dropdownPosition.width,
+        zIndex: 10000,
+        boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
+      }}
+    >
+      {suggestionsLoading ? (
+        <li className="px-4 py-3 text-sm text-muted-foreground flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" /> Finding places…
+        </li>
+      ) : (
+        suggestions.map((item, i) => (
+          <li
+            key={`${item.lat}-${item.lon}-${i}`}
+            role="option"
+            className="px-4 py-3 text-sm text-foreground hover:bg-amber-50 active:bg-amber-100 cursor-pointer flex items-center gap-2 border-b border-slate-100 last:border-b-0"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              chooseSuggestion(item);
+            }}
+          >
+            <MapPin className="h-4 w-4 text-amber-600 shrink-0" />
+            <span className="truncate">{item.displayName}</span>
+          </li>
+        ))
+      )}
+    </ul>
+  );
+
   return (
     <div>
       <div className={compact ? "" : "min-h-screen bg-slate-50/80 pt-20 pb-16"}>
@@ -177,22 +288,37 @@ export function NearbyRestaurantsContent({
             Nearby Restaurants
           </h2>
           <p className="text-muted-foreground mt-1 text-sm">
-            Enter a city/area or use your location. Data from OpenStreetMap — read-only, no bookings.
+            Enter a city/area or use your location. Read-only, no bookings.
           </p>
         </div>
 
           {/* Location input */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 mb-6">
             <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <div ref={inputWrapRef} className="relative flex-1">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
                 <Input
                   placeholder="City or area (e.g. Hyderabad, Gachibowli)"
                   className="pl-10 rounded-xl"
                   value={locationQuery}
                   onChange={(e) => setLocationQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && searchLocation()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      if (suggestionsOpen && suggestions.length > 0) {
+                        chooseSuggestion(suggestions[0]);
+                      } else {
+                        searchLocation();
+                      }
+                    }
+                    if (e.key === "Escape") setSuggestionsOpen(false);
+                  }}
+                  onFocus={() => suggestions.length > 0 && setSuggestionsOpen(true)}
+                  onBlur={() => setTimeout(() => setSuggestionsOpen(false), 200)}
+                  autoComplete="off"
+                  aria-autocomplete="list"
+                  aria-expanded={suggestionsOpen}
                 />
+                {typeof document !== "undefined" && suggestionsDropdown && createPortal(suggestionsDropdown, document.body)}
               </div>
               <Button
                 type="button"
@@ -230,6 +356,11 @@ export function NearbyRestaurantsContent({
           {/* Results */}
           {restaurants.length > 0 && (
             <>
+              {sampleListings && (
+                <p className="text-sm text-amber-700/90 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+                  Sample listings for this area. Live map data may be limited.
+                </p>
+              )}
               <p className="text-sm text-muted-foreground mb-4">
                 {restaurants.length} restaurant{restaurants.length !== 1 ? "s" : ""} found (sorted by distance)
               </p>

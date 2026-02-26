@@ -52,31 +52,6 @@ export default function AddListing() {
         <p className="text-muted-foreground mt-1">Create a new listing for your business.</p>
       </div>
 
-      {/* Step indicator */}
-      <div className="flex items-center gap-1 overflow-x-auto pb-2">
-        {steps.map((step, i) => (
-          <div key={step} className="flex items-center">
-            <button
-              onClick={() => i <= (selectedType ? steps.length - 1 : 0) && setCurrentStep(i)}
-              className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap",
-                i === currentStep
-                  ? "bg-primary text-primary-foreground"
-                  : i < currentStep
-                  ? "bg-accent/20 text-accent"
-                  : "bg-muted text-muted-foreground"
-              )}
-            >
-              {i < currentStep ? <Check size={12} /> : <span>{i + 1}</span>}
-              <span className="hidden sm:inline">{step}</span>
-            </button>
-            {i < steps.length - 1 && (
-              <ChevronRight size={14} className="mx-1 text-muted-foreground/50 shrink-0" />
-            )}
-          </div>
-        ))}
-      </div>
-
       {/* Step content */}
       <AnimatePresence mode="wait">
         <motion.div

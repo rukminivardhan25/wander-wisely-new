@@ -1,14 +1,15 @@
 import { Link, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Compass, Users, MapPin, LogOut, Calendar } from "lucide-react";
+import { Menu, X, Compass, Users, MapPin, LogOut, Calendar, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
-  { path: "/my-trip", label: "My Trip", icon: Calendar },
   { path: "/explore", label: "Explore", icon: Compass },
   { path: "/plan-trip", label: "Plan Trip", icon: MapPin },
+  { path: "/my-trip", label: "My Plan", icon: Calendar },
+  { path: "/my-trips", label: "My Trips", icon: History },
   { path: "/community", label: "Community", icon: Users },
   { path: "/about", label: "About", icon: null },
 ];
@@ -39,19 +40,20 @@ const Navbar = () => {
 
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-1">
-          {navItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                location.pathname === item.path
-                  ? "text-accent"
-                  : "text-primary-foreground/70 hover:text-primary-foreground"
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const isActive = item.path === "/my-trips" ? location.pathname.startsWith("/my-trips") : location.pathname === item.path;
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  isActive ? "text-accent" : "text-primary-foreground/70 hover:text-primary-foreground"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </div>
 
         {/* Auth Buttons */}
@@ -106,20 +108,21 @@ const Navbar = () => {
             className="md:hidden bg-primary border-t border-primary-foreground/10"
           >
             <div className="container mx-auto px-4 py-4 flex flex-col gap-2">
-              {navItems.map((item) => (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={() => setMobileOpen(false)}
-                  className={`px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                    location.pathname === item.path
-                      ? "text-accent bg-primary-foreground/5"
-                      : "text-primary-foreground/70 hover:text-primary-foreground"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              ))}
+              {navItems.map((item) => {
+                const isActive = item.path === "/my-trips" ? location.pathname.startsWith("/my-trips") : location.pathname === item.path;
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setMobileOpen(false)}
+                    className={`px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                      isActive ? "text-accent bg-primary-foreground/5" : "text-primary-foreground/70 hover:text-primary-foreground"
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
               <div className="flex gap-3 mt-2 pt-2 border-t border-primary-foreground/10">
                 {isLoggedIn ? (
                   <>

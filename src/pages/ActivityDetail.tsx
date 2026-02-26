@@ -54,12 +54,14 @@ const TRANSPORT_OPTION_TO_MODE: Record<string, TransportMode> = {
 };
 
 type LocationState = {
-  trip: { origin: string; destination: string; days: number };
+  trip: { origin: string; destination: string; days: number; id?: string };
   dayNumber: number;
   activity: ActivityItem;
   activityIndex: number;
   daySummary?: string;
   fullResult?: { trip: { id: string; origin: string; destination: string; days: number }; itineraries: unknown[] };
+  /** Where to go when clicking "Back to Day X": "plan-trip" or "my-plan" */
+  returnTo?: "plan-trip" | "my-plan";
 };
 
 const BLOCK_CONFIG: Record<ActivityType, { label: string; icon: JSX.Element; options: string[] }> = {
@@ -94,12 +96,16 @@ const ActivityDetail = () => {
     );
   }
 
-  const { trip, dayNumber, activity, daySummary, fullResult } = locationState;
+  const { trip, dayNumber, activity, daySummary, fullResult, returnTo } = locationState;
   const type = (activity.activityType && BLOCK_CONFIG[activity.activityType] ? activity.activityType : "experience") as ActivityType;
   const block = BLOCK_CONFIG[type];
 
   const handleBack = () => {
-    if (fullResult) {
+    if (returnTo === "my-plan") {
+      navigate("/my-trip", { state: { selectedDay: dayNumber } });
+    } else if (returnTo === "plan-trip" && fullResult) {
+      navigate("/plan-trip", { state: { restoreItinerary: fullResult, selectedDay: dayNumber } });
+    } else if (fullResult) {
       navigate("/plan-trip", { state: { restoreItinerary: fullResult, selectedDay: dayNumber } });
     } else {
       navigate(-1);

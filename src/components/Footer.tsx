@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Compass, Mail, MapPin, Phone } from "lucide-react";
+import { Compass, Mail, Phone } from "lucide-react";
 
 const Footer = () => {
   return (
@@ -23,13 +23,10 @@ const Footer = () => {
           <div>
             <h4 className="font-display font-semibold mb-4">Explore</h4>
             <ul className="space-y-2">
-              {["Destinations", "Plan a Trip", "Community", "Travel Tips"].map((link) => (
-                <li key={link}>
-                  <a href="#" className="text-sm text-primary-foreground/60 hover:text-accent transition-colors">
-                    {link}
-                  </a>
-                </li>
-              ))}
+              <li><Link to="/explore" className="text-sm text-primary-foreground/60 hover:text-accent transition-colors">Destinations</Link></li>
+              <li><Link to="/plan-trip" className="text-sm text-primary-foreground/60 hover:text-accent transition-colors">Plan a Trip</Link></li>
+              <li><Link to="/community" className="text-sm text-primary-foreground/60 hover:text-accent transition-colors">Community</Link></li>
+              <li><Link to="/travel-tips" className="text-sm text-primary-foreground/60 hover:text-accent transition-colors">Travel Tips</Link></li>
             </ul>
           </div>
 
@@ -37,36 +34,41 @@ const Footer = () => {
           <div>
             <h4 className="font-display font-semibold mb-4">Company</h4>
             <ul className="space-y-2">
-              {["About Us", "Privacy Policy", "Terms of Service", "Contact"].map((link) => (
-                <li key={link}>
-                  <a href="#" className="text-sm text-primary-foreground/60 hover:text-accent transition-colors">
-                    {link}
-                  </a>
-                </li>
-              ))}
+              <li><Link to="/about" className="text-sm text-primary-foreground/60 hover:text-accent transition-colors">About Us</Link></li>
+              <li><Link to="/help" className="text-sm text-primary-foreground/60 hover:text-accent transition-colors">Help</Link></li>
+              <li><Link to="/privacy" className="text-sm text-primary-foreground/60 hover:text-accent transition-colors">Privacy Policy</Link></li>
+              <li><Link to="/terms" className="text-sm text-primary-foreground/60 hover:text-accent transition-colors">Terms of Service</Link></li>
             </ul>
           </div>
 
-          {/* Contact */}
+          {/* Get in Touch */}
           <div>
             <h4 className="font-display font-semibold mb-4">Get in Touch</h4>
             <ul className="space-y-3">
               <li className="flex items-center gap-2 text-sm text-primary-foreground/60">
-                <Mail className="w-4 h-4 text-accent" />
-                hello@wanderlust.app
+                <Mail className="w-4 h-4 text-accent shrink-0" />
+                <a href="mailto:hello@wanderlust.app" className="hover:text-accent transition-colors">hello@wanderlust.app</a>
               </li>
               <li className="flex items-center gap-2 text-sm text-primary-foreground/60">
-                <MapPin className="w-4 h-4 text-accent" />
-                Global Community
+                <Phone className="w-4 h-4 text-accent shrink-0" />
+                <a href="tel:+15551234567" className="hover:text-accent transition-colors">+1 (555) 123-4567</a>
               </li>
             </ul>
           </div>
         </div>
 
-        <div className="border-t border-primary-foreground/10 mt-12 pt-8 text-center">
+        <div className="border-t border-primary-foreground/10 mt-12 pt-8 flex flex-col sm:flex-row items-center justify-center gap-4 text-center">
           <p className="text-sm text-primary-foreground/40">
             © 2026 Wanderlust. All rights reserved. Made with ❤️ for travelers.
           </p>
+          <div className="flex items-center gap-6">
+            <Link to="/feedback" className="text-sm text-primary-foreground/60 hover:text-accent transition-colors">
+              Give feedback
+            </Link>
+            <Link to="/complaint" className="text-sm text-primary-foreground/60 hover:text-accent transition-colors">
+              Complaint
+            </Link>
+          </div>
         </div>
       </div>
     </footer>

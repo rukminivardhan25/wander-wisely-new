@@ -50,11 +50,16 @@ const BookingSuccessPage = () => {
     };
     addStoredBusBooking(payload);
     if (token) {
-      apiFetch("/api/bookings", {
-        method: "POST",
-        body: payload,
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => {});
+      apiFetch<{ trip?: { id: string } }>("/api/trips/active", { headers: { Authorization: `Bearer ${token}` } })
+        .then(({ data }) => {
+          const tripId = data?.trip?.id;
+          return apiFetch("/api/bookings", {
+            method: "POST",
+            body: { ...payload, tripId: tripId ?? undefined },
+            headers: { Authorization: `Bearer ${token}` },
+          });
+        })
+        .catch(() => {});
     }
   }, [state?.bookingId, token]);
 

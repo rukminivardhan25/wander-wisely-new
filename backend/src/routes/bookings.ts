@@ -6,6 +6,7 @@ import { authMiddleware } from "../middleware/auth.js";
 const router = Router();
 
 const createBookingSchema = z.object({
+  tripId: z.string().uuid().optional(),
   bookingId: z.string().min(1),
   bus: z.object({
     busId: z.string().uuid().optional(),
@@ -143,10 +144,11 @@ router.get("/for-bus", async (req: Request, res: Response): Promise<void> => {
 
 router.use(authMiddleware);
 
-/** GET /api/bookings - List current user's transport bookings */
+/** GET /api/bookings - List current user's transport bookings. Optional ?trip_id=uuid to scope to a trip. */
 router.get("/", async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.userId!;
+    const tripId = typeof req.query.trip_id === "string" && /^[0-9a-f-]{36}$/i.test(req.query.trip_id.trim()) ? req.query.trip_id.trim() : null;
     const result = await query<{
       id: string;
       booking_id: string;
@@ -167,11 +169,16 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       email: string | null;
       created_at: string;
     }>(
-      `select id, booking_id, listing_name, bus_name, registration_number, bus_number,
+      tripId
+        ? `select id, booking_id, listing_name, bus_name, registration_number, bus_number,
+       departure_time, driver_name, driver_phone, selected_seats, travel_date,
+       route_from, route_to, total_cents, passenger_name, passenger_phone, email, created_at
+       from transport_bookings where user_id = $1 and trip_id = $2 order by created_at desc`
+        : `select id, booking_id, listing_name, bus_name, registration_number, bus_number,
        departure_time, driver_name, driver_phone, selected_seats, travel_date,
        route_from, route_to, total_cents, passenger_name, passenger_phone, email, created_at
        from transport_bookings where user_id = $1 order by created_at desc`,
-      [userId]
+      tripId ? [userId, tripId] : [userId]
     );
     const bookings = result.rows.map((r) => ({
       bookingId: r.booking_id,
@@ -213,13 +220,14 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
     const b = body.data;
     await query(
       `insert into transport_bookings (
-        user_id, booking_id, bus_id, listing_id, listing_name, bus_name, registration_number, bus_number,
+        user_id, trip_id, booking_id, bus_id, listing_id, listing_name, bus_name, registration_number, bus_number,
         departure_time, driver_name, driver_phone, selected_seats, travel_date,
         route_from, route_to, total_cents, passenger_name, passenger_phone, email
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       on conflict (booking_id) do nothing`,
       [
         userId,
+        b.tripId ?? null,
         b.bookingId,
         b.bus.busId ?? null,
         b.bus.listingId ?? null,

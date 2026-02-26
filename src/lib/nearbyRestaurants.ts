@@ -1,8 +1,9 @@
 /**
- * Nearby Restaurants – OpenStreetMap (Nominatim + Overpass).
- * No vendor/DB; read-only discovery from external OSM data.
+ * Nearby Restaurants – 100% free OpenStreetMap (Nominatim + Overpass).
+ * Uses backend /api/places when available (more reliable); falls back to direct OSM from browser.
  */
 
+import { getApiUrl } from "@/lib/api";
 import { overpassFetch } from "@/lib/overpassFetch";
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
@@ -32,8 +33,19 @@ export type RestaurantResult = {
   openNow?: boolean;
 };
 
-/** Reverse geocode coordinates to an address using Nominatim (OSM). */
+/** Reverse geocode coordinates to an address. Tries Google (backend) first, then Nominatim. */
 export async function reverseGeocode(lat: number, lon: number): Promise<GeoResult | null> {
+  try {
+    const res = await fetch(getApiUrl(`/api/places/reverse?lat=${lat}&lon=${lon}`));
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.lat != null && data?.lon != null && data?.displayName) {
+        return { lat: data.lat, lon: data.lon, displayName: data.displayName };
+      }
+    }
+  } catch {
+    // fall back to Nominatim
+  }
   const params = new URLSearchParams({
     lat: String(lat),
     lon: String(lon),
@@ -58,8 +70,25 @@ export async function reverseGeocode(lat: number, lon: number): Promise<GeoResul
   };
 }
 
-/** Geocode a place name to lat/lon using Nominatim (OSM). */
+/** Geocode a place name to lat/lon. Tries Google (backend) first, then Nominatim. */
 export async function geocode(query: string): Promise<GeoResult | null> {
+  const q = query.trim();
+  if (!q) return null;
+  try {
+    const res = await fetch(getApiUrl(`/api/places/geocode?q=${encodeURIComponent(q)}`));
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.lat != null && data?.lon != null) {
+        return {
+          lat: data.lat,
+          lon: data.lon,
+          displayName: data.displayName ?? q,
+        };
+      }
+    }
+  } catch {
+    // fall back to Nominatim
+  }
   const params = new URLSearchParams({
     q: query.trim(),
     format: "json",
@@ -75,8 +104,51 @@ export async function geocode(query: string): Promise<GeoResult | null> {
   return {
     lat: parseFloat(first.lat),
     lon: parseFloat(first.lon),
-    displayName: first.display_name ?? query,
+    displayName: first.display_name ?? q,
   };
+}
+
+/** Fetch location suggestions for autocomplete. Tries Google (backend) first, then Nominatim. */
+export async function searchLocationSuggestions(query: string): Promise<GeoResult[]> {
+  const q = query.trim();
+  if (!q || q.length < 2) return [];
+  try {
+    const res = await fetch(getApiUrl(`/api/places/suggestions?q=${encodeURIComponent(q)}`));
+    if (res.ok) {
+      const data = await res.json();
+      const list = data?.suggestions ?? [];
+      if (Array.isArray(list) && list.length > 0) {
+        return list
+          .filter((s: { lat?: number; lon?: number; displayName?: string }) => s?.lat != null && s?.lon != null && s?.displayName)
+          .map((s: { lat: number; lon: number; displayName: string }) => ({
+            lat: s.lat,
+            lon: s.lon,
+            displayName: s.displayName,
+          }));
+      }
+    }
+  } catch {
+    // fall back to Nominatim
+  }
+  const params = new URLSearchParams({
+    q,
+    format: "json",
+    limit: "8",
+    addressdetails: "1",
+  });
+  const res = await fetch(`${NOMINATIM_URL}?${params}`, {
+    headers: { "Accept-Language": "en", "User-Agent": USER_AGENT },
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  const items = Array.isArray(data) ? data : [];
+  return items
+    .filter((item: { lat?: string; lon?: string }) => item?.lat != null && item?.lon != null)
+    .map((item: { lat: string; lon: string; display_name?: string }) => ({
+      lat: parseFloat(item.lat),
+      lon: parseFloat(item.lon),
+      displayName: item.display_name ?? `${item.lat}, ${item.lon}`,
+    }));
 }
 
 /** Haversine distance in km. */
@@ -99,15 +171,37 @@ function distanceKm(
   return R * c;
 }
 
-/** Fetch nearby restaurants from Overpass (OSM). Radius in metres. */
+export type FetchNearbyRestaurantsResult = { list: RestaurantResult[]; fallback?: boolean };
+
+/** Fetch nearby restaurants. Uses backend (OSM) or direct Overpass; backend may return sample list when live data unavailable. */
 export async function fetchNearbyRestaurants(
   lat: number,
   lon: number,
-  radiusMetres: number = 2000
-): Promise<RestaurantResult[]> {
-  const radius = Math.min(radiusMetres, 5000);
-  const around = `(around:${radius},${lat},${lon})`;
-  const query = `[out:json][timeout:15];(node${around}["amenity"="restaurant"];node${around}["amenity"="fast_food"];node${around}["amenity"="cafe"]);out;`;
+  radiusMetres: number = 250
+): Promise<FetchNearbyRestaurantsResult> {
+  const radius = Math.min(radiusMetres, 400);
+  try {
+    const res = await fetch(getApiUrl(`/api/places/nearby-restaurants?lat=${lat}&lon=${lon}&radius=${radius}`));
+    if (res.ok) {
+      const data = await res.json();
+      const list = data?.restaurants ?? [];
+      if (Array.isArray(list)) {
+        return { list: list.slice(0, 50), fallback: data?.fallback === true };
+      }
+    }
+    if (res.status === 502) {
+      const body = await res.json().catch(() => ({}));
+      const msg = body?.error ?? "Restaurant data isn't available for this spot right now. Try again in a moment or another area.";
+      throw new Error(msg);
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message.length > 0) throw e;
+    // fall back to Overpass
+  }
+
+  const radiusOSM = Math.min(radiusMetres, 400);
+  const around = `(around:${radiusOSM},${lat},${lon})`;
+  const query = `[out:json][timeout:6];(node${around}["amenity"="restaurant"];node${around}["amenity"="fast_food"];node${around}["amenity"="cafe"]);out 30;`;
 
   const data = await overpassFetch<{ elements?: unknown[] }>(query, {
     userAgent: USER_AGENT,
@@ -155,7 +249,7 @@ export async function fetchNearbyRestaurants(
   }
 
   results.sort((a, b) => a.distanceKm - b.distanceKm);
-  return results.slice(0, 50);
+  return { list: results.slice(0, 50) };
 }
 
 /** OpenStreetMap link for a point (latitude, longitude). */

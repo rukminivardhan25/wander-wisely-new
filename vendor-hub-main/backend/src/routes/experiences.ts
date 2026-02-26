@@ -180,6 +180,24 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       return { day, time: time || "09:00" };
     });
 
+    let schedule_days: Record<string, boolean> = { mon: false, tue: false, wed: false, thu: false, fri: false, sat: false, sun: false };
+    let schedule_by_day: Record<string, { startTime: string; endTime: string; numberOfSlots: number }> = {};
+    const templateRows = await query<{ day_of_week: string; start_time: string; end_time: string; number_of_slots: number }>(
+      "SELECT day_of_week, start_time::text, end_time::text, number_of_slots FROM experience_schedule_template WHERE experience_id = $1",
+      [row.id]
+    ).catch(() => ({ rows: [] }));
+    if (templateRows.rows.length > 0) {
+      for (const t of templateRows.rows) {
+        const day = t.day_of_week?.toLowerCase().slice(0, 3) ?? "";
+        if (DAY_KEYS.includes(day as (typeof DAY_KEYS)[number])) {
+          schedule_days[day] = true;
+          const st = String(t.start_time ?? "09:00").slice(0, 5);
+          const et = String(t.end_time ?? "17:00").slice(0, 5);
+          schedule_by_day[day] = { startTime: st, endTime: et, numberOfSlots: Math.max(1, t.number_of_slots ?? 1) };
+        }
+      }
+    }
+
     res.json({
       id: row.id,
       listing_id: row.listing_id,
@@ -200,6 +218,8 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       updated_at: row.updated_at,
       slots: slots.rows,
       recurring_slots,
+      schedule_days,
+      schedule_by_day,
       media: media.rows,
     });
   } catch (err) {
@@ -213,7 +233,45 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 const DAY_TO_DOW: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+
+type ScheduleSlot = { startTime: string; endTime: string; numberOfSlots: number };
+
+/** Compute slot times (HH:mm) evenly between start and end. */
+function slotTimesFromRange(startTime: string, endTime: string, numberOfSlots: number): string[] {
+  if (numberOfSlots < 1) return [];
+  const [sh, sm] = startTime.split(":").map(Number);
+  const [eh, em] = endTime.split(":").map(Number);
+  let startMins = (sh ?? 0) * 60 + (sm ?? 0);
+  let endMins = (eh ?? 0) * 60 + (em ?? 0);
+  if (endMins <= startMins) endMins += 24 * 60;
+  const out: string[] = [];
+  for (let i = 0; i < numberOfSlots; i++) {
+    const mins = startMins + ((endMins - startMins) * i) / numberOfSlots;
+    const h = Math.floor(mins / 60) % 24;
+    const m = Math.round(mins % 60);
+    out.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+  }
+  return out;
+}
+
+/** Build recurring_slots from schedule_days + schedule_by_day (UI form data). */
+function buildRecurringSlotsFromSchedule(
+  scheduleDays: Record<string, boolean>,
+  scheduleByDay: Record<string, ScheduleSlot>
+): { day: string; time: string }[] {
+  const recurring: { day: string; time: string }[] = [];
+  for (const day of DAY_KEYS) {
+    if (!scheduleDays[day]) continue;
+    const s = scheduleByDay[day];
+    if (!s) continue;
+    const n = Math.max(1, s.numberOfSlots ?? 1);
+    const times = slotTimesFromRange(s.startTime || "09:00", s.endTime || "17:00", n);
+    times.forEach((time) => recurring.push({ day, time: time.slice(0, 5) || "09:00" }));
+  }
+  return recurring;
+}
 
 /** Generate dates for next 12 weeks for a given day-of-week (0=Sun, 1=Mon, ...). */
 function datesForDayOfWeek(dayOfWeek: number): string[] {
@@ -253,6 +311,8 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
       duration_text?: string; short_description?: string | null; long_description?: string | null; age_restriction?: string | null;
       max_participants_per_slot?: number; price_per_person_cents?: number; tax_included?: boolean; cancellation_policy?: string | null;
       recurring_slots?: { day: string; time: string }[];
+      schedule_days?: Record<string, boolean>;
+      schedule_by_day?: Record<string, ScheduleSlot>;
       media?: { file_url: string; is_cover: boolean; sort_order: number }[];
     };
 
@@ -294,10 +354,34 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
     }
     const experienceId = exp.rows[0].id;
 
-    if (Array.isArray(body.recurring_slots) && body.recurring_slots.length > 0) {
+    let recurringToUse = body.recurring_slots;
+    if (body.schedule_days && body.schedule_by_day && typeof body.schedule_days === "object" && typeof body.schedule_by_day === "object") {
+      recurringToUse = buildRecurringSlotsFromSchedule(body.schedule_days, body.schedule_by_day);
+      try {
+        await query("DELETE FROM experience_schedule_template WHERE experience_id = $1", [experienceId]);
+        for (const day of DAY_KEYS) {
+          if (!body.schedule_days[day]) continue;
+          const s = body.schedule_by_day[day];
+          if (!s) continue;
+          const startTime = String(s.startTime || "09:00").slice(0, 5);
+          const endTime = String(s.endTime || "17:00").slice(0, 5);
+          const n = Math.max(1, Math.min(100, s.numberOfSlots ?? 1));
+          await query(
+            `INSERT INTO experience_schedule_template (experience_id, day_of_week, start_time, end_time, number_of_slots, updated_at)
+             VALUES ($1, $2, $3::time, $4::time, $5, now())
+             ON CONFLICT (experience_id, day_of_week) DO UPDATE SET start_time = $3::time, end_time = $4::time, number_of_slots = $5, updated_at = now()`,
+            [experienceId, day, startTime, endTime, n]
+          );
+        }
+      } catch (e) {
+        console.warn("experience_schedule_template not available:", e);
+      }
+    }
+
+    if (Array.isArray(recurringToUse) && recurringToUse.length > 0) {
       await query("DELETE FROM experience_slots WHERE experience_id = $1", [experienceId]);
       const slotInserts: { date: string; time: string; capacity: number }[] = [];
-      for (const s of body.recurring_slots) {
+      for (const s of recurringToUse) {
         const day = String(s.day).toLowerCase().slice(0, 3);
         const dow = DAY_TO_DOW[day];
         if (dow === undefined) continue;
@@ -401,9 +485,33 @@ router.patch("/", async (req: Request, res: Response): Promise<void> => {
     const expRow = await query<{ max_participants_per_slot: number }>("SELECT max_participants_per_slot FROM experiences WHERE id = $1", [experienceId]);
     const maxPart = expRow.rows[0]?.max_participants_per_slot ?? 10;
 
-    if (Array.isArray(body.recurring_slots) && body.recurring_slots.length > 0) {
+    let recurringToUse = body.recurring_slots as { day: string; time: string }[] | undefined;
+    if (body.schedule_days && body.schedule_by_day && typeof body.schedule_days === "object" && typeof body.schedule_by_day === "object") {
+      recurringToUse = buildRecurringSlotsFromSchedule(body.schedule_days, body.schedule_by_day);
+      try {
+        await query("DELETE FROM experience_schedule_template WHERE experience_id = $1", [experienceId]);
+        for (const day of DAY_KEYS) {
+          if (!body.schedule_days[day]) continue;
+          const s = body.schedule_by_day[day];
+          if (!s) continue;
+          const startTime = String(s.startTime || "09:00").slice(0, 5);
+          const endTime = String(s.endTime || "17:00").slice(0, 5);
+          const n = Math.max(1, Math.min(100, s.numberOfSlots ?? 1));
+          await query(
+            `INSERT INTO experience_schedule_template (experience_id, day_of_week, start_time, end_time, number_of_slots, updated_at)
+             VALUES ($1, $2, $3::time, $4::time, $5, now())
+             ON CONFLICT (experience_id, day_of_week) DO UPDATE SET start_time = $3::time, end_time = $4::time, number_of_slots = $5, updated_at = now()`,
+            [experienceId, day, startTime, endTime, n]
+          );
+        }
+      } catch (e) {
+        console.warn("experience_schedule_template not available:", e);
+      }
+    }
+
+    if (Array.isArray(recurringToUse) && recurringToUse.length > 0) {
       await query("DELETE FROM experience_slots WHERE experience_id = $1", [experienceId]);
-      for (const s of body.recurring_slots as { day: string; time: string }[]) {
+      for (const s of recurringToUse) {
         const day = String(s.day).toLowerCase().slice(0, 3);
         const dow = DAY_TO_DOW[day];
         if (dow === undefined) continue;

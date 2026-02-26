@@ -167,6 +167,34 @@
   .shadow-accent {
     box-shadow: var(--shadow-accent);
   }
+
+  /* Overlay scrollbar: visible only on hover/scroll inside the element */
+  .scrollbar-overlay {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  .scrollbar-overlay:hover,
+  .scrollbar-overlay:focus-within {
+    scrollbar-color: rgba(148, 163, 184, 0.6) transparent;
+  }
+  .scrollbar-overlay::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-overlay::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-overlay::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 3px;
+  }
+  .scrollbar-overlay:hover::-webkit-scrollbar-thumb,
+  .scrollbar-overlay:focus-within::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.6);
+  }
+  .scrollbar-overlay::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.8);
+  }
 }
 
 /* Print: only show the ticket card when user clicks Download Ticket (window.print) */

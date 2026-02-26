@@ -50,13 +50,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch, getApiUrl } from "@/lib/api";
 
 const CATEGORIES = [
+  { id: "bike", label: "Bike Rental", icon: Bike },
+  { id: "car", label: "Car Rental", icon: Car },
   { id: "bus", label: "Bus", icon: Bus },
-  { id: "flight", label: "Flight", icon: Plane },
   { id: "train", label: "Train", icon: Train },
+  { id: "flight", label: "Flight", icon: Plane },
   { id: "hotel", label: "Hotel", icon: Hotel },
   { id: "experience", label: "Experiences", icon: Ticket },
-  { id: "car", label: "Car Rental", icon: Car },
-  { id: "bike", label: "Bike Rental", icon: Bike },
   { id: "events", label: "Events", icon: CalendarDays },
 ] as const;
 
@@ -220,6 +220,7 @@ function formatAcType(t: string | null | undefined): string {
 }
 
 const BookingMarketplace = () => {
+  const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const [tripOrigin, setTripOrigin] = useState("");
   const [tripDestination, setTripDestination] = useState("");
   const [from, setFrom] = useState("");
@@ -342,14 +343,17 @@ const BookingMarketplace = () => {
 
   useEffect(() => {
     if (!token) return;
-    apiFetch<{ trip: { origin: string; destination: string } }>("/api/trips/active", {
+    apiFetch<{ trip: { id: string; origin: string; destination: string } }>("/api/trips/active", {
       headers: { Authorization: `Bearer ${token}` },
     }).then(({ data }) => {
       if (data?.trip) {
+        setActiveTripId(data.trip.id);
         setTripOrigin(data.trip.origin);
         setTripDestination(data.trip.destination);
         setFrom(data.trip.origin);
         setTo(data.trip.destination);
+      } else {
+        setActiveTripId(null);
       }
     });
   }, [token]);
@@ -563,7 +567,7 @@ const BookingMarketplace = () => {
     };
     const { data, error } = await apiFetch<{ id: string; bookingRef: string; status: string }>("/api/car-bookings", {
       method: "POST",
-      body,
+      body: { ...body, tripId: activeTripId ?? undefined },
       headers: { Authorization: `Bearer ${token}` },
     });
     if (error || !data?.id) {
@@ -651,6 +655,7 @@ const BookingMarketplace = () => {
         experienceSlotId: selectedExperienceSlot.id,
         participantsCount: participants,
         totalCents,
+        tripId: activeTripId ?? undefined,
       },
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -716,7 +721,7 @@ const BookingMarketplace = () => {
     const { data, error } = await apiFetch<{ id: string; bookingRef: string; status: string; totalCents: number }>("/api/event-bookings", {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
-      body: { eventId: selectedEvent.id, tickets },
+      body: { eventId: selectedEvent.id, tickets, tripId: activeTripId ?? undefined },
     });
     if (error || !data?.id) {
       setEventError(error || "Failed to create booking");
@@ -996,6 +1001,7 @@ const BookingMarketplace = () => {
         documentUrls: hotelDocUrls.filter((d) => d.label.trim() && d.url.trim()),
         roomType: hotelSelectedRoomType?.name?.trim() || null,
         totalCents: totalCents ?? null,
+        tripId: activeTripId ?? undefined,
       },
     })
       .then(({ data, error }) => {
@@ -2720,6 +2726,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                             totalCents,
                             passengerDetails,
                             documents,
+                            tripId: activeTripId ?? undefined,
                           },
                         });
                         if (error || !data?.id) {

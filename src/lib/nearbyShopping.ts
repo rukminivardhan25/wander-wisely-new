@@ -93,6 +93,26 @@ export type ShopResult = {
   openNow?: boolean;
 };
 
+/** Fallback sample shops when Overpass fails (India). */
+const FALLBACK_SHOPS: Array<{ id: string; name: string; address: string; lat: number; lon: number; areaType: ShopAreaType; category: ShopCategory }> = [
+  { id: "fs-1", name: "Chandpole Bazaar", address: "Chandpole, Jaipur", lat: 26.9189, lon: 75.8123, areaType: "street", category: "handicrafts" },
+  { id: "fs-2", name: "Johari Bazaar", address: "Johari Bazaar, Jaipur", lat: 26.9234, lon: 75.8196, areaType: "street", category: "jewelry" },
+  { id: "fs-3", name: "Pink Square Mall", address: "Malviya Nagar, Jaipur", lat: 26.8601, lon: 75.8067, areaType: "mall", category: "clothes" },
+  { id: "fs-4", name: "Bapu Bazaar", address: "Bapu Bazaar, Jaipur", lat: 26.9089, lon: 75.8012, areaType: "street", category: "souvenirs" },
+  { id: "fs-5", name: "Tripolia Bazaar", address: "Tripolia Bazaar, Jaipur", lat: 26.9261, lon: 75.8095, areaType: "street", category: "handicrafts" },
+  { id: "fs-6", name: "GVK One Mall", address: "Banjara Hills, Hyderabad", lat: 17.4231, lon: 78.4732, areaType: "mall", category: "electronics" },
+  { id: "fs-7", name: "Shilparamam", address: "Madhapur, Hyderabad", lat: 17.4482, lon: 78.3902, areaType: "local_market", category: "handicrafts" },
+  { id: "fs-8", name: "Abids Market", address: "Abids, Hyderabad", lat: 17.3922, lon: 78.4745, areaType: "street", category: "clothes" },
+  { id: "fs-9", name: "Sultan Bazaar", address: "Koti, Hyderabad", lat: 17.3856, lon: 78.4789, areaType: "street", category: "shoes" },
+  { id: "fs-10", name: "Forum Mall", address: "Kukatpally, Hyderabad", lat: 17.4912, lon: 78.3923, areaType: "mall", category: "clothes" },
+  { id: "fs-11", name: "MI Road Footwear", address: "MI Road, Jaipur", lat: 26.9078, lon: 75.7998, areaType: "street", category: "shoes" },
+  { id: "fs-12", name: "Kishanpole Bazaar", address: "Kishanpole, Jaipur", lat: 26.9201, lon: 75.8156, areaType: "street", category: "clothes" },
+];
+
+function isInIndia(lat: number, lon: number): boolean {
+  return lat >= 8 && lat <= 35 && lon >= 68 && lon <= 97;
+}
+
 function distanceKm(
   lat1: number,
   lon1: number,
@@ -130,7 +150,7 @@ function getAreaTypeFromTags(tags: Record<string, unknown>): string | undefined 
   return undefined;
 }
 
-/** Fetch nearby shops from Overpass. Optional areaType/category filter in app layer. */
+/** Fetch nearby shops from Overpass. Optional areaType/category filter in app layer. Falls back to sample data in India when Overpass fails. */
 export async function fetchNearbyShops(
   lat: number,
   lon: number,
@@ -142,9 +162,34 @@ export async function fetchNearbyShops(
   const around = `(around:${radius},${lat},${lon})`;
   const query = `[out:json][timeout:15];(node${around}["shop"];node${around}["amenity"="marketplace"];node${around}["building"="mall"];node${around}["building"="retail"]);out;`;
 
-  const data = await overpassFetch<{ elements?: unknown[] }>(query, {
-    userAgent: USER_AGENT,
-  });
+  let data: { elements?: unknown[] };
+  try {
+    data = await overpassFetch<{ elements?: unknown[] }>(query, {
+      userAgent: USER_AGENT,
+    });
+  } catch {
+    if (isInIndia(lat, lon)) {
+      const categoryShopValues = category ? CATEGORY_TO_OSM_SHOP[category] ?? [] : [];
+      const fallback = FALLBACK_SHOPS.filter((s) => {
+        if (areaType && s.areaType !== areaType) return false;
+        if (category && categoryShopValues.length && s.category !== category) return false;
+        return true;
+      }).map((s) => ({
+        id: s.id,
+        name: s.name,
+        address: s.address,
+        lat: s.lat,
+        lon: s.lon,
+        distanceKm: Math.round(distanceKm(lat, lon, s.lat, s.lon) * 100) / 100,
+        areaType: s.areaType,
+        category: s.category,
+      }));
+      fallback.sort((a, b) => a.distanceKm - b.distanceKm);
+      return fallback.slice(0, 50);
+    }
+    throw new Error("Map data is temporarily unavailable for this area. Try another location or use your current location.");
+  }
+
   const elements = data?.elements ?? [];
   const results: ShopResult[] = [];
   const seen = new Set<string>();

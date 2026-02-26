@@ -15,9 +15,11 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.userId!;
     const body = req.body as {
+      tripId?: string;
       eventId?: string;
       tickets?: { eventTicketTypeId: string; quantity: number }[];
     };
+    const tripId = typeof body.tripId === "string" && /^[0-9a-f-]{36}$/i.test(body.tripId.trim()) ? body.tripId.trim() : null;
     const eventId = body.eventId;
     const tickets = Array.isArray(body.tickets) ? body.tickets : [];
 
@@ -77,8 +79,8 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
 
     const ref = bookingRef();
     await query(
-      `INSERT INTO event_bookings (booking_ref, event_id, user_id, total_cents, status) VALUES ($1, $2, $3, $4, 'confirmed')`,
-      [ref, eventId, userId, totalCents]
+      `INSERT INTO event_bookings (booking_ref, event_id, user_id, trip_id, total_cents, status) VALUES ($1, $2, $3, $4, $5, 'confirmed')`,
+      [ref, eventId, userId, tripId, totalCents]
     );
     const bookRow = await query<{ id: string }>("SELECT id FROM event_bookings WHERE booking_ref = $1", [ref]);
     const bookingId = bookRow.rows[0]?.id;
@@ -113,10 +115,11 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-/** GET /api/event-bookings — List current user's event bookings */
+/** GET /api/event-bookings — List current user's event bookings. Optional ?trip_id=uuid to scope to a trip. */
 router.get("/", async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.userId!;
+    const tripId = typeof req.query.trip_id === "string" && /^[0-9a-f-]{36}$/i.test(req.query.trip_id.trim()) ? req.query.trip_id.trim() : null;
     const rows = await query<{
       id: string;
       booking_ref: string;
@@ -133,14 +136,22 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       start_time: string;
       end_time: string;
     }>(
-      `SELECT b.id, b.booking_ref, b.event_id, b.total_cents, b.status, b.paid_at::text, b.created_at::text,
+      tripId
+        ? `SELECT b.id, b.booking_ref, b.event_id, b.total_cents, b.status, b.paid_at::text, b.created_at::text,
+        e.name AS ev_name, e.city AS ev_city, e.venue_name AS ev_venue,
+        e.start_date::text AS start_date, e.end_date::text AS end_date,
+        e.start_time::text AS start_time, e.end_time::text AS end_time
+       FROM event_bookings b
+       JOIN events e ON e.id = b.event_id
+       WHERE b.user_id = $1 AND b.trip_id = $2 ORDER BY b.created_at DESC`
+        : `SELECT b.id, b.booking_ref, b.event_id, b.total_cents, b.status, b.paid_at::text, b.created_at::text,
         e.name AS ev_name, e.city AS ev_city, e.venue_name AS ev_venue,
         e.start_date::text AS start_date, e.end_date::text AS end_date,
         e.start_time::text AS start_time, e.end_time::text AS end_time
        FROM event_bookings b
        JOIN events e ON e.id = b.event_id
        WHERE b.user_id = $1 ORDER BY b.created_at DESC`,
-      [userId]
+      tripId ? [userId, tripId] : [userId]
     );
 
     res.json({

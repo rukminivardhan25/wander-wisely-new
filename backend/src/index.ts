@@ -1,4 +1,5 @@
 import "dotenv/config";
+import path from "path";
 import express from "express";
 import cors from "cors";
 import { pool } from "./config/db.js";
@@ -6,6 +7,9 @@ import authRoutes from "./routes/auth.js";
 import tripsRoutes from "./routes/trips.js";
 import destinationsRoutes from "./routes/destinations.js";
 import postsRoutes from "./routes/posts.js";
+import uploadRoutes from "./routes/upload.js";
+import meRoutes from "./routes/me.js";
+import placesRoutes from "./routes/places.js";
 import transportRoutes from "./routes/transport.js";
 import bookingsRoutes from "./routes/bookings.js";
 import carBookingsRoutes from "./routes/carBookings.js";
@@ -17,6 +21,8 @@ import eventsRoutes from "./routes/events.js";
 import eventBookingsRoutes from "./routes/eventBookings.js";
 import hotelsRoutes from "./routes/hotels.js";
 import hotelBookingsRoutes from "./routes/hotelBookings.js";
+import feedbackRoutes from "./routes/feedback.js";
+import adminFeedbackRoutes from "./routes/adminFeedback.js";
 
 /** Log DATABASE_URL (password redacted) so you can confirm main app and vendor hub use the same DB. */
 function logDbUrl(label: string, url: string): void {
@@ -32,20 +38,24 @@ function logDbUrl(label: string, url: string): void {
 const app = express();
 const PORT = process.env.PORT ?? 3001;
 
-const corsOrigin = process.env.CORS_ORIGIN ?? "http://localhost:8080,http://localhost:8081";
+const defaultOrigins = "http://localhost:8080,http://localhost:8081,http://localhost:5173,http://localhost:5174,http://localhost:8083";
+const corsOrigin = process.env.CORS_ORIGIN ?? defaultOrigins;
 const corsOrigins = corsOrigin.split(",").map((o) => o.trim()).filter(Boolean);
-const allowedSet = new Set(corsOrigins.length ? corsOrigins : ["http://localhost:8080", "http://localhost:8081"]);
+const allowedSet = new Set([
+  ...(corsOrigins.length ? corsOrigins : defaultOrigins.split(",").map((o) => o.trim())),
+  "http://localhost:8083", // admin-main
+]);
 app.use(cors({
   origin: (origin, cb) => {
-    // Preflight or same-origin requests may omit Origin
     if (!origin) return cb(null, true);
     if (allowedSet.has(origin)) return cb(null, origin);
     return cb(null, false);
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "Content-Disposition", "X-Admin-Key"],
   optionsSuccessStatus: 204,
+  preflightContinue: false,
 }));
 app.use(express.json());
 
@@ -57,6 +67,10 @@ app.use("/api/auth", authRoutes);
 app.use("/api/trips", tripsRoutes);
 app.use("/api/destinations", destinationsRoutes);
 app.use("/api/posts", postsRoutes);
+app.use("/api/upload", uploadRoutes);
+app.use("/api/me", meRoutes);
+app.use("/api/places", placesRoutes);
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 app.use("/api/transport", transportRoutes);
 app.use("/api/bookings", bookingsRoutes);
 app.use("/api/car-bookings", carBookingsRoutes);
@@ -68,6 +82,8 @@ app.use("/api/events", eventsRoutes);
 app.use("/api/event-bookings", eventBookingsRoutes);
 app.use("/api/hotels", hotelsRoutes);
 app.use("/api/hotel-bookings", hotelBookingsRoutes);
+app.use("/api/feedback", feedbackRoutes);
+app.use("/api/admin/feedback", adminFeedbackRoutes);
 
 app.listen(PORT, () => {
   const dbUrl = process.env.DATABASE_URL ?? "";

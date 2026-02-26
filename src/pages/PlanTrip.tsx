@@ -19,7 +19,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "@/lib/api";
 
-const budgetOptions = ["Budget", "Medium", "Luxury"];
 const travelTypes = ["Solo", "Couple", "Family", "Friends"];
 const interests = [
   { label: "Food", emoji: "🍜" },
@@ -78,11 +77,54 @@ type ItineraryDay = {
   };
 };
 
+/** Parse cost range string to [min, max]. Handles "Free", "₹200–₹400", "₹1,000–₹1,500". Never merge digits (e.g. "500 1000" must not become 5001000). */
+const MAX_SANE_COST = 10_000_000; // 1 crore per activity cap to avoid one misparse blowing up total
+
+function parseCostRangeForTotal(s: string | undefined): [number, number] | null {
+  if (!s || !s.trim()) return null;
+  const t = s.trim();
+  if (/^free$/i.test(t)) return [0, 0];
+  const rangeMatch = t.match(/(\d[\d,.]*)\s*[–\-]\s*(\d[\d,.]*)/);
+  if (rangeMatch) {
+    const min = Math.min(MAX_SANE_COST, parseFloat(rangeMatch[1].replace(/,/g, "")) || 0);
+    const max = Math.min(MAX_SANE_COST, parseFloat(rangeMatch[2].replace(/,/g, "")) || 0);
+    return [min, max];
+  }
+  // Find all number-like parts (avoid merging "500" and "1000" into "5001000")
+  const parts = t.match(/\d[\d,.]*/g);
+  if (parts && parts.length >= 2) {
+    const a = Math.min(MAX_SANE_COST, parseFloat(parts[0].replace(/,/g, "")) || 0);
+    const b = Math.min(MAX_SANE_COST, parseFloat(parts[1].replace(/,/g, "")) || 0);
+    return [Math.min(a, b), Math.max(a, b)];
+  }
+  if (parts && parts.length === 1) {
+    const n = Math.min(MAX_SANE_COST, parseFloat(parts[0].replace(/,/g, "")) || 0);
+    return [n, n];
+  }
+  return null;
+}
+
+function computeEstimatedTotalRange(itineraries: ItineraryDay[]): { min: number; max: number } | null {
+  let totalMin = 0;
+  let totalMax = 0;
+  let hasAny = false;
+  itineraries.forEach((day) => {
+    (day.content.activities ?? []).forEach((act) => {
+      const range = parseCostRangeForTotal(act.costEstimate);
+      if (range) {
+        totalMin += range[0];
+        totalMax += range[1];
+        hasAny = true;
+      }
+    });
+  });
+  return hasAny ? { min: totalMin, max: totalMax } : null;
+}
+
 const PlanTrip = () => {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [days, setDays] = useState("");
-  const [budget, setBudget] = useState("");
   const [budgetAmount, setBudgetAmount] = useState("");
   const [travelType, setTravelType] = useState("");
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
@@ -92,6 +134,7 @@ const PlanTrip = () => {
   const [selectedDay, setSelectedDay] = useState<number>(1);
   const [makingActive, setMakingActive] = useState(false);
   const [confirmMakeMyTripOpen, setConfirmMakeMyTripOpen] = useState(false);
+  const [confirmedBudgetAmount, setConfirmedBudgetAmount] = useState("");
   const { token, user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -125,13 +168,13 @@ const PlanTrip = () => {
       toast({ title: "Missing fields", description: "Please fill in From, To, and Days (1–30).", variant: "destructive" });
       return;
     }
-    if (!budget || !travelType) {
-      toast({ title: "Missing fields", description: "Please select Budget and Travel type.", variant: "destructive" });
+    if (!travelType) {
+      toast({ title: "Missing fields", description: "Please select Travel type.", variant: "destructive" });
       return;
     }
     const budgetNum = budgetAmount.trim() ? parseFloat(budgetAmount.replace(/[^0-9.]/g, "")) : undefined;
-    if (budgetAmount.trim() && (isNaN(budgetNum!) || budgetNum! <= 0)) {
-      toast({ title: "Invalid budget", description: "Enter a valid total budget amount (e.g. 50000 or ₹50000).", variant: "destructive" });
+    if (!budgetAmount.trim() || budgetNum == null || isNaN(budgetNum) || budgetNum <= 0) {
+      toast({ title: "Missing budget", description: "Enter your total budget amount (e.g. 50000 or ₹50000 or $1200).", variant: "destructive" });
       return;
     }
 
@@ -145,13 +188,12 @@ const PlanTrip = () => {
           origin: from.trim(),
           destination: to.trim(),
           days: daysNum,
-          budget,
           travel_type: travelType,
           interests: selectedInterests,
           transport_preference: transportPref || undefined,
           budget_amount: budgetNum,
         },
-        timeoutMs: 60000,
+        timeoutMs: 180000,
         headers: { Authorization: `Bearer ${token}` },
       }
     );
@@ -160,7 +202,9 @@ const PlanTrip = () => {
     if (networkError || error) {
       toast({
         title: networkError ? "Connection failed" : "Generation failed",
-        description: error ?? "Could not generate itinerary. Try again.",
+        description: networkError
+          ? (error ?? "Could not reach the server. Start the backend (npm run dev in the backend folder) and ensure it runs on the URL shown in the app.")
+          : (error ?? "Could not generate itinerary. Try again."),
         variant: "destructive",
       });
       return;
@@ -168,6 +212,7 @@ const PlanTrip = () => {
     if (data?.trip && data?.itineraries) {
       setResult(data);
       setSelectedDay(1);
+      setConfirmedBudgetAmount("");
       toast({ title: "Itinerary ready", description: "Your trip plan is ready." });
     }
   };
@@ -201,6 +246,30 @@ const PlanTrip = () => {
     const handleMakeMyTrip = async () => {
       if (!token || !result?.trip.id) return;
       setMakingActive(true);
+      const budgetNum = confirmedBudgetAmount.trim()
+        ? parseFloat(confirmedBudgetAmount.replace(/[^0-9.]/g, ""))
+        : undefined;
+      if (confirmedBudgetAmount.trim() && (budgetNum == null || isNaN(budgetNum) || budgetNum <= 0)) {
+        toast({ title: "Invalid budget", description: "Enter a valid total budget amount (e.g. 60150).", variant: "destructive" });
+        setMakingActive(false);
+        return;
+      }
+      if (budgetNum != null && budgetNum > 0) {
+        const patchRes = await apiFetch<{ message: string }>(`/api/trips/${result.trip.id}`, {
+          method: "PATCH",
+          body: { budget_amount: budgetNum },
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (patchRes.error || patchRes.networkError) {
+          toast({
+            title: patchRes.networkError ? "Connection failed" : "Could not save budget",
+            description: patchRes.error ?? "Please try again.",
+            variant: "destructive",
+          });
+          setMakingActive(false);
+          return;
+        }
+      }
       const { error, networkError } = await apiFetch(`/api/trips/${result.trip.id}/activate`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
@@ -258,6 +327,40 @@ const PlanTrip = () => {
                   </Button>
                 </div>
               </div>
+              {/* Estimated total and confirm budget */}
+              {(() => {
+                const totalRange = computeEstimatedTotalRange(result.itineraries);
+                const budgetNum = confirmedBudgetAmount.trim() ? parseFloat(confirmedBudgetAmount.replace(/,/g, "")) : NaN;
+                const budgetOutOfRange = totalRange != null && !Number.isNaN(budgetNum) && (budgetNum < totalRange.min || budgetNum > totalRange.max);
+                return (
+                  <div className="pt-3 mt-3 border-t border-border/60 space-y-2">
+                    {totalRange != null && (
+                      <p className="text-sm text-muted-foreground">
+                        Estimated total trip cost: <span className="font-semibold text-foreground">₹{Math.round(totalRange.min).toLocaleString("en-IN")}–₹{Math.round(totalRange.max).toLocaleString("en-IN")}</span>
+                      </p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label htmlFor="confirm-budget" className="text-sm text-muted-foreground whitespace-nowrap">
+                        Confirm your total budget for this trip (₹):
+                      </label>
+                      <Input
+                        id="confirm-budget"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="e.g. 60150"
+                        value={confirmedBudgetAmount}
+                        onChange={(e) => setConfirmedBudgetAmount(e.target.value)}
+                        className="w-32 h-8 text-sm"
+                      />
+                    </div>
+                    {budgetOutOfRange && (
+                      <p className="text-sm text-amber-600 dark:text-amber-400">
+                        Your budget is outside the estimated range for this trip.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
               {/* Plan actions: always visible bar */}
               <div className="flex flex-wrap items-center gap-2 pt-3 mt-3 border-t border-border/60">
                 <Button variant="outline" size="sm" onClick={() => setResult(null)} className="flex-1 sm:flex-none">
@@ -383,6 +486,7 @@ const PlanTrip = () => {
                                   activityIndex: j,
                                   daySummary: currentDayData.content.summary,
                                   fullResult: result,
+                                  returnTo: "plan-trip",
                                 },
                               })
                             }
@@ -501,28 +605,14 @@ const PlanTrip = () => {
 
             <div>
               <label className="text-sm font-medium text-card-foreground mb-2 flex items-center gap-2">
-                <Wallet className="w-4 h-4 text-accent" /> Budget
+                <Wallet className="w-4 h-4 text-accent" /> Total budget
               </label>
-              <div className="flex gap-3 mb-3">
-                {budgetOptions.map((b) => (
-                  <Button
-                    key={b}
-                    type="button"
-                    variant={budget === b ? "hero" : "outline"}
-                    size="sm"
-                    onClick={() => setBudget(b)}
-                    className="flex-1"
-                  >
-                    {b}
-                  </Button>
-                ))}
-              </div>
               <Input
-                placeholder="Total budget (e.g. ₹50000 or $1200) — optional"
+                placeholder="e.g. ₹50000 or $1200"
                 value={budgetAmount}
                 onChange={(e) => setBudgetAmount(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground mt-1">We'll tailor cost estimates to your budget.</p>
+              <p className="text-xs text-muted-foreground mt-1">Cost estimates will be tailored to this amount for the whole trip.</p>
             </div>
 
             <div>

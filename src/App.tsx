@@ -6,8 +6,10 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import Index from "./pages/Index";
 import Explore from "./pages/Explore";
+import ExploreDetail from "./pages/ExploreDetail";
 import PlanTrip from "./pages/PlanTrip";
 import MyTrip from "./pages/MyTrip";
+import MyTrips from "./pages/MyTrips";
 import BookingMarketplace from "./pages/BookingMarketplace";
 import HotelReceipt from "./pages/HotelReceipt";
 import PaymentPage from "./pages/PaymentPage";
@@ -19,6 +21,12 @@ import NearbyUtilities from "./pages/NearbyUtilities";
 import TransportBook from "./pages/TransportBook";
 import Community from "./pages/Community";
 import About from "./pages/About";
+import HelpPage from "./pages/Help";
+import TravelTips from "./pages/TravelTips";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
+import Feedback from "./pages/Feedback";
+import Complaint from "./pages/Complaint";
 import SignIn from "./pages/SignIn";
 import SignUp from "./pages/SignUp";
 import NotFound from "./pages/NotFound";
@@ -35,9 +43,12 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/explore" element={<Explore />} />
+            <Route path="/explore/:id" element={<ExploreDetail />} />
             <Route path="/plan-trip" element={<PlanTrip />} />
             <Route path="/plan-trip/activity" element={<ActivityDetail />} />
             <Route path="/my-trip" element={<MyTrip />} />
+            <Route path="/my-trips" element={<MyTrips />} />
+            <Route path="/my-trips/:tripId" element={<MyTrip />} />
             <Route path="/my-trip/nearby-restaurants" element={<NearbyRestaurants />} />
             <Route path="/my-trip/nearby-shopping" element={<NearbyShopping />} />
             <Route path="/my-trip/nearby-utilities" element={<NearbyUtilities />} />
@@ -48,6 +59,12 @@ const App = () => (
             <Route path="/book/transport" element={<TransportBook />} />
             <Route path="/community" element={<Community />} />
             <Route path="/about" element={<About />} />
+            <Route path="/help" element={<HelpPage />} />
+            <Route path="/travel-tips" element={<TravelTips />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/feedback" element={<Feedback />} />
+            <Route path="/complaint" element={<Complaint />} />
             <Route path="/signin" element={<SignIn />} />
             <Route path="/signup" element={<SignUp />} />
             <Route path="*" element={<NotFound />} />

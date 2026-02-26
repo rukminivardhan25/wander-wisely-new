@@ -7,6 +7,7 @@ const router = Router();
 router.use(authMiddleware);
 
 const createSchema = z.object({
+  tripId: z.string().uuid().optional(),
   hotelBranchId: z.string().uuid(),
   listingId: z.string().uuid(),
   checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -26,10 +27,11 @@ function bookingRef(): string {
   return `HTL-${s()}-${s()}`;
 }
 
-/** GET /api/hotel-bookings — List current user's hotel bookings */
+/** GET /api/hotel-bookings — List current user's hotel bookings. Optional ?trip_id=uuid to scope to a trip. */
 router.get("/", async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.userId!;
+    const tripId = typeof req.query.trip_id === "string" && /^[0-9a-f-]{36}$/i.test(req.query.trip_id.trim()) ? req.query.trip_id.trim() : null;
     const result = await query<{
       id: string;
       booking_ref: string;
@@ -46,10 +48,14 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       total_cents: number | null;
       created_at: string;
     }>(
-      `SELECT id, booking_ref, hotel_branch_id, listing_id, check_in, check_out, nights,
+      tripId
+        ? `SELECT id, booking_ref, hotel_branch_id, listing_id, check_in, check_out, nights,
+              guest_name, guest_phone, guest_email, status, room_number, total_cents, created_at
+       FROM hotel_bookings WHERE user_id = $1 AND trip_id = $2 ORDER BY created_at DESC`
+        : `SELECT id, booking_ref, hotel_branch_id, listing_id, check_in, check_out, nights,
               guest_name, guest_phone, guest_email, status, room_number, total_cents, created_at
        FROM hotel_bookings WHERE user_id = $1 ORDER BY created_at DESC`,
-      [userId]
+      tripId ? [userId, tripId] : [userId]
     );
     res.json({
       bookings: result.rows.map((r) => ({
@@ -93,12 +99,13 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
     const ref = bookingRef();
     await pool.query(
       `INSERT INTO hotel_bookings (
-        user_id, booking_ref, hotel_branch_id, listing_id, check_in, check_out, nights,
+        user_id, trip_id, booking_ref, hotel_branch_id, listing_id, check_in, check_out, nights,
         guest_name, guest_phone, guest_email, requirements_text, document_urls, status,
         room_type, total_cents
-      ) VALUES ($1, $2, $3, $4, $5::date, $6::date, $7, $8, $9, $10, $11, $12::jsonb, 'pending_vendor', $13, $14)`,
+      ) VALUES ($1, $2, $3, $4, $5, $6::date, $7::date, $8, $9, $10, $11, $12, $13::jsonb, 'pending_vendor', $14, $15)`,
       [
         userId,
+        d.tripId ?? null,
         ref,
         d.hotelBranchId,
         d.listingId,

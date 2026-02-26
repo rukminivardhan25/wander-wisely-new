@@ -9,6 +9,7 @@ const db = { query, pool };
 const router = Router();
 
 const createCarBookingSchema = z.object({
+  tripId: z.string().uuid().optional(),
   listingId: z.string().uuid(),
   carId: z.string().uuid(),
   areaId: z.string().uuid(),
@@ -35,10 +36,11 @@ function otp(): string {
 
 router.use(authMiddleware);
 
-/** GET /api/car-bookings — List current user's car bookings */
+/** GET /api/car-bookings — List current user's car bookings. Optional ?trip_id=uuid to scope to a trip. */
 router.get("/", async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.userId!;
+    const tripId = typeof req.query.trip_id === "string" && /^[0-9a-f-]{36}$/i.test(req.query.trip_id.trim()) ? req.query.trip_id.trim() : null;
     const pool = db.pool;
     const result = await pool.query<{
       id: string;
@@ -61,10 +63,14 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       paid_at: string | null;
       created_at: string;
     }>(
-      `SELECT id, booking_ref, listing_id, car_id, area_id, booking_type, city, pickup_point, drop_point,
+      tripId
+        ? `SELECT id, booking_ref, listing_id, car_id, area_id, booking_type, city, pickup_point, drop_point,
+       travel_time, from_city, to_city, travel_date, passengers, total_cents, status, otp, paid_at, created_at
+       FROM car_bookings WHERE user_id = $1 AND trip_id = $2 ORDER BY created_at DESC`
+        : `SELECT id, booking_ref, listing_id, car_id, area_id, booking_type, city, pickup_point, drop_point,
        travel_time, from_city, to_city, travel_date, passengers, total_cents, status, otp, paid_at, created_at
        FROM car_bookings WHERE user_id = $1 ORDER BY created_at DESC`,
-      [userId]
+      tripId ? [userId, tripId] : [userId]
     );
     const bookings = result.rows.map((r) => ({
       id: r.id,
@@ -123,12 +129,13 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
         : null;
     await pool.query(
       `INSERT INTO car_bookings (
-        user_id, booking_ref, listing_id, car_id, area_id, booking_type,
+        user_id, trip_id, booking_ref, listing_id, car_id, area_id, booking_type,
         city, pickup_point, drop_point, travel_time, from_city, to_city,
         travel_date, passengers, total_cents, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::time, $11, $12, $13::date, $14, $15, 'pending_vendor')`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::time, $12, $13, $14::date, $15, $16, 'pending_vendor')`,
       [
         userId,
+        d.tripId ?? null,
         ref,
         d.listingId,
         d.carId,

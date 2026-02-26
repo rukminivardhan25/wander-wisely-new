@@ -1,12 +1,25 @@
 const ADMIN_API_URL = import.meta.env.VITE_ADMIN_API_URL ?? "http://localhost:3003";
+const MAIN_APP_API_URL = import.meta.env.VITE_MAIN_APP_API_URL ?? "http://localhost:3001";
+const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY ?? "";
 
-function getUrl(path: string): string {
-  return `${ADMIN_API_URL.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+function getUrl(base: string, path: string): string {
+  return `${base.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 export async function adminFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const url = getUrl(path);
+  const url = getUrl(ADMIN_API_URL, path);
   const res = await fetch(url, { ...options, headers: { "Content-Type": "application/json", ...options?.headers } });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string }).error ?? "Request failed");
+  return data as T;
+}
+
+/** Call main app backend (wander-wisely) for feedback/complaints. Sends X-Admin-Key if set. */
+export async function mainAppFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const url = getUrl(MAIN_APP_API_URL, path);
+  const headers: Record<string, string> = { "Content-Type": "application/json", ...(options?.headers as Record<string, string>) };
+  if (ADMIN_API_KEY) headers["X-Admin-Key"] = ADMIN_API_KEY;
+  const res = await fetch(url, { ...options, headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string }).error ?? "Request failed");
   return data as T;

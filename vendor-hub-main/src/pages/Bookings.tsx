@@ -2944,8 +2944,8 @@ export default function Bookings() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-display font-bold text-foreground">Bookings</h1>
+      <div>
+        <h1 className="text-2xl font-display font-bold text-foreground">Bookings</h1>
           <p className="text-muted-foreground mt-1">
             Manage your incoming and past bookings by category.
           </p>
@@ -3230,7 +3230,7 @@ export default function Bookings() {
                               </TableCell>
                               <TableCell className="py-3">
                                 <span
-                                  className={cn(
+                    className={cn(
                                     "inline-flex text-xs font-medium px-2 py-0.5 rounded-full capitalize",
                                     b.status === "pending_vendor" && "bg-amber-100 text-amber-800",
                                     b.status === "approved_awaiting_payment" && "bg-blue-100 text-blue-800",
@@ -3292,9 +3292,9 @@ export default function Bookings() {
                           ))}
                         </TableBody>
                       </Table>
-                    </div>
+          </div>
                         )}
-                      </div>
+        </div>
                     </div>
                   )}
                 </>
@@ -3348,17 +3348,17 @@ export default function Bookings() {
                                     >
                                       <Eye className="h-4 w-4" />
                                     </Button>
-                                  </div>
+            </div>
                                 </CardContent>
                               </Card>
                             ))}
-                          </div>
+            </div>
                         ) : (
                           <p className="text-sm text-muted-foreground py-6 text-center">
                             No flights scheduled for {dateFilter}. Schedules are shown from the database for the selected date.
                           </p>
                         )}
-                      </div>
+            </div>
                       <div>
                         <h3 className="text-sm font-semibold text-foreground mb-2">Flight booking requests</h3>
                         <div className="rounded-xl border border-slate-200 overflow-hidden">
@@ -3416,7 +3416,7 @@ export default function Bookings() {
                               )}
                             </TableBody>
                           </Table>
-                        </div>
+      </div>
                       </div>
                     </>
                   )}

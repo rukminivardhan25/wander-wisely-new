@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { MapPin, Sparkles, Users, Globe, ArrowRight, Star, Shield, Zap } from "lucide-react";
+import { Sparkles, Users, ArrowRight, Star, Zap, Compass, ListTodo, FolderOpen, Ticket, Car, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Layout from "@/components/Layout";
 import heroImg from "@/assets/hero-travel.jpg";
@@ -25,28 +25,60 @@ const destinations = [
   { name: "Historic Cities", image: destCity, tag: "Culture", count: "320+ cities" },
   { name: "Jungle Escapes", image: destJungle, tag: "Nature", count: "150+ parks" },
   { name: "Sacred Temples", image: destTemple, tag: "Spiritual", count: "200+ sites" },
+  {
+    name: "Desert Dunes",
+    image: "https://images.unsplash.com/photo-1509316785289-025f5b846b35?w=800&q=80",
+    tag: "Adventure",
+    count: "90+ experiences",
+  },
+  {
+    name: "Lakes & Rivers",
+    image: "https://images.unsplash.com/photo-1505142468610-359e7d316be0?w=800&q=80",
+    tag: "Nature",
+    count: "120+ spots",
+  },
 ];
 
 const features = [
   {
     icon: Sparkles,
     title: "AI Trip Planner",
-    desc: "Get personalized day-by-day itineraries powered by AI, tailored to your budget and interests.",
+    desc: "Get personalized day-by-day itineraries powered by AI for your destination and dates.",
   },
   {
-    icon: Globe,
-    title: "Smart Maps",
-    desc: "Interactive maps with restaurants, hotels, attractions, and real-time navigation.",
+    icon: Compass,
+    title: "Explore Destinations",
+    desc: "Browse curated places by category: History, Nature, Spiritual, Beaches, and more.",
+  },
+  {
+    icon: ListTodo,
+    title: "My Plan",
+    desc: "Your current itinerary, activities, and day-by-day plan all in one place.",
+  },
+  {
+    icon: FolderOpen,
+    title: "My Trips",
+    desc: "Access and manage all your saved and past trips anytime.",
+  },
+  {
+    icon: Ticket,
+    title: "Events & Experiences",
+    desc: "Book events, tours, and experiences from your itinerary with a simple checkout flow.",
+  },
+  {
+    icon: Car,
+    title: "Transport & Bookings",
+    desc: "Book transport and manage your travel bookings in one place.",
+  },
+  {
+    icon: UtensilsCrossed,
+    title: "Nearby",
+    desc: "Discover restaurants, shopping, and essentials near your stay.",
   },
   {
     icon: Users,
     title: "Travel Community",
-    desc: "Share experiences, tips, and photos with fellow travelers from around the world.",
-  },
-  {
-    icon: Shield,
-    title: "Safety First",
-    desc: "Real-time safety info, weather alerts, and community-verified travel tips.",
+    desc: "Share experiences, tips, and connect with fellow travelers worldwide.",
   },
 ];
 

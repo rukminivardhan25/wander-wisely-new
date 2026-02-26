@@ -12,6 +12,7 @@ const passengerSchema = z.object({
 });
 
 const createFlightBookingSchema = z.object({
+  tripId: z.string().uuid().optional(),
   listingId: z.string().uuid(),
   flightId: z.string().uuid(),
   scheduleId: z.string().optional().nullable(),
@@ -39,10 +40,11 @@ function getDb() {
   return getTransportPool();
 }
 
-/** GET /api/flight-bookings — List current user's flight bookings */
+/** GET /api/flight-bookings — List current user's flight bookings. Optional ?trip_id=uuid to scope to a trip. */
 router.get("/", async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.userId!;
+    const tripId = typeof req.query.trip_id === "string" && /^[0-9a-f-]{36}$/i.test(req.query.trip_id.trim()) ? req.query.trip_id.trim() : null;
     const pool = getDb();
     const result = await pool.query<{
       id: string;
@@ -61,12 +63,18 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       created_at: string;
       all_seats_assigned: boolean | null;
     }>(
-      `SELECT id, booking_ref, listing_id, flight_id, schedule_id, route_from, route_to,
+      tripId
+        ? `SELECT id, booking_ref, listing_id, flight_id, schedule_id, route_from, route_to,
+       travel_date, passengers, total_cents, status, otp, paid_at, created_at,
+       (SELECT COALESCE(BOOL_AND(fbp.seat_number IS NOT NULL AND trim(fbp.seat_number) <> ''), false)
+        FROM flight_booking_passengers fbp WHERE fbp.flight_booking_id = flight_bookings.id) AS all_seats_assigned
+       FROM flight_bookings WHERE user_id = $1 AND trip_id = $2 ORDER BY created_at DESC`
+        : `SELECT id, booking_ref, listing_id, flight_id, schedule_id, route_from, route_to,
        travel_date, passengers, total_cents, status, otp, paid_at, created_at,
        (SELECT COALESCE(BOOL_AND(fbp.seat_number IS NOT NULL AND trim(fbp.seat_number) <> ''), false)
         FROM flight_booking_passengers fbp WHERE fbp.flight_booking_id = flight_bookings.id) AS all_seats_assigned
        FROM flight_bookings WHERE user_id = $1 ORDER BY created_at DESC`,
-      [userId]
+      tripId ? [userId, tripId] : [userId]
     );
     const bookings = result.rows.map((r) => ({
       id: r.id,
@@ -117,11 +125,11 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
     const ref = bookingRef();
     const insertResult = await pool.query<{ id: string }>(
       `INSERT INTO flight_bookings (
-        user_id, booking_ref, listing_id, flight_id, schedule_id,
+        user_id, trip_id, booking_ref, listing_id, flight_id, schedule_id,
         route_from, route_to, travel_date, passengers, total_cents, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::date, $9, $10, 'pending_vendor')
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::date, $10, $11, 'pending_vendor')
       RETURNING id`,
-      [userId, ref, d.listingId, d.flightId, d.scheduleId ?? null, d.routeFrom, d.routeTo, d.travelDate, d.passengers, d.totalCents]
+      [userId, d.tripId ?? null, ref, d.listingId, d.flightId, d.scheduleId ?? null, d.routeFrom, d.routeTo, d.travelDate, d.passengers, d.totalCents]
     );
     const bookingId = insertResult.rows[0]?.id;
     if (!bookingId) {

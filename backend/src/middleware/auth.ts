@@ -35,3 +35,20 @@ export function authMiddleware(
     res.status(401).json({ error: "Invalid or expired token" });
   }
 }
+
+/** Sets req.userId when a valid token is present; does not 401 when missing. Use for optional-auth routes (e.g. list posts). */
+export function optionalAuthMiddleware(req: Request, _res: Response, next: NextFunction): void {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!token) {
+    next();
+    return;
+  }
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    req.userId = decoded.sub;
+  } catch {
+    // ignore invalid/expired
+  }
+  next();
+}

@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from "react-router-dom";
-import { LayoutDashboard, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, ShieldCheck, MessageSquare, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function AdminLayout() {
@@ -35,6 +35,30 @@ export function AdminLayout() {
           >
             <ShieldCheck size={20} />
             Verification
+          </NavLink>
+          <NavLink
+            to="/feedback-users"
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                isActive ? "bg-sidebar-primary text-primary-foreground" : "hover:bg-sidebar-hover text-forest-100"
+              )
+            }
+          >
+            <MessageSquare size={20} />
+            feedback-users
+          </NavLink>
+          <NavLink
+            to="/complaint-users"
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                isActive ? "bg-sidebar-primary text-primary-foreground" : "hover:bg-sidebar-hover text-forest-100"
+              )
+            }
+          >
+            <AlertCircle size={20} />
+            complaint-users
           </NavLink>
         </nav>
       </aside>
