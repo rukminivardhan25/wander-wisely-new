@@ -43,6 +43,9 @@ import { getStoredBusBookings, type StoredBusBooking } from "@/lib/bookingsStora
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { NearbyRestaurantsContent } from "@/pages/NearbyRestaurants";
+import { NearbyShoppingContent } from "@/pages/NearbyShopping";
+import { NearbyUtilitiesContent } from "@/pages/NearbyUtilities";
 
 /** Car booking from GET /api/car-bookings */
 type CarBookingItem = {
@@ -933,6 +936,11 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                   >
                     <Plus className="h-4 w-4" /> Add Expense
                   </Button>
+                  <Button size="sm" variant="secondary" className="bg-white/90 text-slate-800 hover:bg-white shadow-md rounded-xl gap-1.5" asChild>
+                    <Link to="/my-trip/nearby-restaurants">
+                      <Utensils className="h-4 w-4" /> Nearby Restaurants
+                    </Link>
+                  </Button>
                   <Button size="sm" variant="secondary" className="bg-white/90 text-slate-800 hover:bg-white shadow-md rounded-xl gap-1.5">
                     <MapIcon className="h-4 w-4" /> View Map
                   </Button>
@@ -1196,7 +1204,6 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                   <TabsTrigger value="bookings" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm">Bookings</TabsTrigger>
                   <TabsTrigger value="restaurants" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm">Restaurants</TabsTrigger>
                   <TabsTrigger value="shopping" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm">Shopping</TabsTrigger>
-                  <TabsTrigger value="emergency" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm">Emergency</TabsTrigger>
                   <TabsTrigger value="nearby" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm">Nearby</TabsTrigger>
                 </TabsList>
               </div>
@@ -1484,74 +1491,25 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                   </div>
                 </TabsContent>
                 <TabsContent value="restaurants" className="mt-0">
-                  <p className="text-sm text-muted-foreground mb-4">Recommended restaurants in {data.trip.destination}.</p>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {["Top rated", "Budget-friendly", "Luxury", "Trending"].map((t, i) => (
-                      <div key={i} className="rounded-2xl border border-slate-200 overflow-hidden">
-                        <div className="h-24 bg-slate-100" />
-                        <div className="p-3">
-                          <p className="font-medium text-foreground">{t} options</p>
-                          <p className="text-xs text-muted-foreground">Rating · Cuisine · ₹₹</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <NearbyRestaurantsContent
+                    showBackLink={false}
+                    defaultLocation={data?.trip?.destination ?? ""}
+                    compact={true}
+                  />
                 </TabsContent>
                 <TabsContent value="shopping" className="mt-0">
-                  <p className="text-sm text-muted-foreground mb-4">Markets and shopping in {data.trip.destination}.</p>
-                  <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-4">
-                    {["Famous markets", "Malls", "Street markets", "Special items"].map((s, i) => (
-                      <div key={i} className="rounded-2xl border border-slate-200 overflow-hidden aspect-square bg-slate-100" />
-                    ))}
-                  </div>
-                </TabsContent>
-                <TabsContent value="emergency" className="mt-0">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="rounded-2xl border-2 border-red-200 bg-red-50/50 p-4 flex gap-3">
-                      <Stethoscope className="h-8 w-8 text-red-600 shrink-0" />
-                      <div>
-                        <p className="font-semibold text-foreground">Nearest hospital</p>
-                        <p className="text-sm text-muted-foreground">—</p>
-                        <Button size="sm" variant="destructive" className="mt-2 rounded-lg">Call</Button>
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border-2 border-red-200 bg-red-50/50 p-4 flex gap-3">
-                      <Building2 className="h-8 w-8 text-red-600 shrink-0" />
-                      <div>
-                        <p className="font-semibold text-foreground">Police station</p>
-                        <p className="text-sm text-muted-foreground">—</p>
-                        <Button size="sm" variant="destructive" className="mt-2 rounded-lg">Call</Button>
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-slate-200 p-4 flex gap-3">
-                      <Phone className="h-8 w-8 text-slate-600 shrink-0" />
-                      <div>
-                        <p className="font-semibold text-foreground">Emergency numbers</p>
-                        <p className="text-sm text-muted-foreground">112 · 100 · 102</p>
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-slate-200 p-4 flex gap-3">
-                      <Building2 className="h-8 w-8 text-slate-600 shrink-0" />
-                      <div>
-                        <p className="font-semibold text-foreground">Embassy</p>
-                        <p className="text-sm text-muted-foreground">If international</p>
-                      </div>
-                    </div>
-                  </div>
+                  <NearbyShoppingContent
+                    showBackLink={false}
+                    defaultLocation={data?.trip?.destination ?? ""}
+                    compact={true}
+                  />
                 </TabsContent>
                 <TabsContent value="nearby" className="mt-0">
-                  <p className="text-sm text-muted-foreground mb-4">Use your location or trip destination to see nearby places.</p>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    {["Restaurants nearby", "Shops", "ATMs", "Hospitals"].map((label, i) => (
-                      <div key={i} className="rounded-2xl border border-slate-200 p-4 flex gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center shrink-0" />
-                        <div>
-                          <p className="font-medium text-foreground">{label}</p>
-                          <p className="text-xs text-muted-foreground">— km · Open</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <NearbyUtilitiesContent
+                    showBackLink={false}
+                    defaultLocation={data?.trip?.destination ?? ""}
+                    compact={true}
+                  />
                 </TabsContent>
               </div>
             </Tabs>

@@ -13,6 +13,9 @@ import HotelReceipt from "./pages/HotelReceipt";
 import PaymentPage from "./pages/PaymentPage";
 import BookingSuccessPage from "./pages/BookingSuccessPage";
 import ActivityDetail from "./pages/ActivityDetail";
+import NearbyRestaurants from "./pages/NearbyRestaurants";
+import NearbyShopping from "./pages/NearbyShopping";
+import NearbyUtilities from "./pages/NearbyUtilities";
 import TransportBook from "./pages/TransportBook";
 import Community from "./pages/Community";
 import About from "./pages/About";
@@ -35,6 +38,9 @@ const App = () => (
             <Route path="/plan-trip" element={<PlanTrip />} />
             <Route path="/plan-trip/activity" element={<ActivityDetail />} />
             <Route path="/my-trip" element={<MyTrip />} />
+            <Route path="/my-trip/nearby-restaurants" element={<NearbyRestaurants />} />
+            <Route path="/my-trip/nearby-shopping" element={<NearbyShopping />} />
+            <Route path="/my-trip/nearby-utilities" element={<NearbyUtilities />} />
             <Route path="/my-trip/book" element={<BookingMarketplace />} />
             <Route path="/my-trip/hotel-booking/:id" element={<HotelReceipt />} />
             <Route path="/my-trip/payment" element={<PaymentPage />} />
