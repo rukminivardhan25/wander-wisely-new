@@ -47,13 +47,14 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       room_number: string | null;
       total_cents: number | null;
       created_at: string;
+      paid_at: string | null;
     }>(
       tripId
         ? `SELECT id, booking_ref, hotel_branch_id, listing_id, check_in, check_out, nights,
-              guest_name, guest_phone, guest_email, status, room_number, total_cents, created_at
+              guest_name, guest_phone, guest_email, status, room_number, total_cents, created_at, paid_at
        FROM hotel_bookings WHERE user_id = $1 AND trip_id = $2 ORDER BY created_at DESC`
         : `SELECT id, booking_ref, hotel_branch_id, listing_id, check_in, check_out, nights,
-              guest_name, guest_phone, guest_email, status, room_number, total_cents, created_at
+              guest_name, guest_phone, guest_email, status, room_number, total_cents, created_at, paid_at
        FROM hotel_bookings WHERE user_id = $1 ORDER BY created_at DESC`,
       tripId ? [userId, tripId] : [userId]
     );
@@ -73,6 +74,7 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
         roomNumber: r.room_number ?? undefined,
         totalCents: r.total_cents ?? undefined,
         createdAt: r.created_at,
+        paidAt: r.paid_at ?? undefined,
       })),
     });
   } catch (err) {
@@ -142,6 +144,45 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+/** PATCH /api/hotel-bookings/:id/pay — User pays bill (after hotel approved). Sets status to confirmed and paid_at. */
+router.patch("/:id/pay", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId!;
+    const { id } = req.params;
+    const current = await query<{ id: string; status: string }>(
+      "SELECT id, status FROM hotel_bookings WHERE id = $1 AND user_id = $2",
+      [id, userId]
+    );
+    if (current.rows.length === 0) {
+      res.status(404).json({ error: "Booking not found" });
+      return;
+    }
+    if (current.rows[0].status !== "approved_awaiting_payment") {
+      res.status(400).json({ error: "Booking is not awaiting payment. Hotel must approve and send the bill first." });
+      return;
+    }
+    await pool.query(
+      "UPDATE hotel_bookings SET status = 'confirmed', paid_at = now(), updated_at = now() WHERE id = $1 AND user_id = $2",
+      [id, userId]
+    );
+    const row = await query<{ booking_ref: string; total_cents: number | null; paid_at: string }>(
+      "SELECT booking_ref, total_cents, paid_at::text FROM hotel_bookings WHERE id = $1 AND user_id = $2",
+      [id, userId]
+    );
+    const r = row.rows[0];
+    res.json({
+      ok: true,
+      status: "confirmed",
+      bookingRef: r?.booking_ref,
+      totalCents: r?.total_cents ?? undefined,
+      paidAt: r?.paid_at ?? new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error("Hotel booking pay error:", err);
+    res.status(500).json({ error: "Failed to record payment" });
+  }
+});
+
 /** GET /api/hotel-bookings/:id — Get one booking (for receipt) */
 router.get("/:id", async (req: Request, res: Response): Promise<void> => {
   try {
@@ -166,6 +207,7 @@ router.get("/:id", async (req: Request, res: Response): Promise<void> => {
       total_cents: number | null;
       vendor_notes: string | null;
       created_at: string;
+      paid_at: string | null;
       branch_name: string;
       branch_city: string | null;
       branch_full_address: string | null;
@@ -174,7 +216,7 @@ router.get("/:id", async (req: Request, res: Response): Promise<void> => {
     }>(
       `SELECT hb.id, hb.booking_ref, hb.hotel_branch_id, hb.listing_id, hb.check_in, hb.check_out, hb.nights,
               hb.guest_name, hb.guest_phone, hb.guest_email, hb.requirements_text, hb.document_urls,
-              hb.status, hb.room_type, hb.room_number, hb.total_cents, hb.vendor_notes, hb.created_at,
+              hb.status, hb.room_type, hb.room_number, hb.total_cents, hb.vendor_notes, hb.created_at, hb.paid_at,
               br.name AS branch_name, br.city AS branch_city, br.full_address AS branch_full_address, br.contact_number AS branch_contact_number,
               l.name AS listing_name
        FROM hotel_bookings hb
@@ -207,6 +249,7 @@ router.get("/:id", async (req: Request, res: Response): Promise<void> => {
       totalCents: r.total_cents ?? undefined,
       vendorNotes: r.vendor_notes ?? undefined,
       createdAt: r.created_at,
+      paidAt: r.paid_at ?? undefined,
       branchName: r.branch_name,
       branchCity: r.branch_city ?? undefined,
       branchFullAddress: r.branch_full_address ?? undefined,

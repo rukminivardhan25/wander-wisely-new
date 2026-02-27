@@ -381,6 +381,7 @@ const MyTrip = () => {
   const [paymentMethod, setPaymentMethod] = useState<"upi" | "card" | null>(null);
   const [experiencePayId, setExperiencePayId] = useState<string | null>(null);
   const [eventPayId, setEventPayId] = useState<string | null>(null);
+  const [hotelPayId, setHotelPayId] = useState<string | null>(null);
   const [experienceTicketModalOpen, setExperienceTicketModalOpen] = useState(false);
   const [experienceTicketData, setExperienceTicketData] = useState<ExperienceBookingItem | null>(null);
   const [eventTicketModalOpen, setEventTicketModalOpen] = useState(false);
@@ -1774,11 +1775,13 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                       const statusLabel =
                         b.status === "pending_vendor"
                           ? "Pending approval"
-                          : b.status === "approved"
-                            ? "Approved — pay at hotel"
-                            : b.status === "rejected"
-                              ? "Rejected"
-                              : b.status;
+                          : b.status === "approved_awaiting_payment"
+                            ? "Bill ready — Pay now"
+                            : b.status === "confirmed"
+                              ? "Confirmed"
+                              : b.status === "rejected"
+                                ? "Rejected"
+                                : b.status;
                       return (
                         <div key={b.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3 relative">
                           <button
@@ -1796,8 +1799,8 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                           <div className="min-w-0 flex-1 pr-8">
                             <p className="font-medium text-foreground truncate">Hotel stay</p>
                             <p className="text-xs text-muted-foreground">Hotel · {b.checkIn} – {b.checkOut} · {b.nights} night{b.nights !== 1 ? "s" : ""}</p>
-                            <p className={`text-xs mt-1 flex items-center gap-1 ${b.status === "approved" ? "text-emerald-600" : b.status === "rejected" ? "text-red-600" : "text-amber-600"}`}>
-                              {b.status === "approved" && <CheckCircle className="h-3.5 w-3.5 shrink-0" />}
+                            <p className={`text-xs mt-1 flex items-center gap-1 ${b.status === "approved_awaiting_payment" ? "text-blue-600" : b.status === "confirmed" ? "text-emerald-600" : b.status === "rejected" ? "text-red-600" : "text-amber-600"}`}>
+                              {(b.status === "approved_awaiting_payment" || b.status === "confirmed") && <CheckCircle className="h-3.5 w-3.5 shrink-0" />}
                               {statusLabel}
                             </p>
                             <div className="flex flex-wrap gap-1 mt-2">
@@ -1806,9 +1809,37 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                                   <Link to={`/my-trip/hotel-booking/${b.id}`}>View request</Link>
                                 </Button>
                               )}
-                              {b.status === "approved" && (
+                              {b.status === "approved_awaiting_payment" && (
+                                <>
+                                  <Button asChild size="sm" variant="outline" className="rounded-lg text-xs">
+                                    <Link to={`/my-trip/hotel-booking/${b.id}`}>View bill</Link>
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="hero"
+                                    className="rounded-lg text-xs"
+                                    disabled={hotelPayId === b.id}
+                                    onClick={async () => {
+                                      if (!token || !b.id) return;
+                                      setHotelPayId(b.id);
+                                      try {
+                                        await apiFetch(`/api/hotel-bookings/${b.id}/pay`, { method: "PATCH", headers: { Authorization: `Bearer ${token}` } });
+                                        loadBookings();
+                                        toast({ title: "Payment recorded", description: "Your hotel booking is confirmed." });
+                                      } catch {
+                                        toast({ title: "Payment failed", description: "Could not complete payment.", variant: "destructive" });
+                                      } finally {
+                                        setHotelPayId(null);
+                                      }
+                                    }}
+                                  >
+                                    {hotelPayId === b.id ? "Processing…" : "Pay now"}
+                                  </Button>
+                                </>
+                              )}
+                              {b.status === "confirmed" && (
                                 <Button asChild size="sm" variant="hero" className="rounded-lg text-xs">
-                                  <Link to={`/my-trip/hotel-booking/${b.id}`}>View receipt / bill</Link>
+                                  <Link to={`/my-trip/hotel-booking/${b.id}`}>View receipt</Link>
                                 </Button>
                               )}
                             </div>

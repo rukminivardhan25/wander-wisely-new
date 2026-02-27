@@ -205,10 +205,10 @@ router.patch("/:bookingId/approve", async (req: Request, res: Response): Promise
       return;
     }
     await pool.query(
-      `UPDATE hotel_bookings SET status = 'approved', room_number = $1, total_cents = COALESCE($2, total_cents), vendor_notes = $5, updated_at = now() WHERE id = $3 AND listing_id = $4`,
+      `UPDATE hotel_bookings SET status = 'approved_awaiting_payment', room_number = $1, total_cents = COALESCE($2, total_cents), vendor_notes = $5, updated_at = now() WHERE id = $3 AND listing_id = $4`,
       [roomNumber, totalCents, bookingId, listingId, vendorNotes]
     );
-    res.json({ ok: true, status: "approved", roomNumber });
+    res.json({ ok: true, status: "approved_awaiting_payment", roomNumber });
   } catch (err) {
     console.error("Approve hotel booking error:", err);
     res.status(500).json({ error: "Failed to approve booking" });

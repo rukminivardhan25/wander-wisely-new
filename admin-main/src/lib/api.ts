@@ -43,7 +43,15 @@ export async function vendorHubFetch<T>(path: string, options?: RequestInit): Pr
 
 export async function adminFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const url = getUrl(ADMIN_API_URL, path);
-  const res = await fetch(url, { ...options, headers: { "Content-Type": "application/json", ...options?.headers } });
+  let res: Response;
+  try {
+    res = await fetch(url, { ...options, headers: { "Content-Type": "application/json", ...options?.headers } });
+  } catch (err) {
+    const msg = err instanceof Error && (err.message === "Failed to fetch" || err.message?.includes("fetch"))
+      ? "Cannot reach the admin API. If running locally, start the backend: cd admin-main/backend && npm run dev"
+      : (err instanceof Error ? err.message : "Request failed");
+    throw new Error(msg);
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string }).error ?? "Request failed");
   return data as T;

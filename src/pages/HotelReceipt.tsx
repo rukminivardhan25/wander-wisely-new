@@ -100,8 +100,39 @@ const HotelReceipt = () => {
     );
   }
 
-  const statusLabel = booking.status === "approved" ? "Confirmed" : booking.status === "rejected" ? "Rejected" : "Pending hotel approval";
+  const statusLabel =
+    booking.status === "pending_vendor"
+      ? "Pending hotel approval"
+      : booking.status === "approved_awaiting_payment"
+        ? "Bill ready — Pay now"
+        : booking.status === "confirmed"
+          ? "Confirmed"
+          : booking.status === "rejected"
+            ? "Rejected"
+            : booking.status;
   const isPending = booking.status === "pending_vendor";
+  const isAwaitingPayment = booking.status === "approved_awaiting_payment";
+
+  const [payLoading, setPayLoading] = useState(false);
+
+  const handlePayNow = async () => {
+    if (!id || !token || booking.status !== "approved_awaiting_payment") return;
+    setPayLoading(true);
+    try {
+      const { data: payData, error: payErr } = await apiFetch<{ ok: boolean; status: string }>(`/api/hotel-bookings/${id}/pay`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (payErr) throw new Error(payErr);
+      if (payData?.ok) {
+        setBooking((prev) => (prev ? { ...prev, status: "confirmed" } : null));
+      }
+    } catch {
+      setError("Payment failed. Please try again.");
+    } finally {
+      setPayLoading(false);
+    }
+  };
 
   const handleDownloadReceipt = () => {
     window.print();
@@ -174,7 +205,7 @@ const HotelReceipt = () => {
                 </div>
               </div>
               <p className="text-amber-100 text-sm mt-2 font-mono">Booking ref: {booking.bookingRef}</p>
-              <p className={`text-sm mt-1 font-medium ${booking.status === "approved" ? "text-emerald-200" : booking.status === "rejected" ? "text-red-200" : "text-amber-100"}`}>
+              <p className={`text-sm mt-1 font-medium ${booking.status === "approved_awaiting_payment" ? "text-blue-200" : booking.status === "confirmed" ? "text-emerald-200" : booking.status === "rejected" ? "text-red-200" : "text-amber-100"}`}>
                 Status: {statusLabel}
               </p>
             </div>
@@ -268,9 +299,17 @@ const HotelReceipt = () => {
                     <span>Total</span>
                     <span>₹{(booking.totalCents / 100).toFixed(2)}</span>
                   </div>
-                  {booking.status === "approved" && (
+                  {booking.status === "approved_awaiting_payment" && (
+                    <div className="flex flex-col gap-2 no-print">
+                      <p className="text-sm text-muted-foreground">Pay now to confirm your booking.</p>
+                      <Button type="button" className="w-full sm:w-auto rounded-xl bg-amber-600 hover:bg-amber-700" onClick={handlePayNow} disabled={payLoading}>
+                        {payLoading ? "Processing…" : "Pay now"}
+                      </Button>
+                    </div>
+                  )}
+                  {booking.status === "confirmed" && (
                     <p className="text-sm text-muted-foreground">
-                      Pay this amount at the hotel on check-in, or contact the hotel for online payment options.
+                      Payment complete. Present this receipt at check-in along with a valid ID.
                     </p>
                   )}
                 </div>

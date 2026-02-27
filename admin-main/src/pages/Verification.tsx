@@ -128,9 +128,11 @@ export function Verification() {
   const [hotelBranchRequests, setHotelBranchRequests] = useState<HotelBranchRequestRow[]>([]);
   const [viewHotelBranchRequest, setViewHotelBranchRequest] = useState<HotelBranchRequestRow | null>(null);
   const [hotelBranchRequestDetail, setHotelBranchRequestDetail] = useState<HotelBranchRequestRow | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   const fetchPending = async () => {
     setLoading(true);
+    setApiError(null);
     try {
       if (category === "company") {
         const typeParam = companyType ? `?type=${encodeURIComponent(companyType.toLowerCase())}` : "";
@@ -233,7 +235,8 @@ export function Verification() {
       } else {
         setHotelBranchRequests([]);
       }
-    } catch {
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : "Request failed");
       if (category === "company") setRequests([]);
       if (category === "vehicles") {
         setBusRequests([]);
@@ -567,14 +570,19 @@ export function Verification() {
   const displayHotelBranchDetail = hotelBranchRequestDetail ?? viewHotelBranchRequest;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0">
+      {apiError && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {apiError}
+        </div>
+      )}
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Verification</h1>
-        <p className="text-muted-foreground mt-1">Review verification requests from vendors. Filter by category and type.</p>
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground">Verification</h1>
+        <p className="text-muted-foreground mt-1 text-sm sm:text-base">Review verification requests from vendors. Filter by category and type.</p>
       </div>
 
       {/* Filters */}
-      <div className="bg-card rounded-2xl border border-forest-200 p-5 shadow-card space-y-4">
+      <div className="bg-card rounded-2xl border border-forest-200 p-4 sm:p-5 shadow-card space-y-4 min-w-0">
         <h2 className="text-sm font-semibold text-foreground">Filters</h2>
 
         <div className="flex flex-wrap items-center gap-4">
@@ -714,7 +722,7 @@ export function Verification() {
       </div>
 
       {/* Requests list */}
-      <div className="bg-card rounded-2xl border border-forest-200 overflow-hidden shadow-card">
+      <div className="bg-card rounded-2xl border border-forest-200 overflow-hidden shadow-card min-w-0">
         <div className="px-6 py-4 border-b border-forest-200 flex items-center justify-between">
           <h2 className="font-semibold text-foreground">
             {category === "company" ? "Company requests" : category === "vehicles" ? (vehicleType ? `${vehicleType} requests` : "Vehicle requests") : category === "hotel_branch" ? "Hotel Branch requests" : ""}

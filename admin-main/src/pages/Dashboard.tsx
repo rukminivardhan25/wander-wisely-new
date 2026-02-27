@@ -41,10 +41,10 @@ export function Dashboard() {
   }, []);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground mt-1">Overview of admin activity.</p>
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground">Dashboard</h1>
+        <p className="text-muted-foreground mt-1 text-sm sm:text-base">Overview of admin activity.</p>
       </div>
 
       {error && (
@@ -64,7 +64,7 @@ export function Dashboard() {
         ))}
       </div>
 
-      <div className="bg-card rounded-2xl border border-forest-200 border-l-4 border-l-forest-500 p-6 shadow-card">
+      <div className="bg-card rounded-2xl border border-forest-200 border-l-4 border-l-forest-500 p-4 sm:p-6 shadow-card">
         <h2 className="font-semibold text-foreground mb-2">Quick actions</h2>
         <p className="text-sm text-muted-foreground">Use the Verification page to review and approve or reject pending requests.</p>
       </div>

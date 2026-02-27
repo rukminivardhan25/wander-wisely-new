@@ -1755,11 +1755,12 @@ function HotelBookingsSection({ dateFilter }: { dateFilter: string }) {
                         <span
                           className={cn(
                             b.status === "pending_vendor" && "text-amber-600 font-medium",
-                            b.status === "approved" && "text-emerald-600",
+                            b.status === "approved_awaiting_payment" && "text-blue-600",
+                            b.status === "confirmed" && "text-emerald-600",
                             b.status === "rejected" && "text-red-600"
                           )}
                         >
-                          {b.status === "pending_vendor" ? "Pending" : b.status === "approved" ? "Approved" : "Rejected"}
+                          {b.status === "pending_vendor" ? "Pending" : b.status === "approved_awaiting_payment" ? "Approved (await payment)" : b.status === "confirmed" ? "Confirmed" : "Rejected"}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -1832,10 +1833,11 @@ function HotelBookingsSection({ dateFilter }: { dateFilter: string }) {
                 <p className={cn(
                   "mt-0.5 font-medium",
                   selectedBooking.status === "pending_vendor" && "text-amber-600",
-                  selectedBooking.status === "approved" && "text-emerald-600",
+                  selectedBooking.status === "approved_awaiting_payment" && "text-blue-600",
+                  selectedBooking.status === "confirmed" && "text-emerald-600",
                   selectedBooking.status === "rejected" && "text-red-600"
                 )}>
-                  {selectedBooking.status === "pending_vendor" ? "Pending" : selectedBooking.status === "approved" ? "Approved" : "Rejected"}
+                  {selectedBooking.status === "pending_vendor" ? "Pending" : selectedBooking.status === "approved_awaiting_payment" ? "Approved (await payment)" : selectedBooking.status === "confirmed" ? "Confirmed" : "Rejected"}
                 </p>
                 {selectedBooking.roomNumber && <p className="text-sm text-foreground mt-1">Room: {selectedBooking.roomNumber}</p>}
                 {selectedBooking.totalCents != null && <p className="text-sm text-foreground">Total: ₹{(selectedBooking.totalCents / 100).toFixed(2)}</p>}
@@ -1913,11 +1915,11 @@ function HotelBookingsSection({ dateFilter }: { dateFilter: string }) {
                             <span
                               className={cn(
                                 b.status === "pending_vendor" && "text-amber-600 font-medium",
-                                b.status === "approved" && "text-emerald-600",
+                                (b.status === "approved_awaiting_payment" || b.status === "confirmed") && "text-emerald-600",
                                 b.status === "rejected" && "text-red-600"
                               )}
                             >
-                              {b.status === "pending_vendor" ? "Pending" : b.status === "approved" ? "Approved" : "Rejected"}
+                              {b.status === "pending_vendor" ? "Pending" : b.status === "approved_awaiting_payment" ? "Awaiting payment" : b.status === "confirmed" ? "Confirmed" : "Rejected"}
                             </span>
                           </TableCell>
                           <TableCell>
@@ -1943,7 +1945,7 @@ function HotelBookingsSection({ dateFilter }: { dateFilter: string }) {
           <DialogHeader>
             <DialogTitle>Allot room & approve</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">The guest already saw the price when they selected the room type. Enter the allotted room number; they will see it on their receipt and can pay at check-in.</p>
+          <p className="text-sm text-muted-foreground">The guest already saw the price when they selected the room type. Enter the allotted room number and total; the guest will see the bill and can pay online to confirm.</p>
           <div className="space-y-3 mt-4">
             <div>
               <label className="text-sm font-medium text-foreground">Room number *</label>
@@ -1958,7 +1960,7 @@ function HotelBookingsSection({ dateFilter }: { dateFilter: string }) {
           <DialogFooter className="mt-4">
             <Button type="button" variant="outline" onClick={() => setApproveOpen(false)} className="rounded-xl">Cancel</Button>
             <Button type="button" className="rounded-xl bg-amber-600 hover:bg-amber-700" onClick={handleApprove} disabled={approveLoading}>
-              {approveLoading ? "Saving…" : "Approve & send room number"}
+              {approveLoading ? "Saving…" : "Approve & generate bill"}
             </Button>
           </DialogFooter>
         </DialogContent>
