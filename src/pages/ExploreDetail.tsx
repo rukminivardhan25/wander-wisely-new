@@ -44,11 +44,16 @@ const ExploreDetail = () => {
                 alt={dest.name}
                 className="w-full h-full object-cover"
                 loading="eager"
+                decoding="async"
+                referrerPolicy="no-referrer"
                 onError={(e) => {
                   const t = e.currentTarget;
                   if (!t.dataset.fallback) {
                     t.dataset.fallback = "1";
                     t.src = `https://picsum.photos/seed/${encodeURIComponent(dest.id)}/800/600`;
+                  } else if (!t.dataset.fallback2) {
+                    t.dataset.fallback2 = "1";
+                    t.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='500' viewBox='0 0 800 500'%3E%3Crect fill='%23e5e7eb' width='800' height='500'/%3E%3Ctext x='50%25' y='50%25' fill='%239ca3af' text-anchor='middle' dy='.3em' font-family='sans-serif' font-size='24'%3EPhoto%3C/text%3E%3C/svg%3E";
                   }
                 }}
               />
