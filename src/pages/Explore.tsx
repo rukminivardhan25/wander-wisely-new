@@ -89,12 +89,19 @@ const Explore = () => {
                   to={`/explore/${dest.id}`}
                   className="block group rounded-2xl overflow-hidden bg-card shadow-soft hover:shadow-medium transition-all duration-300 hover:-translate-y-1 cursor-pointer"
                 >
-                  <div className="aspect-[4/3] overflow-hidden">
+                  <div className="aspect-[4/3] overflow-hidden bg-muted">
                     <img
                       src={dest.images[0]}
                       alt={dest.name}
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                       loading="lazy"
+                      onError={(e) => {
+                        const t = e.currentTarget;
+                        if (!t.dataset.fallback) {
+                          t.dataset.fallback = "1";
+                          t.src = `https://picsum.photos/seed/${encodeURIComponent(dest.id)}/800/600`;
+                        }
+                      }}
                     />
                   </div>
                   <div className="p-5">

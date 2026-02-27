@@ -44,6 +44,13 @@ const ExploreDetail = () => {
                 alt={dest.name}
                 className="w-full h-full object-cover"
                 loading="eager"
+                onError={(e) => {
+                  const t = e.currentTarget;
+                  if (!t.dataset.fallback) {
+                    t.dataset.fallback = "1";
+                    t.src = `https://picsum.photos/seed/${encodeURIComponent(dest.id)}/800/600`;
+                  }
+                }}
               />
             </div>
 
