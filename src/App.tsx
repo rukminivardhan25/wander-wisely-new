@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Explore from "./pages/Explore";
 import ExploreDetail from "./pages/ExploreDetail";
@@ -44,20 +45,20 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/explore" element={<Explore />} />
             <Route path="/explore/:id" element={<ExploreDetail />} />
-            <Route path="/plan-trip" element={<PlanTrip />} />
-            <Route path="/plan-trip/activity" element={<ActivityDetail />} />
-            <Route path="/my-trip" element={<MyTrip />} />
-            <Route path="/my-trips" element={<MyTrips />} />
-            <Route path="/my-trips/:tripId" element={<MyTrip />} />
-            <Route path="/my-trip/nearby-restaurants" element={<NearbyRestaurants />} />
-            <Route path="/my-trip/nearby-shopping" element={<NearbyShopping />} />
-            <Route path="/my-trip/nearby-utilities" element={<NearbyUtilities />} />
-            <Route path="/my-trip/book" element={<BookingMarketplace />} />
-            <Route path="/my-trip/hotel-booking/:id" element={<HotelReceipt />} />
-            <Route path="/my-trip/payment" element={<PaymentPage />} />
-            <Route path="/my-trip/booking-success" element={<BookingSuccessPage />} />
-            <Route path="/book/transport" element={<TransportBook />} />
-            <Route path="/community" element={<Community />} />
+            <Route path="/plan-trip" element={<ProtectedRoute><PlanTrip /></ProtectedRoute>} />
+            <Route path="/plan-trip/activity" element={<ProtectedRoute><ActivityDetail /></ProtectedRoute>} />
+            <Route path="/my-trip" element={<ProtectedRoute><MyTrip /></ProtectedRoute>} />
+            <Route path="/my-trips" element={<ProtectedRoute><MyTrips /></ProtectedRoute>} />
+            <Route path="/my-trips/:tripId" element={<ProtectedRoute><MyTrip /></ProtectedRoute>} />
+            <Route path="/my-trip/nearby-restaurants" element={<ProtectedRoute><NearbyRestaurants /></ProtectedRoute>} />
+            <Route path="/my-trip/nearby-shopping" element={<ProtectedRoute><NearbyShopping /></ProtectedRoute>} />
+            <Route path="/my-trip/nearby-utilities" element={<ProtectedRoute><NearbyUtilities /></ProtectedRoute>} />
+            <Route path="/my-trip/book" element={<ProtectedRoute><BookingMarketplace /></ProtectedRoute>} />
+            <Route path="/my-trip/hotel-booking/:id" element={<ProtectedRoute><HotelReceipt /></ProtectedRoute>} />
+            <Route path="/my-trip/payment" element={<ProtectedRoute><PaymentPage /></ProtectedRoute>} />
+            <Route path="/my-trip/booking-success" element={<ProtectedRoute><BookingSuccessPage /></ProtectedRoute>} />
+            <Route path="/book/transport" element={<ProtectedRoute><TransportBook /></ProtectedRoute>} />
+            <Route path="/community" element={<ProtectedRoute><Community /></ProtectedRoute>} />
             <Route path="/about" element={<About />} />
             <Route path="/help" element={<HelpPage />} />
             <Route path="/travel-tips" element={<TravelTips />} />

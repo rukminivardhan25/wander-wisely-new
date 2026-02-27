@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, Compass } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,8 @@ const SignIn = () => {
   const { toast } = useToast();
   const { signIn } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: string } | null)?.from ?? "/";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +41,7 @@ const SignIn = () => {
       if (data?.user && data?.token) {
         signIn(data.user, data.token);
         toast({ title: "Welcome back!", description: "You are signed in." });
-        navigate("/", { replace: true });
+        navigate(from, { replace: true });
       }
     } finally {
       setLoading(false);
