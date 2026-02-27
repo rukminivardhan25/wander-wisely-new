@@ -36,6 +36,8 @@ import Analytics from "./pages/Analytics";
 import Promotions from "./pages/Promotions";
 import Verification from "./pages/Verification";
 import Payouts from "./pages/Payouts";
+import PayoutsListingRevenue from "./pages/PayoutsListingRevenue";
+import PayoutsFleetRevenue from "./pages/PayoutsFleetRevenue";
 import ProfileSettings from "./pages/ProfileSettings";
 import Support from "./pages/Support";
 import NotFound from "./pages/NotFound";
@@ -47,7 +49,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_relativeSplatPath: true }}>
         <VendorAuthProvider>
           <Routes>
             <Route path="/signin" element={<SignIn />} />
@@ -82,6 +84,9 @@ const App = () => (
                 <Route path="/promotions" element={<Promotions />} />
                 <Route path="/verification" element={<Verification />} />
                 <Route path="/payouts" element={<Payouts />} />
+                <Route path="/payouts/listing/:listingId" element={<PayoutsListingRevenue />} />
+                <Route path="/payouts/listing/:listingId/fleet/:fleetId/entity/:entityId" element={<PayoutsFleetRevenue />} />
+                <Route path="/payouts/listing/:listingId/fleet/:fleetId" element={<PayoutsFleetRevenue />} />
                 <Route path="/settings" element={<ProfileSettings />} />
                 <Route path="/support" element={<Support />} />
               </Route>
