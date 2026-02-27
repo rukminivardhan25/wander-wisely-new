@@ -12,6 +12,7 @@ import { PayoutsVendor } from "@/pages/PayoutsVendor";
 import { PayoutsListing } from "@/pages/PayoutsListing";
 import { PayoutsFleet } from "@/pages/PayoutsFleet";
 import { PayoutsTransactions } from "@/pages/PayoutsTransactions";
+import { VendorSupport } from "@/pages/VendorSupport";
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
           <Route path="payouts/vendor/:vendorId/listing/:listingId" element={<PayoutsListing />} />
           <Route path="payouts/vendor/:vendorId/listing/:listingId/fleet/:fleetId" element={<PayoutsFleet />} />
           <Route path="payouts/vendor/:vendorId/listing/:listingId/fleet/:fleetId/entity/:entityId" element={<PayoutsFleet />} />
+          <Route path="support-tickets" element={<VendorSupport />} />
         </Route>
       </Routes>
     </BrowserRouter>

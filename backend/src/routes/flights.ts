@@ -7,7 +7,7 @@ const router = Router();
 /**
  * GET /api/flights/search?from=&to=&date=YYYY-MM-DD&passengers=
  * Returns flights that have a schedule on the given date, route from/to match, and available seats >= passengers.
- * Uses transport DB (same as vendor hub).
+ * Uses transport DB (same as partner portal).
  */
 router.get("/search", async (req: Request, res: Response): Promise<void> => {
   try {
@@ -109,7 +109,7 @@ router.get("/search", async (req: Request, res: Response): Promise<void> => {
     const msg = err && typeof err === "object" && "message" in err ? String((err as Error).message) : "";
     if (msg.includes("flight_schedules") || msg.includes("flights") || msg.includes("flight_routes") || msg.includes("flight_bookings")) {
       res.status(503).json({
-        error: "Flight search not available. Run flight schema on this database (e.g. vendor-hub: npm run db:flight). Use the same DATABASE_URL for main app and vendor hub.",
+        error: "Flight search not available. Run flight schema on this database (e.g. partner portal: npm run db:flight). Use the same DATABASE_URL for main app and partner portal.",
       });
       return;
     }

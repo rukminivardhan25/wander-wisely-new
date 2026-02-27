@@ -5,7 +5,7 @@
 import { Router, Request, Response } from "express";
 
 const router = Router();
-const USER_AGENT = "Wanderlust-NearbyRestaurants/1.0 (travel app; backend proxy)";
+const USER_AGENT = "Wanderly-NearbyRestaurants/1.0 (travel app; backend proxy)";
 const NOMINATIM_SEARCH = "https://nominatim.openstreetmap.org/search";
 const NOMINATIM_REVERSE = "https://nominatim.openstreetmap.org/reverse";
 const OVERPASS_PRIMARY = "https://overpass-api.de/api/interpreter";

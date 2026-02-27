@@ -37,11 +37,11 @@ async function check() {
     const missing = vendorHubTables.filter((t) => !existing.has(t));
     const present = vendorHubTables.filter((t) => existing.has(t));
 
-    console.log("\nVendor Hub tables:");
+    console.log("\nPartner Portal tables:");
     console.log("  Already present:", present.length ? present.join(", ") : "(none)");
     console.log("  Not yet created:", missing.length ? missing.join(", ") : "(none)");
     if (missing.length > 0) {
-      console.log("\nRun 'npm run db:init' to create missing Vendor Hub tables (no data is deleted).");
+      console.log("\nRun 'npm run db:init' to create missing Partner Portal tables (no data is deleted).");
     }
   } catch (err) {
     console.error("Database check failed:", err);

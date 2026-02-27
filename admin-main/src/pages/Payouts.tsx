@@ -181,7 +181,7 @@ export function Payouts() {
                   {vendors.length === 0 ? (
                     <tr>
                       <td colSpan={9} className="px-6 py-8 text-center text-muted-foreground">
-                        No vendors found. Ensure vendor-hub is running and vendors are registered.
+                        No vendors found. Ensure partner portal is running and vendors are registered.
                       </td>
                     </tr>
                   ) : (

@@ -1,10 +1,10 @@
 /**
- * Address suggestions for vendor-hub (e.g. Exact Location on Create Experience).
+ * Address suggestions for partner portal (e.g. Exact Location on Create Experience).
  * Uses Nominatim (OpenStreetMap) only; no current location, no API key.
  */
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
-const USER_AGENT = "VendorHub-Experience/1.0 (listing form)";
+const USER_AGENT = "PartnerPortal-Experience/1.0 (listing form)";
 
 export type AddressSuggestion = {
   lat: number;

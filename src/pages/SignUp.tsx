@@ -43,7 +43,7 @@ const SignUp = () => {
       }
       if (data?.user && data?.token) {
         signIn(data.user, data.token);
-        toast({ title: "Account created", description: "Welcome to Wanderlust!" });
+        toast({ title: "Account created", description: "Welcome to Wanderly!" });
         navigate("/", { replace: true });
       }
     } finally {
@@ -75,7 +75,7 @@ const SignUp = () => {
             <div className="w-8 h-8 rounded-lg bg-gradient-sunset flex items-center justify-center">
               <Compass className="w-5 h-5 text-accent-foreground" />
             </div>
-            <span className="text-xl font-display font-bold text-foreground">Wanderlust</span>
+            <span className="text-xl font-display font-bold text-foreground">Wanderly</span>
           </Link>
 
           <h1 className="text-3xl font-display font-bold text-foreground mb-2">Create Account</h1>

@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from "react-router-dom";
-import { LayoutDashboard, ShieldCheck, MessageSquare, AlertCircle, Users, Building2, Calendar, IndianRupee } from "lucide-react";
+import { LayoutDashboard, ShieldCheck, MessageSquare, AlertCircle, Users, Building2, Calendar, IndianRupee, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function AdminLayout() {
@@ -107,6 +107,18 @@ export function AdminLayout() {
           >
             <IndianRupee size={20} />
             Payouts
+          </NavLink>
+          <NavLink
+            to="/support-tickets"
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                isActive ? "bg-sidebar-primary text-primary-foreground" : "hover:bg-sidebar-hover text-forest-100"
+              )
+            }
+          >
+            <HelpCircle size={20} />
+            Vendor Support
           </NavLink>
         </nav>
       </aside>

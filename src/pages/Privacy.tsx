@@ -9,7 +9,7 @@ const Privacy = () => {
           <p className="text-sm text-muted-foreground mb-8">Last updated: 2026</p>
           <div className="prose prose-neutral dark:prose-invert max-w-none space-y-6 text-muted-foreground">
             <p>
-              Wanderlust ("we", "our", or "the app") is committed to protecting your privacy. This policy describes how we collect, use, and safeguard your information when you use our travel planning and community features.
+              Wanderly ("we", "our", or "the app") is committed to protecting your privacy. This policy describes how we collect, use, and safeguard your information when you use our travel planning and community features.
             </p>
             <h2 className="text-lg font-semibold text-foreground mt-8">Information we collect</h2>
             <p>
@@ -28,7 +28,7 @@ const Privacy = () => {
               You may request access, correction, or deletion of your personal data. You can also opt out of certain communications. Contact us using the details in "Get in Touch" for any privacy-related requests.
             </p>
             <p className="mt-8">
-              By using Wanderlust, you agree to this Privacy Policy. We may update it from time to time; we will notify users of significant changes.
+              By using Wanderly, you agree to this Privacy Policy. We may update it from time to time; we will notify users of significant changes.
             </p>
           </div>
         </div>

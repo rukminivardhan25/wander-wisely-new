@@ -1,5 +1,5 @@
--- Car rental bookings (user requests). Lives in transport DB so both main app and vendor-hub can access.
--- user_id is main app user (no FK; main app and vendor-hub may use different DBs for users/vendors).
+-- Car rental bookings (user requests). Lives in transport DB so both main app and partner portal can access.
+-- user_id is main app user (no FK; main app and partner portal may use different DBs for users/vendors).
 CREATE TABLE IF NOT EXISTS public.car_bookings (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   booking_ref text NOT NULL UNIQUE,

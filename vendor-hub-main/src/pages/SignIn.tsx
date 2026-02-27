@@ -43,7 +43,7 @@ export default function SignIn() {
         </div>
         <Card className="border-border shadow-card">
           <CardHeader className="text-center">
-            <CardTitle className="font-display text-2xl">Sign in to VendorHub</CardTitle>
+            <CardTitle className="font-display text-2xl">Sign in to Partner Portal</CardTitle>
             <CardDescription>Enter your vendor account credentials.</CardDescription>
           </CardHeader>
           <CardContent>

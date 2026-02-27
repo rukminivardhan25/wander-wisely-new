@@ -13,7 +13,7 @@ import {
 } from "@/lib/nearbyRestaurants";
 import { overpassFetch } from "@/lib/overpassFetch";
 
-const USER_AGENT = "Wanderlust-NearbyUtilities/1.0 (travel app)";
+const USER_AGENT = "Wanderly-NearbyUtilities/1.0 (travel app)";
 
 export { geocode, reverseGeocode, googleMapsPlaceUrl, googleMapsDirectionsFromCurrentUrl, type GeoResult };
 

@@ -55,7 +55,7 @@ const SignIn = () => {
             <div className="w-8 h-8 rounded-lg bg-gradient-sunset flex items-center justify-center">
               <Compass className="w-5 h-5 text-accent-foreground" />
             </div>
-            <span className="text-xl font-display font-bold text-foreground">Wanderlust</span>
+            <span className="text-xl font-display font-bold text-foreground">Wanderly</span>
           </Link>
 
           <h1 className="text-3xl font-display font-bold text-foreground mb-2">Welcome Back</h1>

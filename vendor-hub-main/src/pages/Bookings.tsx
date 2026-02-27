@@ -1471,6 +1471,14 @@ function HotelBookingsSection({ dateFilter }: { dateFilter: string }) {
   const [error, setError] = useState("");
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<(HotelBookingRow & { listingId: string; listingName: string }) | null>(null);
+  const [hotelDetailOpen, setHotelDetailOpen] = useState(false);
+  const [selectedHotelDetail, setSelectedHotelDetail] = useState<{
+    listingId: string;
+    listingName: string;
+    hotelBranchId: string;
+    branchName: string;
+    bookings: (HotelBookingRow & { listingId: string; listingName: string })[];
+  } | null>(null);
   const [approveOpen, setApproveOpen] = useState(false);
   const [approveRoomNumber, setApproveRoomNumber] = useState("");
   const [approveVendorNotes, setApproveVendorNotes] = useState("");
@@ -1523,6 +1531,19 @@ function HotelBookingsSection({ dateFilter }: { dateFilter: string }) {
   const pendingCount = allHotelBookings.filter((b) => b.status === "pending_vendor").length;
 
   const openDetail = (b: HotelBookingRow & { listingId: string; listingName: string }) => {
+    setSelectedBooking(b);
+    setDetailOpen(true);
+  };
+
+  const openHotelDetail = (listingId: string, listingName: string, hotelBranchId: string, branchName: string) => {
+    const forBranch = allHotelBookings.filter((b) => b.listingId === listingId && b.hotelBranchId === hotelBranchId);
+    setSelectedHotelDetail({ listingId, listingName, hotelBranchId, branchName, bookings: forBranch });
+    setHotelDetailOpen(true);
+  };
+
+  const openBookingFromHotelDetail = (b: HotelBookingRow & { listingId: string; listingName: string }) => {
+    setHotelDetailOpen(false);
+    setSelectedHotelDetail(null);
     setSelectedBooking(b);
     setDetailOpen(true);
   };
@@ -1625,6 +1646,7 @@ function HotelBookingsSection({ dateFilter }: { dateFilter: string }) {
                 : pendingCount > 0
                   ? `${pendingCount} pending request(s). Allot room number to approve — the guest already saw the price when they selected the room.`
                   : "View requests below. Approve with room number so the guest gets their receipt."}
+              {listings.length > 0 && allHotelBookings.length > 0 && " Click View details on a card to see that branch's bookings and open individual booking details."}
             </p>
           </CardHeader>
           <CardContent>
@@ -1633,7 +1655,67 @@ function HotelBookingsSection({ dateFilter }: { dateFilter: string }) {
             ) : allHotelBookings.length === 0 ? (
               <p className="text-sm text-muted-foreground">No hotel booking requests yet.</p>
             ) : (
-              <Table>
+              <>
+                {/* Hotel cards: one per branch (like fleet), View details opens sheet with that branch's bookings */}
+                {(() => {
+                  const branchMap = new Map<string, { listingId: string; listingName: string; hotelBranchId: string; branchName: string }>();
+                  for (const b of allHotelBookings) {
+                    const key = `${b.listingId}\t${b.hotelBranchId}`;
+                    if (!branchMap.has(key)) {
+                      branchMap.set(key, {
+                        listingId: b.listingId,
+                        listingName: b.listingName,
+                        hotelBranchId: b.hotelBranchId,
+                        branchName: (b.branchName && b.branchName.trim()) || b.hotelBranchId || "Branch",
+                      });
+                    }
+                  }
+                  const branches = Array.from(branchMap.values());
+                  return (
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-6">
+                      {branches.map((branch) => {
+                        const forBranch = allHotelBookings.filter(
+                          (b) => b.listingId === branch.listingId && b.hotelBranchId === branch.hotelBranchId
+                        );
+                        const count = forBranch.length;
+                        return (
+                          <div
+                            key={`${branch.listingId}-${branch.hotelBranchId}`}
+                            className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 flex flex-col"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                                <Hotel className="h-5 w-5 text-amber-600" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium text-foreground truncate">{branch.listingName}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5 truncate">{branch.branchName}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">{count} booking{count !== 1 ? "s" : ""} for this {dateFilter ? "date" : "period"}</p>
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="mt-3 rounded-lg gap-1.5 w-fit"
+                              onClick={() => openHotelDetail(branch.listingId, branch.listingName, branch.hotelBranchId, branch.branchName)}
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              View details
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+                <p className="text-sm text-muted-foreground mb-3">All hotel booking requests — click the icon to see full details and approve.</p>
+                {dateFilter && (
+                  <p className="text-sm font-medium text-foreground mb-2">
+                    Bookings for {new Date(dateFilter + "T12:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                  </p>
+                )}
+                <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-9">Details</TableHead>
@@ -1690,6 +1772,7 @@ function HotelBookingsSection({ dateFilter }: { dateFilter: string }) {
                   ))}
                 </TableBody>
               </Table>
+              </>
             )}
           </CardContent>
         </Card>
@@ -1767,6 +1850,88 @@ function HotelBookingsSection({ dateFilter }: { dateFilter: string }) {
                   </Button>
                 </div>
               )}
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Hotel detail sheet: hotel info + list of bookings with Eye to open individual booking */}
+      <Sheet open={hotelDetailOpen} onOpenChange={(o) => !o && (setHotelDetailOpen(false), setSelectedHotelDetail(null))}>
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto rounded-l-2xl">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <Hotel className="h-5 w-5 text-amber-600" />
+              {selectedHotelDetail ? `${selectedHotelDetail.listingName} — ${selectedHotelDetail.branchName}` : "Hotel details"}
+            </SheetTitle>
+            {selectedHotelDetail && (
+              <p className="text-sm text-muted-foreground font-normal">
+                {dateFilter ? `Bookings for ${new Date(dateFilter + "T12:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}` : "All bookings"} — click the icon to view and manage each booking.
+              </p>
+            )}
+          </SheetHeader>
+          {selectedHotelDetail && (
+            <div className="mt-6 space-y-4">
+              <div>
+                <h4 className="text-sm font-semibold text-foreground mb-3">Bookings</h4>
+                {selectedHotelDetail.bookings.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No bookings for this branch{dateFilter ? " on this date" : ""}.</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-9">Details</TableHead>
+                        <TableHead>Ref</TableHead>
+                        <TableHead>Branch</TableHead>
+                        <TableHead>Guest</TableHead>
+                        <TableHead>Check-in</TableHead>
+                        <TableHead>Nights</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Room / Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedHotelDetail.bookings.map((b) => (
+                        <TableRow key={b.id}>
+                          <TableCell className="w-9 p-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-lg text-slate-600 hover:bg-slate-100"
+                              title="View booking details"
+                              onClick={() => openBookingFromHotelDetail(b)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">{b.bookingRef}</TableCell>
+                          <TableCell className="text-xs">{b.branchName || "—"}</TableCell>
+                          <TableCell>{b.guestName}</TableCell>
+                          <TableCell>{b.checkIn}</TableCell>
+                          <TableCell>{b.nights}</TableCell>
+                          <TableCell>
+                            <span
+                              className={cn(
+                                b.status === "pending_vendor" && "text-amber-600 font-medium",
+                                b.status === "approved" && "text-emerald-600",
+                                b.status === "rejected" && "text-red-600"
+                              )}
+                            >
+                              {b.status === "pending_vendor" ? "Pending" : b.status === "approved" ? "Approved" : "Rejected"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            {b.roomNumber && <span className="font-mono">{b.roomNumber}</span>}
+                            {b.roomNumber && b.totalCents != null && " · "}
+                            {b.totalCents != null && `₹${(b.totalCents / 100).toFixed(0)}`}
+                            {!b.roomNumber && !b.totalCents && "—"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
             </div>
           )}
         </SheetContent>
@@ -3086,6 +3251,77 @@ export default function Bookings() {
                             : "Select a date above to see buses scheduled for that day."}
                         </p>
                       )}
+                      {/* Bookings for this date — flat list at bottom */}
+                      {dateFilter && transportBuses.length > 0 && (() => {
+                        const allBusBookingsForDate = transportBuses.flatMap((bus) =>
+                          (bus.bookings ?? []).map((b) => ({
+                            ...b,
+                            busName: bus.busName,
+                            busNumber: bus.busNumber,
+                            route: bus.route,
+                            date: bus.date,
+                            departure: bus.departure,
+                            listingName: bus.listingName ?? "—",
+                          }))
+                        );
+                        if (allBusBookingsForDate.length === 0) return null;
+                        const formattedDate = new Date(dateFilter + "T12:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+                        return (
+                          <Card className="rounded-2xl border border-slate-200/80 shadow-sm mt-6">
+                            <CardHeader className="pb-3">
+                              <CardTitle className="text-base font-display font-semibold flex items-center gap-2">
+                                <Bus className="h-5 w-5 text-slate-600" />
+                                Bookings for {formattedDate}
+                              </CardTitle>
+                              <p className="text-sm text-muted-foreground font-normal">
+                                All bus bookings on this date. Use View details on a card above to manage a bus and its customers.
+                              </p>
+                            </CardHeader>
+                            <CardContent>
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Ref</TableHead>
+                                    <TableHead>Bus / Route</TableHead>
+                                    <TableHead>Date · Departure</TableHead>
+                                    <TableHead>Guest</TableHead>
+                                    <TableHead>Seats</TableHead>
+                                    <TableHead>Amount</TableHead>
+                                    <TableHead>Status</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {allBusBookingsForDate.map((b) => (
+                                    <TableRow key={b.id}>
+                                      <TableCell className="font-mono text-xs">{b.id}</TableCell>
+                                      <TableCell>
+                                        <p className="font-medium text-foreground text-sm">{b.busName}</p>
+                                        <p className="text-xs text-muted-foreground">{b.route}</p>
+                                      </TableCell>
+                                      <TableCell className="text-sm">
+                                        {b.date} · {b.departure}
+                                      </TableCell>
+                                      <TableCell>{b.customerName}</TableCell>
+                                      <TableCell>{(b.seats ?? []).join(", ") || "—"}</TableCell>
+                                      <TableCell>₹{(b.amount ?? 0).toLocaleString("en-IN")}</TableCell>
+                                      <TableCell>
+                                        <span className={cn(
+                                          "text-xs font-medium capitalize",
+                                          b.status === "confirmed" && "text-emerald-600",
+                                          b.status === "pending" && "text-amber-600",
+                                          b.status === "cancelled" && "text-red-600"
+                                        )}>
+                                          {b.status}
+                                        </span>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </CardContent>
+                          </Card>
+                        );
+                      })()}
                     </>
                   )}
                 </>

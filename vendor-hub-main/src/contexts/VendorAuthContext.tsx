@@ -62,7 +62,7 @@ export function VendorAuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Network error";
       if (msg === "Failed to fetch" || msg.includes("fetch")) {
-        throw new Error("Cannot reach the API. Start the Vendor Hub backend: cd vendor-hub-main/backend then npm run dev");
+        throw new Error("Cannot reach the API. Start the Partner Portal backend: cd vendor-hub-main/backend then npm run dev");
       }
       throw err;
     }
@@ -86,7 +86,7 @@ export function VendorAuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Network error";
       if (msg === "Failed to fetch" || msg.includes("fetch")) {
-        throw new Error("Cannot reach the API. Start the Vendor Hub backend: cd vendor-hub-main/backend then npm run dev");
+        throw new Error("Cannot reach the API. Start the Partner Portal backend: cd vendor-hub-main/backend then npm run dev");
       }
       throw err;
     }

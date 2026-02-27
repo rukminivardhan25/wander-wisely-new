@@ -45,7 +45,7 @@ router.get("/cities", async (req: Request, res: Response): Promise<void> => {
     const message = err instanceof Error ? err.message : "Failed to fetch cities";
     res.status(500).json({
       error: message.includes("does not exist")
-        ? "Transport tables not found. Run vendor-hub migrations on this database (listings, buses, bus_schedules, routes)."
+        ? "Transport tables not found. Run partner portal migrations on this database (listings, buses, bus_schedules, routes)."
         : "Failed to fetch cities",
     });
   }
@@ -206,7 +206,7 @@ router.get("/available-buses", async (req: Request, res: Response): Promise<void
     const message = err instanceof Error ? err.message : "Failed to fetch available buses";
     res.status(500).json({
       error: message.includes("does not exist")
-        ? "Transport tables not found. Run vendor-hub migrations on this database (listings, buses, bus_schedules, routes)."
+        ? "Transport tables not found. Run partner portal migrations on this database (listings, buses, bus_schedules, routes)."
         : "Failed to fetch available buses",
     });
   }
@@ -346,7 +346,7 @@ router.get("/available-cars", async (req: Request, res: Response): Promise<void>
     const message = err instanceof Error ? err.message : "Failed to fetch available cars";
     res.status(500).json({
       error: message.includes("does not exist")
-        ? "Car/transport tables not found. Run vendor-hub migrations 026, 028, 031, 032 on this database."
+        ? "Car/transport tables not found. Run partner portal migrations 026, 028, 031, 032 on this database."
         : message,
     });
   }

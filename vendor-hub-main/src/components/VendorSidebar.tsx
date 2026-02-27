@@ -47,16 +47,16 @@ export function VendorSidebar() {
         {!collapsed && (
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg gold-gradient flex items-center justify-center">
-              <span className="font-display font-bold text-sm text-accent-foreground">V</span>
+              <span className="font-display font-bold text-sm text-accent-foreground">P</span>
             </div>
             <span className="font-display font-bold text-lg text-primary-foreground">
-              VendorHub
+              Partner Portal
             </span>
           </div>
         )}
         {collapsed && (
           <div className="w-8 h-8 rounded-lg gold-gradient flex items-center justify-center mx-auto">
-            <span className="font-display font-bold text-sm text-accent-foreground">V</span>
+            <span className="font-display font-bold text-sm text-accent-foreground">P</span>
           </div>
         )}
       </div>

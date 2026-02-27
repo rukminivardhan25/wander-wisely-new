@@ -90,8 +90,7 @@ export default function Dashboard() {
   }, []);
 
   return (
-    <div className="overflow-y-auto max-h-[calc(100vh-4rem)] min-h-0">
-      <div className="space-y-8">
+    <div className="space-y-8">
         {/* Page title – on the screen, not in a card */}
         <header className="pb-2">
           <motion.h1
@@ -324,7 +323,6 @@ export default function Dashboard() {
             </div>
           </div>
         </section>
-      </div>
     </div>
   );
 }

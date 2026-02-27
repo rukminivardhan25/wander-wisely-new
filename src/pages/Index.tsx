@@ -166,7 +166,7 @@ const Index = () => {
             className="text-center mb-16"
           >
             <motion.span variants={fadeUp} custom={0} className="text-sm font-semibold text-accent uppercase tracking-widest">
-              Why Wanderlust
+              Why Wanderly
             </motion.span>
             <motion.h2 variants={fadeUp} custom={1} className="text-4xl md:text-5xl font-display font-bold text-foreground mt-3">
               Travel Smarter, Not Harder

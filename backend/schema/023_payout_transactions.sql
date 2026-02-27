@@ -1,5 +1,5 @@
 -- Payout transactions: admin initiates payment, vendor confirms receipt.
--- Both main app and vendor-hub use the same DB so both can read/write.
+-- Both main app and partner portal use the same DB so both can read/write.
 CREATE TABLE IF NOT EXISTS payout_transactions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   vendor_id uuid NOT NULL REFERENCES vendors(id) ON DELETE CASCADE,

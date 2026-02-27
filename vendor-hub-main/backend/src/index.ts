@@ -17,6 +17,8 @@ import profileRoutes from "./routes/profile.js";
 import adminVendorsRoutes from "./routes/adminVendors.js";
 import payoutsRoutes from "./routes/payouts.js";
 import dashboardRoutes from "./routes/dashboard.js";
+import supportRoutes from "./routes/support.js";
+import adminSupportTicketsRoutes from "./routes/adminSupportTickets.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -40,7 +42,7 @@ app.use(cors({
 app.use(express.json({ limit: "6mb" }));
 
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", message: "Vendor Hub API" });
+  res.json({ status: "ok", message: "Partner Portal API" });
 });
 
 /** Debug: return ALL car_bookings (no filters). Uses same DB as DATABASE_URL (single DB). */
@@ -73,6 +75,8 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/admin/vendors", adminVendorsRoutes);
 app.use("/api/payouts", payoutsRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/support", supportRoutes);
+app.use("/api/admin/support-tickets", adminSupportTicketsRoutes);
 app.use("/api/public", publicTransportRoutes);
 
 app.use((_req, res) => {
@@ -96,7 +100,7 @@ function logDbUrl(label: string, url: string): void {
 
 app.listen(Number(PORT), "0.0.0.0", () => {
   const dbUrl = process.env.DATABASE_URL ?? "";
-  if (dbUrl) logDbUrl("Vendor hub DATABASE_URL", dbUrl);
+  if (dbUrl) logDbUrl("Partner portal DATABASE_URL", dbUrl);
   console.log("[DB] Car bookings use DATABASE_URL (single DB, same as bus/listings).");
-  console.log(`Vendor Hub API running at http://localhost:${PORT}`);
+  console.log(`Partner Portal API running at http://localhost:${PORT}`);
 });

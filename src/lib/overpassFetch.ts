@@ -35,7 +35,7 @@ export async function overpassFetch<T = { elements?: unknown[] }>(
   query: string,
   options: OverpassFetchOptions = {}
 ): Promise<T> {
-  const { userAgent = "Wanderlust/1.0", timeoutMs = 30000 } = options;
+  const { userAgent = "Wanderly/1.0", timeoutMs = 30000 } = options;
   const body = `data=${encodeURIComponent(query)}`;
   const headers: HeadersInit = { "User-Agent": userAgent };
 

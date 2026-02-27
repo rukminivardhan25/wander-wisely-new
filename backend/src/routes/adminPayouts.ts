@@ -13,7 +13,7 @@ const ADMIN_SHARE = 0.1;
 
 type BookingRow = { id: string; booking_ref: string; user_name: string; amount_cents: number; paid_at: string | null; status: string };
 
-/** Only these are "fleet" in vendor-hub (under a listing). Experiences and events are listing types with no fleet. */
+/** Only these are "fleet" in partner portal (under a listing). Experiences and events are listing types with no fleet. */
 const FLEET_TYPES = [
   { id: "bus", name: "Bus bookings" },
   { id: "car", name: "Car bookings" },
@@ -365,7 +365,7 @@ router.get("/vendors", async (_req: Request, res: Response): Promise<void> => {
       console.error("[admin/payouts] vendors event", e);
     }
 
-    // Fallback: when no totals from vendor_listings, aggregate by listings.vendor_id (e.g. vendor-hub setup)
+    // Fallback: when no totals from vendor_listings, aggregate by listings.vendor_id (e.g. partner portal setup)
     if (vendorTotals.size === 0) {
       try {
         const transport = await query<{ vendor_id: string; vendor_name: string; total_cents: string }>(
@@ -739,7 +739,7 @@ router.get("/vendors/:vendorId/listings", async (req: Request, res: Response): P
   }
 });
 
-/** GET /api/admin/payouts/vendors/:vendorId/listings/:listingId — Fleets (only those that exist for this listing in vendor-hub) + payout totals. */
+/** GET /api/admin/payouts/vendors/:vendorId/listings/:listingId — Fleets (only those that exist for this listing in partner portal) + payout totals. */
 router.get("/vendors/:vendorId/listings/:listingId", async (req: Request, res: Response): Promise<void> => {
   const { vendorId, listingId } = req.params;
   try {

@@ -50,7 +50,7 @@ const Feedback = () => {
         <div className="container mx-auto px-4 max-w-lg py-12">
           <h1 className="text-3xl font-display font-bold text-foreground mb-2">Give feedback</h1>
           <p className="text-muted-foreground mb-8">
-            Rate your experience. Your feedback reaches our team and helps us improve Wanderlust.
+            Rate your experience. Your feedback reaches our team and helps us improve Wanderly.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-6">

@@ -34,7 +34,7 @@ const Navbar = () => {
             <Compass className="w-5 h-5 text-accent-foreground" />
           </div>
           <span className="text-xl font-display font-bold text-primary-foreground">
-            Wanderlust
+            Wanderly
           </span>
         </Link>
 

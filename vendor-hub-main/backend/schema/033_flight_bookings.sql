@@ -1,4 +1,4 @@
--- Flight bookings (user requests). Same DB as car_bookings so main app and vendor-hub can access.
+-- Flight bookings (user requests). Same DB as car_bookings so main app and partner portal can access.
 -- user_id = main app user. listing_id = vendor listing. flight_id = vendor's flight (no FK; flights may be static for now).
 CREATE TABLE IF NOT EXISTS public.flight_bookings (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

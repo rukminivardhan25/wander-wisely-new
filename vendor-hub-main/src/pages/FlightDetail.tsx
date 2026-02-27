@@ -304,7 +304,7 @@ export default function FlightDetail() {
     setLoading(true);
     setError("");
     Promise.all([
-      vendorFetch<{ id: string; flightNumber: string; airlineName: string; aircraftType: string; flightType: string; totalSeats: number; status: string; verificationStatus?: string; baseFareCents?: number; baggageAllowance?: string; seatLayout?: unknown }>(`/api/listings/${listingId}/flights/${flightId}`),
+      vendorFetch<{ id: string; flightNumber: string; airlineName: string; aircraftType: string; flightType: string; totalSeats: number; status: string; verificationStatus?: string; baseFareCents?: number; baggageAllowance?: string; seatLayout?: unknown; hasWifi?: boolean; hasCharging?: boolean; hasEntertainment?: boolean; hasMeal?: boolean }>(`/api/listings/${listingId}/flights/${flightId}`),
       vendorFetch<{ routes: { id: string; fromPlace: string; toPlace: string; fareCents?: number }[] }>(`/api/listings/${listingId}/flights/${flightId}/routes`),
       vendorFetch<{ schedules: { id: string; fromPlace: string; toPlace: string; scheduleDate: string; departureTime: string; arrivalTime: string; status: string }[] }>(`/api/listings/${listingId}/flights/${flightId}/schedules`),
     ])
@@ -326,10 +326,10 @@ export default function FlightDetail() {
           flight_type: f.flightType,
           base_fare_cents: f.baseFareCents,
           baggage_allowance: f.baggageAllowance,
-          has_wifi: false,
-          has_charging: false,
-          has_entertainment: false,
-          has_meal: false,
+          has_wifi: f.hasWifi ?? false,
+          has_charging: f.hasCharging ?? false,
+          has_entertainment: f.hasEntertainment ?? false,
+          has_meal: f.hasMeal ?? false,
           ...layout,
           layoutSource: useSavedLayout ? ("saved" as const) : ("default" as const),
         });
@@ -420,6 +420,8 @@ export default function FlightDetail() {
               flight_type: payload.flight_type,
               base_fare_cents: payload.base_fare_cents,
               baggage_allowance: payload.baggage_allowance ?? undefined,
+              verification_status: "no_request",
+              status: "inactive",
             }
           : null
       );
@@ -441,14 +443,36 @@ export default function FlightDetail() {
     }
   };
 
-  const handleSaveAmenities = () => {
-    if (!flight) return;
+  const handleSaveAmenities = async () => {
+    if (!flight || !listingId || !flightId) return;
     setSavingAmenities(true);
-    setFlight((prev) =>
-      prev ? { ...prev, has_wifi: amenitiesForm.has_wifi, has_charging: amenitiesForm.has_charging, has_entertainment: amenitiesForm.has_entertainment, has_meal: amenitiesForm.has_meal } : null
-    );
-    setEditingAmenities(false);
-    setSavingAmenities(false);
+    try {
+      await vendorFetch(`/api/listings/${listingId}/flights/${flightId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          has_wifi: amenitiesForm.has_wifi,
+          has_charging: amenitiesForm.has_charging,
+          has_entertainment: amenitiesForm.has_entertainment,
+          has_meal: amenitiesForm.has_meal,
+        }),
+      });
+      setFlight((prev) =>
+        prev
+          ? {
+              ...prev,
+              has_wifi: amenitiesForm.has_wifi,
+              has_charging: amenitiesForm.has_charging,
+              has_entertainment: amenitiesForm.has_entertainment,
+              has_meal: amenitiesForm.has_meal,
+              verification_status: "no_request",
+              status: "inactive",
+            }
+          : null
+      );
+      setEditingAmenities(false);
+    } finally {
+      setSavingAmenities(false);
+    }
   };
 
   const addRoute = async () => {
@@ -465,6 +489,7 @@ export default function FlightDetail() {
       setRoutes((next ?? []).map((r) => ({ id: r.id, from_place: r.fromPlace, to_place: r.toPlace, fare_cents: r.fareCents ?? 0 })));
       setNewRouteForm({ from_place: "", to_place: "", fare_rupees: "" });
       setRoutesSheetOpen(false);
+      setFlight((prev) => (prev ? { ...prev, verification_status: "no_request", status: "inactive" } : null));
     } catch {
       // keep form open on error
     }
@@ -476,6 +501,7 @@ export default function FlightDetail() {
       await vendorFetch(`/api/listings/${listingId}/flights/${flightId}/routes/${id}`, { method: "DELETE" });
       const { routes: next } = await vendorFetch<{ routes: { id: string; fromPlace: string; toPlace: string; fareCents?: number }[] }>(`/api/listings/${listingId}/flights/${flightId}/routes`);
       setRoutes((next ?? []).map((r) => ({ id: r.id, from_place: r.fromPlace, to_place: r.toPlace, fare_cents: r.fareCents ?? 0 })));
+      setFlight((prev) => (prev ? { ...prev, verification_status: "no_request", status: "inactive" } : null));
     } catch {
       // ignore
     }
@@ -606,7 +632,9 @@ export default function FlightDetail() {
             <CardHeader>
               <CardTitle className="text-base font-semibold">Quick actions</CardTitle>
               {flight.verification_status !== "approved" && (
-                <p className="text-xs text-muted-foreground mt-1">Verify this flight (Fleet → Verify) to add schedules, set active, or delete.</p>
+                <p className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+                  After any add or edit to flight info, routes & pricing, or amenities, re-verification is required and status is set to inactive. Verify this flight (Verification → Vehicles → Flights) to use Quick actions below.
+                </p>
               )}
             </CardHeader>
             <CardContent className="space-y-3">

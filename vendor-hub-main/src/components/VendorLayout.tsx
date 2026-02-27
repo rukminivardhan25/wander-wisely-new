@@ -1,7 +1,7 @@
-import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import { VendorSidebar } from "./VendorSidebar";
 import { TopHeader } from "./TopHeader";
+import { VendorFooter } from "./VendorFooter";
 
 export function VendorLayout() {
   return (
@@ -9,9 +9,10 @@ export function VendorLayout() {
       <VendorSidebar />
       <div className="transition-all duration-300 ml-[260px] peer-collapsed:ml-[72px] flex flex-col min-h-screen">
         <TopHeader />
-        <main className="flex-1 p-6 bg-muted/20 min-h-0">
+        <main className="flex-1 p-6 bg-muted/20 min-h-0 overflow-y-auto">
           <Outlet />
         </main>
+        <VendorFooter />
       </div>
     </div>
   );

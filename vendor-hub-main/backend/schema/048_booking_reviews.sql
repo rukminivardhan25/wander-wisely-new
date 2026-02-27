@@ -3,7 +3,7 @@
 CREATE TABLE IF NOT EXISTS public.booking_reviews (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 
-  -- Who wrote the review (main app user; no FK so main app and vendor-hub can use same or different DBs)
+  -- Who wrote the review (main app user; no FK so main app and partner portal can use same or different DBs)
   user_id uuid NOT NULL,
   user_name text,
 

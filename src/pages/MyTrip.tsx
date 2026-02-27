@@ -439,7 +439,7 @@ const MyTrip = () => {
   }, [data?.trip?.days, location.state]);
 
   useEffect(() => {
-    if (!token || !data?.trip.id) return;
+    if (!token || !data?.trip?.id) return;
     let cancelled = false;
     apiFetch<{ expenses: Expense[] }>(`/api/trips/${data.trip.id}/expenses`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -447,7 +447,7 @@ const MyTrip = () => {
       if (!cancelled && resData?.expenses) setExpenses(resData.expenses);
     });
     return () => { cancelled = true; };
-  }, [token, data?.trip.id]);
+  }, [token, data?.trip?.id]);
 
   const activeTripId = data?.trip?.id ?? null;
 
@@ -752,7 +752,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
 .ticket-foot{background:#f8fafc;padding:12px 20px;text-align:center;font-size:11px;color:#64748b}
 </style></head><body>
 <div class="ticket">
-  <div class="ticket-head"><div class="brand">WANDERLUST</div><div class="title">Experience ticket</div></div>
+  <div class="ticket-head"><div class="brand">WANDERLY</div><div class="title">Experience ticket</div></div>
   <hr class="perf"/>
   <div class="ticket-body">
     <div class="ref-box"><p class="ref-label">Booking reference</p><p class="ref-value">${ref}</p></div>
@@ -763,7 +763,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
     <div class="row"><span class="l">Amount paid</span><span class="r amount">₹${amt}</span></div>
     <div class="barcode" aria-hidden="true"></div>
   </div>
-  <div class="ticket-foot">Print or save as PDF · Wanderlust</div>
+  <div class="ticket-foot">Print or save as PDF · Wanderly</div>
 </div>
 </body></html>`;
     const iframe = document.createElement("iframe");
@@ -890,7 +890,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
 .ticket-foot{background:#f8fafc;padding:12px 20px;text-align:center;font-size:11px;color:#64748b}
 </style></head><body>
 <div class="ticket">
-  <div class="ticket-head"><div class="brand">WANDERLUST</div><div class="title">Event ticket</div></div>
+  <div class="ticket-head"><div class="brand">WANDERLY</div><div class="title">Event ticket</div></div>
   <hr class="perf"/>
   <div class="ticket-body">
     <div class="ref-box"><p class="ref-label">Booking reference</p><p class="ref-value">${ref}</p></div>
@@ -901,7 +901,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
     <div class="row"><span class="l">Amount paid</span><span class="r amount">₹${amt}</span></div>
     <div class="barcode" aria-hidden="true"></div>
   </div>
-  <div class="ticket-foot">Print or save as PDF · Wanderlust</div>
+  <div class="ticket-foot">Print or save as PDF · Wanderly</div>
 </div>
 </body></html>`;
     const iframe = document.createElement("iframe");
@@ -1014,6 +1014,25 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
             </p>
             <Button asChild variant="hero">
               <Link to={isReadOnly ? "/my-trips" : "/plan-trip"}>{isReadOnly ? "Back to My Trips" : "Plan a trip"}</Link>
+            </Button>
+          </div>
+        </section>
+      </Layout>
+    );
+  }
+
+  if (!data.trip) {
+    return (
+      <Layout>
+        <section className="pt-24 pb-16 min-h-screen flex items-center justify-center bg-slate-50">
+          <div className="text-center px-4 max-w-md">
+            <CalendarIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <h2 className="text-xl font-display font-bold text-foreground mb-2">No active trip</h2>
+            <p className="text-muted-foreground mb-6">
+              Plan a trip and choose &quot;Make This My Trip&quot; to see it here.
+            </p>
+            <Button asChild variant="hero">
+              <Link to="/plan-trip">Plan a trip</Link>
             </Button>
           </div>
         </section>
@@ -1235,7 +1254,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                         className="rounded-xl gap-1.5 w-full"
                         disabled={startDateSetting}
                         onClick={async () => {
-                          if (!token || !data?.trip.id) return;
+                          if (!token || !data?.trip?.id) return;
                           const startDateStr = toLocalDateString(calendarSelectedDate);
                           setStartDateSetting(true);
                           const { error, status } = await apiFetch(`/api/trips/${data.trip.id}`, {
@@ -1879,7 +1898,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                   toast({ title: "Invalid amount", description: "Enter a valid amount.", variant: "destructive" });
                   return;
                 }
-                if (!token || !data?.trip.id) return;
+                if (!token || !data?.trip?.id) return;
                 setExpenseSubmitting(true);
                 const { data: resData, error, status } = await apiFetch<{ expense: Expense }>(
                   `/api/trips/${data.trip.id}/expenses`,
@@ -2299,7 +2318,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
             {experienceTicketData && (
               <>
                 <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 text-white px-5 py-4 text-center">
-                  <p className="text-[11px] font-medium tracking-[0.2em] opacity-90">WANDERLUST</p>
+                  <p className="text-[11px] font-medium tracking-[0.2em] opacity-90">WANDERLY</p>
                   <p className="text-lg font-bold mt-1">Experience ticket</p>
                 </div>
                 <div className="border-t-2 border-dashed border-slate-200" />
@@ -2335,7 +2354,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                   </Button>
                 </div>
                 <div className="bg-slate-50 px-5 py-3 text-center text-[11px] text-muted-foreground">
-                  Print or save as PDF · Wanderlust
+                  Print or save as PDF · Wanderly
                 </div>
               </>
             )}
@@ -2351,7 +2370,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
             {eventTicketData && (
               <>
                 <div className="bg-gradient-to-br from-violet-600 to-violet-800 text-white px-5 py-4 text-center">
-                  <p className="text-[11px] font-medium tracking-[0.2em] opacity-90">WANDERLUST</p>
+                  <p className="text-[11px] font-medium tracking-[0.2em] opacity-90">WANDERLY</p>
                   <p className="text-lg font-bold mt-1">Event ticket</p>
                 </div>
                 <div className="border-t-2 border-dashed border-slate-200" />
@@ -2387,7 +2406,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                   </Button>
                 </div>
                 <div className="bg-slate-50 px-5 py-3 text-center text-[11px] text-muted-foreground">
-                  Print or save as PDF · Wanderlust
+                  Print or save as PDF · Wanderly
                 </div>
               </>
             )}

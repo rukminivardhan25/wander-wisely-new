@@ -140,7 +140,7 @@ type ApiCarOption = {
 
 const todayDate = () => new Date();
 
-/** Fallback cities for Car Local ride when API returns none (static UI). */
+/** Fallback cities for Car Local ride when API returns none. */
 const CAR_LOCAL_CITIES_FALLBACK = ["Hyderabad", "Bangalore", "Chennai", "Mumbai", "Delhi", "Pune", "Kolkata"];
 
 /** Format "09:00" -> "9:00 AM" for display */
@@ -445,8 +445,8 @@ const BookingMarketplace = () => {
         setExperienceCities([]);
         setExperienceError(
           networkError
-            ? "Could not reach the API. Start the main app backend (npm run dev:backend from project root) and ensure it uses the same DATABASE_URL as VendorHub."
-            : (error || "Could not load cities. Ensure the main app backend is running and uses the same database as VendorHub.")
+            ? "Could not reach the API. Start the main app backend (npm run dev:backend from project root) and ensure it uses the same DATABASE_URL as Partner Portal."
+            : (error || "Could not load cities. Ensure the main app backend is running and uses the same database as Partner Portal.")
         );
         return;
       }
@@ -1233,7 +1233,7 @@ const BookingMarketplace = () => {
             </div>
           )}
 
-          {/* Category content: Flight (static UI) */}
+          {/* Category content: Flight */}
           {selectedCategory === "flight" && (
             <div className="space-y-6">
               <h3 className="font-semibold text-foreground">
@@ -1301,13 +1301,13 @@ const BookingMarketplace = () => {
                 {busError && (
                   <div
                     className={`mb-4 rounded-xl border p-4 text-sm ${
-                      busError.includes("not running") || busError.includes("vendor hub")
+                      busError.includes("not running") || busError.includes("partner portal")
                         ? "border-amber-500/50 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
                         : "border-destructive/50 bg-destructive/5 text-destructive"
                     }`}
                   >
                     <p className="font-medium">{busError}</p>
-                    {(busError.includes("3002") || busError.includes("vendor hub")) && (
+                    {(busError.includes("3002") || busError.includes("partner portal")) && (
                       <p className="mt-2 text-xs opacity-90">
                         In a separate terminal run: <code className="rounded bg-black/10 px-1 py-0.5">cd vendor-hub-main/backend && npm run dev</code>
                       </p>
@@ -1707,7 +1707,7 @@ const BookingMarketplace = () => {
                       <h3 className="font-semibold text-foreground">Available cars</h3>
                       {carList.length === 0 ? (
                         <p className="text-sm text-muted-foreground py-6 text-center">
-                          No cars available for this search. Try another city/route or date, or add cars and schedules in the vendor hub.
+                          No cars available for this search. Try another city/route or date, or add cars and schedules in the partner portal.
                         </p>
                       ) : (
                         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1774,7 +1774,7 @@ const BookingMarketplace = () => {
                   </div>
                   <h3 className="text-lg font-semibold text-foreground mb-2">Booking request sent</h3>
                   <p className="text-sm text-muted-foreground mb-1">
-                    Your request for <strong>{carRequestedName ?? "this car"}</strong> is now pending vendor approval.
+                    Your request for <strong>{carRequestedName ?? "this car"}</strong> is now pending operator approval.
                   </p>
                   <p className="text-xs text-muted-foreground mb-4">
                     No payment yet. When the vendor accepts, you will see a &quot;Pay now&quot; button. After payment you will get your ticket with a booking OTP.
@@ -1884,7 +1884,7 @@ const BookingMarketplace = () => {
               {experienceCities.length === 0 && !experienceLoading && !experienceError && (
                 <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-muted-foreground">
                   <p className="font-medium text-foreground">No cities with experiences yet.</p>
-                  <p className="text-sm mt-2">To see a city here: in <strong>VendorHub</strong> go to My Listings → open the experience → <strong>Manage</strong> → click <strong>Active</strong>. The experience must be Active for its city to appear. Also run the main app backend with the same database (npm run dev:backend).</p>
+                  <p className="text-sm mt-2">To see a city here: in <strong>Partner Portal</strong> go to My Listings → open the experience → <strong>Manage</strong> → click <strong>Active</strong>. The experience must be Active for its city to appear. Also run the main app backend with the same database (npm run dev:backend).</p>
                 </div>
               )}
               {experienceError && <p className="text-sm text-destructive">{experienceError}</p>}
@@ -1964,7 +1964,7 @@ const BookingMarketplace = () => {
               {eventCities.length === 0 && !eventLoading && !eventError && (
                 <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-muted-foreground">
                   <p className="font-medium text-foreground">No cities with events yet.</p>
-                  <p className="text-sm mt-2">In VendorHub add an event listing, verify it, and set it Active. Use the same database for the main app backend.</p>
+                  <p className="text-sm mt-2">In Partner Portal add an event listing, verify it, and set it Active. Use the same database for the main app backend.</p>
                 </div>
               )}
               {eventError && <p className="text-sm text-destructive">{eventError}</p>}
@@ -2034,7 +2034,7 @@ const BookingMarketplace = () => {
               )}
               {!hotelLoading && hotelList.length === 0 && hotelCity.trim() && (
                 <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-muted-foreground">
-                  <p>No verified hotels found in this city. Try another city or add hotels in VendorHub and get them verified.</p>
+                  <p>No verified hotels found in this city. Try another city or add hotels in Partner Portal and get them verified.</p>
                 </div>
               )}
               {!hotelLoading && hotelList.length > 0 && (
@@ -2503,7 +2503,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
 .ticket-foot{background:#f8fafc;padding:12px 20px;text-align:center;font-size:11px;color:#64748b}
 </style></head><body>
 <div class="ticket">
-  <div class="ticket-head"><div class="brand">WANDERLUST</div><div class="title">Event ticket</div></div>
+  <div class="ticket-head"><div class="brand">WANDERLY</div><div class="title">Event ticket</div></div>
   <hr class="perf"/>
   <div class="ticket-body">
     <div class="ref-box"><p class="ref-label">Booking reference</p><p class="ref-value">${ref}</p></div>
@@ -2514,7 +2514,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
     <div class="row"><span class="l">Amount paid</span><span class="r amount">₹${amt}</span></div>
     <div class="barcode" aria-hidden="true"></div>
   </div>
-  <div class="ticket-foot">Print or save as PDF · Wanderlust</div>
+  <div class="ticket-foot">Print or save as PDF · Wanderly</div>
 </div>
 </body></html>`;
                     w.document.write(content);
@@ -2599,7 +2599,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
 .ticket-foot{background:#f8fafc;padding:12px 20px;text-align:center;font-size:11px;color:#64748b}
 </style></head><body>
 <div class="ticket">
-  <div class="ticket-head"><div class="brand">WANDERLUST</div><div class="title">Experience ticket</div></div>
+  <div class="ticket-head"><div class="brand">WANDERLY</div><div class="title">Experience ticket</div></div>
   <hr class="perf"/>
   <div class="ticket-body">
     <div class="ref-box"><p class="ref-label">Booking reference</p><p class="ref-value">${ref}</p></div>
@@ -2610,7 +2610,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
     <div class="row"><span class="l">Amount paid</span><span class="r amount">₹${amt}</span></div>
     <div class="barcode" aria-hidden="true"></div>
   </div>
-  <div class="ticket-foot">Print or save as PDF · Wanderlust</div>
+  <div class="ticket-foot">Print or save as PDF · Wanderly</div>
 </div>
 </body></html>`;
                     w.document.write(content);
@@ -2792,7 +2792,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
         </SheetContent>
       </Sheet>
 
-      {/* Flight book: passenger details + documents (static UI) */}
+      {/* Flight book: passenger details + documents */}
       <Dialog open={flightBookOpen} onOpenChange={setFlightBookOpen}>
         <DialogContent className="rounded-2xl max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -2800,14 +2800,13 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
               <Plane className="h-5 w-5" /> Add passenger details & documents
             </DialogTitle>
             <DialogDescription>
-              Add details for all {flightPassengerForms.length} passenger(s). Each passenger needs ID type, number and document upload. You will wait for vendor approval after submitting.
+              Add details for all {flightPassengerForms.length} passenger(s). Each passenger needs ID type, number and document upload. You will wait for operator approval after submitting.
             </DialogDescription>
           </DialogHeader>
           {flightRequestSubmitted ? (
             <div className="py-6 text-center">
               <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto mb-3" />
-              <p className="font-medium text-foreground">Request submitted (static UI)</p>
-              <p className="text-sm text-muted-foreground mt-1">Backend integration coming soon. Once connected, you will see this booking under My Trip and vendor will see it in Bookings → Flight.</p>
+              <p className="font-medium text-foreground">Request submitted. Operator approval is required.</p>
               <Button className="mt-4 rounded-xl" onClick={() => { setFlightBookOpen(false); setSelectedFlightForBook(null); }}>Close</Button>
             </div>
           ) : selectedFlightForBook ? (

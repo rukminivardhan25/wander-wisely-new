@@ -101,7 +101,8 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       res.status(503).json({ error: "Flight bookings not set up. Run schema 033_flight_bookings.sql on transport DB." });
       return;
     }
-    res.status(500).json({ error: "Failed to list flight bookings" });
+    const safeMsg = process.env.NODE_ENV !== "production" && msg ? msg : "Failed to list flight bookings";
+    res.status(500).json({ error: safeMsg });
   }
 });
 
@@ -122,6 +123,15 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
       return;
     }
     const pool = getDb();
+    // Only set trip_id if the trip exists and belongs to this user (avoids FK violation)
+    let tripIdToUse: string | null = null;
+    if (d.tripId) {
+      const tripCheck = await pool.query<{ id: string }>(
+        "SELECT id FROM public.trips WHERE id = $1 AND user_id = $2",
+        [d.tripId, userId]
+      );
+      if (tripCheck.rows.length > 0) tripIdToUse = d.tripId;
+    }
     const ref = bookingRef();
     const insertResult = await pool.query<{ id: string }>(
       `INSERT INTO flight_bookings (
@@ -129,7 +139,7 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
         route_from, route_to, travel_date, passengers, total_cents, status
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::date, $10, $11, 'pending_vendor')
       RETURNING id`,
-      [userId, d.tripId ?? null, ref, d.listingId, d.flightId, d.scheduleId ?? null, d.routeFrom, d.routeTo, d.travelDate, d.passengers, d.totalCents]
+      [userId, tripIdToUse, ref, d.listingId, d.flightId, d.scheduleId ?? null, d.routeFrom, d.routeTo, d.travelDate, d.passengers, d.totalCents]
     );
     const bookingId = insertResult.rows[0]?.id;
     if (!bookingId) {
@@ -158,7 +168,8 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
       res.status(503).json({ error: "Flight bookings not set up. Run schema 033_flight_bookings.sql on transport DB." });
       return;
     }
-    res.status(500).json({ error: "Failed to create flight booking" });
+    const safeMsg = process.env.NODE_ENV !== "production" && msg ? msg : "Failed to create flight booking";
+    res.status(500).json({ error: safeMsg });
   }
 });
 

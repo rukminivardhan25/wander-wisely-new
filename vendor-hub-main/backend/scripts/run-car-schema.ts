@@ -1,9 +1,9 @@
 /**
  * Run car-related schema files only (026, 028, 031, 032).
- * Use when the vendor-hub DB already has base tables and you need cars + car_operating_areas + car_bookings.
+ * Use when the partner portal DB already has base tables and you need cars + car_operating_areas + car_bookings.
  *
  * From vendor-hub-main/backend: npx tsx scripts/run-car-schema.ts
- * Requires .env with DATABASE_URL pointing to the vendor-hub database.
+ * Requires .env with DATABASE_URL pointing to the partner portal database.
  */
 import { config } from "dotenv";
 import { join, dirname } from "path";

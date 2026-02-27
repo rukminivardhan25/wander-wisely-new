@@ -8,7 +8,7 @@ import { overpassFetch } from "@/lib/overpassFetch";
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
 const NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse";
-const USER_AGENT = "Wanderlust-NearbyRestaurants/1.0 (travel app)";
+const USER_AGENT = "Wanderly-NearbyRestaurants/1.0 (travel app)";
 
 export type GeoResult = {
   lat: number;

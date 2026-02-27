@@ -28,7 +28,7 @@ import adminBookingsRoutes from "./routes/adminBookings.js";
 import adminPayoutsRoutes from "./routes/adminPayouts.js";
 import bookingReviewsRoutes from "./routes/bookingReviews.js";
 
-/** Log DATABASE_URL (password redacted) so you can confirm main app and vendor hub use the same DB. */
+/** Log DATABASE_URL (password redacted) so you can confirm main app and partner portal use the same DB. */
 function logDbUrl(label: string, url: string): void {
   try {
     const u = new URL(url);
@@ -63,6 +63,17 @@ app.use(cors({
   preflightContinue: false,
 }));
 app.use(express.json());
+
+// Log 4xx/5xx responses so you can see which request failed (check terminal for the route and error).
+app.use((req, res, next) => {
+  const onDone = () => {
+    if (res.statusCode >= 400) {
+      console.warn(`[${res.statusCode}] ${req.method} ${req.originalUrl || req.url}`);
+    }
+  };
+  res.on("finish", onDone);
+  next();
+});
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", message: "Wander Wisely API" });

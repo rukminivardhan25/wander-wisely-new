@@ -7,7 +7,7 @@ function getUrl(base: string, path: string): string {
   return `${base.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-/** Call vendor-hub backend for admin (e.g. list vendors). Sends X-Admin-Key if set. */
+/** Call partner portal backend for admin (e.g. list vendors). Sends X-Admin-Key if set. */
 export async function vendorHubFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const url = getUrl(VENDOR_HUB_API_URL, path);
   const headers: Record<string, string> = { "Content-Type": "application/json", ...(options?.headers as Record<string, string>) };

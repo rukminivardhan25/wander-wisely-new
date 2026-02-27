@@ -13,7 +13,7 @@ export const pool = new Pool({
   ssl: connectionString.includes("localhost") ? false : { rejectUnauthorized: false },
 });
 
-/** Use for car_bookings so vendor hub sees bookings created by the main app. Set TRANSPORT_DATABASE_URL to the same DB URL the main app uses for car bookings (main app TRANSPORT_DATABASE_URL or DATABASE_URL). */
+/** Use for car_bookings so partner portal sees bookings created by the main app. Set TRANSPORT_DATABASE_URL to the same DB URL the main app uses for car bookings (main app TRANSPORT_DATABASE_URL or DATABASE_URL). */
 const transportConnectionString = process.env.TRANSPORT_DATABASE_URL;
 export const transportPool =
   transportConnectionString && transportConnectionString.trim() !== ""

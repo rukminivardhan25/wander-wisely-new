@@ -12,7 +12,7 @@ const Footer = () => {
               <div className="w-8 h-8 rounded-lg bg-gradient-sunset flex items-center justify-center">
                 <Compass className="w-5 h-5 text-accent-foreground" />
               </div>
-              <span className="text-xl font-display font-bold">Wanderlust</span>
+              <span className="text-xl font-display font-bold">Wanderly</span>
             </Link>
             <p className="text-primary-foreground/60 text-sm leading-relaxed">
               Your AI-powered travel companion. Discover, plan, and explore the world with personalized itineraries.
@@ -47,7 +47,7 @@ const Footer = () => {
             <ul className="space-y-3">
               <li className="flex items-center gap-2 text-sm text-primary-foreground/60">
                 <Mail className="w-4 h-4 text-accent shrink-0" />
-                <a href="mailto:hello@wanderlust.app" className="hover:text-accent transition-colors">hello@wanderlust.app</a>
+                <a href="mailto:hello@wanderly.app" className="hover:text-accent transition-colors">hello@wanderly.app</a>
               </li>
               <li className="flex items-center gap-2 text-sm text-primary-foreground/60">
                 <Phone className="w-4 h-4 text-accent shrink-0" />
@@ -59,7 +59,7 @@ const Footer = () => {
 
         <div className="border-t border-primary-foreground/10 mt-12 pt-8 flex flex-col sm:flex-row items-center justify-center gap-4 text-center">
           <p className="text-sm text-primary-foreground/40">
-            © 2026 Wanderlust. All rights reserved. Made with ❤️ for travelers.
+            © 2026 Wanderly. All rights reserved. Made with ❤️ for travelers.
           </p>
           <div className="flex items-center gap-6">
             <Link to="/feedback" className="text-sm text-primary-foreground/60 hover:text-accent transition-colors">

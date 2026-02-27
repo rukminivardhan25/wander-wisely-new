@@ -15,7 +15,7 @@ const About = () => {
       <section className="pt-24 pb-16 bg-gradient-hero">
         <div className="container mx-auto px-4 text-center py-16">
           <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-4xl md:text-6xl font-display font-bold text-primary-foreground mb-6">
-            About Wanderlust
+            About Wanderly
           </motion.h1>
           <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="text-lg text-primary-foreground/70 max-w-xl mx-auto">
             We're on a mission to make travel planning effortless, personal, and inspiring for every adventurer.

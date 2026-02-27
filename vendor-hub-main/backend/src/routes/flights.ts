@@ -19,6 +19,10 @@ const flightSchema = z.object({
   seat_layout: z.record(z.unknown()).optional().nullable(),
   base_fare_cents: z.number().int().min(0).optional().nullable(),
   baggage_allowance: z.string().optional().nullable(),
+  has_wifi: z.boolean().optional(),
+  has_charging: z.boolean().optional(),
+  has_entertainment: z.boolean().optional(),
+  has_meal: z.boolean().optional(),
 });
 const createSchema = flightSchema;
 const updateSchema = flightSchema.partial();
@@ -88,11 +92,18 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       baggage_allowance: string | null;
       verification_token: string | null;
       verification_status: string | null;
+      has_wifi?: boolean;
+      has_charging?: boolean;
+      has_entertainment?: boolean;
+      has_meal?: boolean;
       created_at: string;
       updated_at: string;
     }>(
       `SELECT id, flight_number, airline_name, aircraft_type, flight_type, total_seats, status,
-       seat_layout, base_fare_cents, baggage_allowance, verification_token, verification_status, created_at, updated_at
+       seat_layout, base_fare_cents, baggage_allowance, verification_token, verification_status,
+       COALESCE(has_wifi, false) AS has_wifi, COALESCE(has_charging, false) AS has_charging,
+       COALESCE(has_entertainment, false) AS has_entertainment, COALESCE(has_meal, false) AS has_meal,
+       created_at, updated_at
        FROM flights WHERE listing_id = $1 ORDER BY flight_number`,
       [listingId]
     );
@@ -110,6 +121,10 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
         baggageAllowance: r.baggage_allowance ?? undefined,
         verificationToken: r.verification_token ?? undefined,
         verificationStatus: r.verification_status ?? undefined,
+        hasWifi: r.has_wifi ?? false,
+        hasCharging: r.has_charging ?? false,
+        hasEntertainment: r.has_entertainment ?? false,
+        hasMeal: r.has_meal ?? false,
         createdAt: r.created_at,
         updatedAt: r.updated_at,
       })),
@@ -256,11 +271,18 @@ router.get("/:flightId", async (req: Request, res: Response): Promise<void> => {
       baggage_allowance: string | null;
       verification_token: string | null;
       verification_status: string | null;
+      has_wifi?: boolean;
+      has_charging?: boolean;
+      has_entertainment?: boolean;
+      has_meal?: boolean;
       created_at: string;
       updated_at: string;
     }>(
       `SELECT id, flight_number, airline_name, aircraft_type, flight_type, total_seats, status,
-       seat_layout, base_fare_cents, baggage_allowance, verification_token, verification_status, created_at, updated_at
+       seat_layout, base_fare_cents, baggage_allowance, verification_token, verification_status,
+       COALESCE(has_wifi, false) AS has_wifi, COALESCE(has_charging, false) AS has_charging,
+       COALESCE(has_entertainment, false) AS has_entertainment, COALESCE(has_meal, false) AS has_meal,
+       created_at, updated_at
        FROM flights WHERE id = $1 AND listing_id = $2`,
       [flightId, listingId]
     );
@@ -282,6 +304,10 @@ router.get("/:flightId", async (req: Request, res: Response): Promise<void> => {
       baggageAllowance: r.baggage_allowance ?? undefined,
       verificationToken: r.verification_token ?? undefined,
       verificationStatus: r.verification_status ?? undefined,
+      hasWifi: r.has_wifi ?? false,
+      hasCharging: r.has_charging ?? false,
+      hasEntertainment: r.has_entertainment ?? false,
+      hasMeal: r.has_meal ?? false,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     });
@@ -351,9 +377,33 @@ router.patch("/:flightId", async (req: Request, res: Response): Promise<void> =>
       updates.push(`baggage_allowance = $${idx++}`);
       values.push(d.baggage_allowance);
     }
+    if (d.has_wifi !== undefined) {
+      updates.push(`has_wifi = $${idx++}`);
+      values.push(d.has_wifi);
+    }
+    if (d.has_charging !== undefined) {
+      updates.push(`has_charging = $${idx++}`);
+      values.push(d.has_charging);
+    }
+    if (d.has_entertainment !== undefined) {
+      updates.push(`has_entertainment = $${idx++}`);
+      values.push(d.has_entertainment);
+    }
+    if (d.has_meal !== undefined) {
+      updates.push(`has_meal = $${idx++}`);
+      values.push(d.has_meal);
+    }
     if (updates.length === 0) {
       res.status(400).json({ error: "No fields to update" });
       return;
+    }
+    const isOnlyStatus =
+      Object.keys(d).length === 1 && d.status !== undefined;
+    if (!isOnlyStatus) {
+      updates.push(`verification_status = $${idx++}`);
+      values.push("no_request");
+      updates.push(`status = $${idx++}`);
+      values.push("inactive");
     }
     updates.push("updated_at = now()");
     values.push(flightId, listingId);

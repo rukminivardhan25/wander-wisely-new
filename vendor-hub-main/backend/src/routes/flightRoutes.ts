@@ -121,6 +121,7 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
       res.status(500).json({ error: "Failed to create route" });
       return;
     }
+    await query("UPDATE flights SET verification_status = 'no_request', status = 'inactive', updated_at = now() WHERE id = $1 AND listing_id = $2", [flightId, listingId]);
     res.status(201).json({ id: row.id, fromPlace: row.from_place, toPlace: row.to_place });
   } catch (err) {
     console.error("Create flight route error:", err);
@@ -180,6 +181,7 @@ router.patch("/:routeId", async (req: Request, res: Response): Promise<void> => 
       res.status(404).json({ error: "Route not found" });
       return;
     }
+    await query("UPDATE flights SET verification_status = 'no_request', status = 'inactive', updated_at = now() WHERE id = $1 AND listing_id = $2", [flightId, listingId]);
     res.json({ ok: true });
   } catch (err) {
     console.error("Update flight route error:", err);
@@ -208,6 +210,7 @@ router.delete("/:routeId", async (req: Request, res: Response): Promise<void> =>
       res.status(404).json({ error: "Route not found" });
       return;
     }
+    await query("UPDATE flights SET verification_status = 'no_request', status = 'inactive', updated_at = now() WHERE id = $1 AND listing_id = $2", [flightId, listingId]);
     res.json({ ok: true });
   } catch (err) {
     console.error("Delete flight route error:", err);

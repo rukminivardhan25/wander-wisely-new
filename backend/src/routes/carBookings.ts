@@ -171,7 +171,7 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
     console.error("Create car booking error:", err);
     const msg = err && typeof err === "object" && "message" in err ? String((err as Error).message) : "";
     if (msg.includes("car_bookings") && msg.includes("does not exist")) {
-      res.status(503).json({ error: "Car bookings not set up. Run vendor-hub schema 032_car_rental_bookings.sql on transport DB." });
+      res.status(503).json({ error: "Car bookings not set up. Run partner portal schema 032_car_rental_bookings.sql on transport DB." });
       return;
     }
     res.status(500).json({ error: "Failed to create car booking" });

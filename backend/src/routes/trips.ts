@@ -179,8 +179,20 @@ router.post("/generate", async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    for (const d of plan.days) {
-      const imageUrls = await getDayImages(d.mainPlace || destination, destination, 2);
+    const planDays = Array.isArray(plan?.days) ? plan.days : [];
+    if (planDays.length === 0) {
+      await query("update trips set status = 'failed' where id = $1", [tripId]);
+      res.status(502).json({ error: "Failed to generate itinerary. No days returned. Please try again." });
+      return;
+    }
+
+    for (const d of planDays) {
+      let imageUrls: string[] = [];
+      try {
+        imageUrls = await getDayImages(d.mainPlace || destination, destination, 2);
+      } catch (imgErr) {
+        console.warn("Day images fetch failed (continuing without images):", imgErr);
+      }
       const content = {
         summary: d.summary,
         activities: d.activities,
@@ -212,11 +224,15 @@ router.post("/generate", async (req: Request, res: Response): Promise<void> => {
     });
   } catch (err) {
     console.error("Generate trip error:", err);
-    res.status(500).json({ error: "Failed to generate trip" });
+    const msg = err instanceof Error ? err.message : String(err);
+    const safeMsg = process.env.NODE_ENV !== "production" && msg
+      ? msg
+      : "Failed to generate trip. Check server logs or set GROQ_API_KEY in backend .env (see https://console.groq.com).";
+    res.status(500).json({ error: safeMsg });
   }
 });
 
-/** Get the current user's active trip (status = 'active'). One per user. Returns 404 if none. */
+/** Get the current user's active trip (status = 'active'). One per user. Returns 200 with trip: null if none. */
 router.get("/active", async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.userId!;
@@ -225,7 +241,7 @@ router.get("/active", async (req: Request, res: Response): Promise<void> => {
       [userId]
     );
     if (tripRow.rows.length === 0) {
-      res.status(404).json({ error: "No active trip" });
+      res.status(200).json({ trip: null, itineraries: [], activity_status: [] });
       return;
     }
     const trip = tripRow.rows[0];

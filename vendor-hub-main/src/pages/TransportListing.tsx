@@ -169,15 +169,13 @@ const MODELS = [
 ];
 
 const FLEET_VEHICLE_TYPES = [
-  { value: "all", label: "All" },
   { value: "bus", label: "Bus" },
   { value: "car", label: "Car" },
-  { value: "bike", label: "Bike" },
-  { value: "cycle", label: "Cycle" },
-  { value: "train", label: "Train" },
   { value: "flight", label: "Flight" },
 ] as const;
 type FleetVehicleType = (typeof FLEET_VEHICLE_TYPES)[number]["value"];
+/** Tab filter can also show "all" vehicles */
+type FleetTabValue = FleetVehicleType | "all";
 
 export default function TransportListing() {
   const { listingId } = useParams<{ listingId: string }>();
@@ -236,7 +234,7 @@ export default function TransportListing() {
   const [openAddRouteOnRoutesLoad, setOpenAddRouteOnRoutesLoad] = useState(false);
   const [fleetStatusFilter, setFleetStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [fleetSort, setFleetSort] = useState<"name" | "status" | "seats">("name");
-  const [fleetVehicleTypeFilter, setFleetVehicleTypeFilter] = useState<FleetVehicleType>("all");
+  const [fleetVehicleTypeFilter, setFleetVehicleTypeFilter] = useState<FleetTabValue>("all");
   const [addVehicleTypeModalOpen, setAddVehicleTypeModalOpen] = useState(false);
   const [showBusSetupFlow, setShowBusSetupFlow] = useState(false);
   const [busJustAddedId, setBusJustAddedId] = useState<string | null>(null);
@@ -1018,7 +1016,7 @@ export default function TransportListing() {
             <p className="text-sm text-muted-foreground">Transport · View fleet</p>
           </div>
         </div>
-        <Tabs value={fleetVehicleTypeFilter} onValueChange={(v) => setFleetVehicleTypeFilter(v as FleetVehicleType)} className="w-full">
+        <Tabs value={fleetVehicleTypeFilter} onValueChange={(v) => setFleetVehicleTypeFilter(v as FleetTabValue)} className="w-full">
           <TabsList className="flex flex-wrap gap-1 bg-muted/50 p-1.5 rounded-xl w-full sm:w-auto">
             <TabsTrigger value="bus" className="rounded-lg gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Bus className="h-4 w-4" /> Bus
@@ -1202,7 +1200,7 @@ export default function TransportListing() {
 
       {/* Vehicle-type bar: All | Bus | Car | Flight */}
       {!showBusSetupFlow && !showCarSetupFlow && (
-        <Tabs value={fleetVehicleTypeFilter} onValueChange={(v) => setFleetVehicleTypeFilter(v as FleetVehicleType)} className="w-full">
+        <Tabs value={fleetVehicleTypeFilter} onValueChange={(v) => setFleetVehicleTypeFilter(v as FleetTabValue)} className="w-full">
           <TabsList className="flex flex-wrap gap-1 bg-muted/50 p-1.5 rounded-xl w-full sm:w-auto">
             <TabsTrigger value="all" className="rounded-lg gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               All

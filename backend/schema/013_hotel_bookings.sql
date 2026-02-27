@@ -1,5 +1,5 @@
 -- Hotel booking requests from users. Vendor approves and allots room_number.
--- Uses same DB as vendor-hub (listings, hotel_branches).
+-- Uses same DB as partner portal (listings, hotel_branches).
 CREATE TABLE IF NOT EXISTS public.hotel_bookings (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,

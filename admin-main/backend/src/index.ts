@@ -4,6 +4,7 @@ import cors from "cors";
 import path from "path";
 import fs from "fs";
 import verificationRoutes from "./routes/verification.js";
+import dashboardRoutes from "./routes/dashboard.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 3003;
@@ -16,8 +17,9 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/verification", verificationRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
-// Serve verification uploads so admin can open documents (same files as vendor-hub uploads)
+// Serve verification uploads so admin can open documents (same files as partner portal uploads)
 const UPLOADS_PATH = process.env.UPLOADS_PATH || path.resolve(process.cwd(), "..", "..", "vendor-hub-main", "backend", "uploads");
 app.get("/api/verification/uploads/:filename", (req, res) => {
   const filename = req.params.filename;

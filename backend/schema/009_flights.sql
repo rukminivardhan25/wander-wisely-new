@@ -1,5 +1,5 @@
 -- Flights: vendor-managed. One row per flight (e.g. 6E-201).
--- Requires: public.listings table (e.g. from vendor-hub or shared DB).
+-- Requires: public.listings table (e.g. from partner portal or shared DB).
 CREATE TABLE IF NOT EXISTS public.flights (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   listing_id uuid NOT NULL REFERENCES public.listings(id) ON DELETE CASCADE,

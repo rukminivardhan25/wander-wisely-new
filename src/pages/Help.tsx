@@ -138,7 +138,7 @@ const Help = () => {
             transition={{ delay: 0.1 }}
             className="text-lg text-primary-foreground/70 max-w-xl mx-auto"
           >
-            How to use each feature of Wanderlust.
+            How to use each feature of Wanderly.
           </motion.p>
         </div>
       </section>

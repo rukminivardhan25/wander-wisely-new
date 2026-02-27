@@ -9,12 +9,12 @@ const Terms = () => {
           <p className="text-sm text-muted-foreground mb-8">Last updated: 2026</p>
           <div className="prose prose-neutral dark:prose-invert max-w-none space-y-6 text-muted-foreground">
             <p>
-              Welcome to Wanderlust. By using our app, you agree to these Terms of Service. Please read them carefully.
+              Welcome to Wanderly. By using our app, you agree to these Terms of Service. Please read them carefully.
             </p>
 
             <h2 className="text-lg font-semibold text-foreground mt-8">Use of the service</h2>
             <p>
-              Wanderlust provides AI-powered trip planning, destination discovery, and a travel community. You must use the service in accordance with these terms and applicable laws.
+              Wanderly provides AI-powered trip planning, destination discovery, and a travel community. You must use the service in accordance with these terms and applicable laws.
             </p>
 
             <h2 className="text-lg font-semibold text-foreground mt-8">Community guidelines – travel-only content</h2>
@@ -32,7 +32,7 @@ const Terms = () => {
 
             <h2 className="text-lg font-semibold text-foreground mt-8">Intellectual property</h2>
             <p>
-              The app, its design, and our content are owned by Wanderlust or our licensors. You retain ownership of the content you post but grant us a license to use it to operate and display the community and related features.
+              The app, its design, and our content are owned by Wanderly or our licensors. You retain ownership of the content you post but grant us a license to use it to operate and display the community and related features.
             </p>
 
             <h2 className="text-lg font-semibold text-foreground mt-8">Disclaimer</h2>
@@ -41,7 +41,7 @@ const Terms = () => {
             </p>
 
             <p className="mt-8">
-              By continuing to use Wanderlust, you agree to these Terms. We may update them from time to time; continued use after changes constitutes acceptance.
+              By continuing to use Wanderly, you agree to these Terms. We may update them from time to time; continued use after changes constitutes acceptance.
             </p>
           </div>
         </div>
