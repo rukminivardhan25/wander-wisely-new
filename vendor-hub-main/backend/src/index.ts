@@ -32,6 +32,7 @@ app.use(cors({
     if (!origin) return cb(null, true);
     if (allowedSet.has(origin)) return cb(null, origin);
     if (/^https?:\/\/localhost(:\d+)?$/.test(origin) || /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) return cb(null, origin);
+    if (origin.endsWith(".vercel.app")) return cb(null, origin);
     return cb(null, false);
   },
   credentials: true,

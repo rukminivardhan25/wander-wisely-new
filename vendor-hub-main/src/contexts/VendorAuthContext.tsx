@@ -1,4 +1,5 @@
 import { createContext, useState, useCallback, useEffect, type ReactNode } from "react";
+import { getVendorApiUrl } from "@/lib/api";
 
 export interface Vendor {
   id: string;
@@ -46,12 +47,8 @@ export function VendorAuthProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, ...readStored(), ready: true }));
   }, []);
 
-  function getApiUrl() {
-    return import.meta.env.VITE_VENDOR_API_URL ?? "http://localhost:3002";
-  }
-
   const signIn = useCallback(async (email: string, password: string) => {
-    const url = `${getApiUrl()}/api/auth/signin`;
+    const url = getVendorApiUrl("/api/auth/signin");
     let res: Response;
     try {
       res = await fetch(url, {
@@ -75,7 +72,7 @@ export function VendorAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = useCallback(async (data: { name: string; email: string; phone?: string; password: string }) => {
-    const url = `${getApiUrl()}/api/auth/signup`;
+    const url = getVendorApiUrl("/api/auth/signup");
     let res: Response;
     try {
       res = await fetch(url, {
