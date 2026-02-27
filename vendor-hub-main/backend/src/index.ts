@@ -45,6 +45,10 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", message: "Partner Portal API" });
 });
 
+app.get("/", (_req, res) => {
+  res.json({ message: "Partner Portal API", docs: "Use the vendor hub frontend; API routes are under /api/...", health: "/api/health" });
+});
+
 /** Debug: return ALL car_bookings (no filters). Uses same DB as DATABASE_URL (single DB). */
 app.get("/api/debug/all-car-bookings", async (_req, res) => {
   try {
