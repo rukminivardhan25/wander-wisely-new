@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, LogOut, MessageSquare } from "lucide-react";
+import { Bell, ChevronDown, LogOut, Menu, MessageSquare } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import {
@@ -36,7 +36,11 @@ function formatNotificationDate(iso: string) {
   }
 }
 
-export function TopHeader() {
+type TopHeaderProps = {
+  onMenuClick?: () => void;
+};
+
+export function TopHeader({ onMenuClick }: TopHeaderProps) {
   const navigate = useNavigate();
   const { vendor, logout } = useVendorAuth();
   const [notifications, setNotifications] = useState<Ticket[]>([]);
@@ -72,9 +76,18 @@ export function TopHeader() {
   }
 
   return (
-    <header className="h-16 bg-card border-b border-border flex items-center justify-between px-6 sticky top-0 z-30">
+    <header className="h-14 md:h-16 bg-card border-b border-border flex items-center justify-between px-4 md:px-6 sticky top-0 z-30">
+      {/* Mobile menu button */}
+      <button
+        type="button"
+        onClick={onMenuClick}
+        className="md:hidden p-2 -ml-2 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+        aria-label="Open menu"
+      >
+        <Menu size={24} />
+      </button>
       {/* Right */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 md:gap-4 ml-auto">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" className="relative p-2 rounded-lg hover:bg-muted transition-colors" aria-label="Notifications">
@@ -86,7 +99,7 @@ export function TopHeader() {
               )}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80 max-h-[360px] overflow-y-auto">
+          <DropdownMenuContent align="end" className="w-[min(20rem,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto">
             <div className="px-2 py-1.5 text-sm font-semibold text-foreground border-b">Notifications</div>
             {loading ? (
               <div className="px-3 py-4 text-sm text-muted-foreground">Loading…</div>
@@ -132,7 +145,7 @@ export function TopHeader() {
               <ChevronDown size={16} className="text-muted-foreground" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuContent align="end" className="w-56 max-w-[calc(100vw-2rem)]">
             <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive cursor-pointer">
               <LogOut className="mr-2 h-4 w-4" />
               Sign out

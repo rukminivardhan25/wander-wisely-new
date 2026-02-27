@@ -11,7 +11,7 @@ export function VendorFooter() {
   const [open, setOpen] = useState(false);
 
   return (
-    <footer className="border-t border-border bg-card px-6 py-3 shrink-0">
+    <footer className="border-t border-border bg-card px-4 md:px-6 py-3 shrink-0">
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger className="flex items-center gap-2 w-full text-left text-sm text-muted-foreground hover:text-foreground transition-colors">
           <HelpCircle className="h-4 w-4 shrink-0" />
