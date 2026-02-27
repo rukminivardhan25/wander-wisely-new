@@ -120,36 +120,6 @@ export default function Listings() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Static company card (demo) */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0 }}
-          className="bg-card rounded-2xl shadow-card border border-border/50 overflow-hidden hover:shadow-card-hover transition-shadow"
-        >
-          <div className="h-36 bg-amber-500/20 flex items-center justify-center">
-            <Building2 className="h-12 w-12 text-amber-600/80" />
-          </div>
-          <div className="p-5">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <h3 className="font-display font-semibold text-foreground">Your Hotel Company</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Company</p>
-              </div>
-              <Button type="button" variant="outline" size="sm" className="rounded-lg text-xs h-8 gap-1.5 shrink-0" disabled>
-                <Shield className="h-3.5 w-3.5" /> Verify
-              </Button>
-            </div>
-            <div className="flex items-center gap-2 mt-4 pt-4 border-t border-border flex-wrap">
-              <span
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted text-muted-foreground"
-                title="Static demo card"
-              >
-                <Building2 size={14} /> Manage Hotels (verify first)
-              </span>
-            </div>
-          </div>
-        </motion.div>
         {listings.map((l, i) => (
           <motion.div
             key={l.id}

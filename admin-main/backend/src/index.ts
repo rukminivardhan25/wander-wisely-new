@@ -16,6 +16,10 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", message: "Admin API" });
 });
 
+app.get("/", (_req, res) => {
+  res.json({ message: "Admin API", docs: "API routes are under /api/...", health: "/api/health" });
+});
+
 app.use("/api/verification", verificationRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 
@@ -45,5 +49,6 @@ app.use((err: Error, _req: express.Request, res: express.Response) => {
 });
 
 app.listen(Number(PORT), "0.0.0.0", () => {
-  console.log(`Admin API running at http://localhost:${PORT}`);
+  const publicUrl = process.env.RENDER_EXTERNAL_URL ?? process.env.PUBLIC_URL;
+  console.log(publicUrl ? `Admin API running at ${publicUrl}` : `Admin API running at http://localhost:${PORT}`);
 });
