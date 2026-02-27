@@ -54,6 +54,8 @@ app.use(cors({
   origin: (origin, cb) => {
     if (!origin) return cb(null, true);
     if (allowedSet.has(origin)) return cb(null, origin);
+    // Allow any Vercel deployment (production and preview URLs like *.vercel.app)
+    if (origin.endsWith(".vercel.app")) return cb(null, origin);
     return cb(null, false);
   },
   credentials: true,
