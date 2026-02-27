@@ -1,7 +1,13 @@
-// Use VITE_API_URL if set; in production build default to deployed backend so Vercel works without env
-const API_BASE =
-  import.meta.env.VITE_API_URL ??
-  (import.meta.env.PROD ? "https://wander-wisely-new.onrender.com" : "http://localhost:3001");
+// Use VITE_API_URL if set; in production build default to deployed backend so Vercel works without env.
+// Also use production API when running on a non-local host (e.g. wanderly-xi.vercel.app) so it works even if build cache or env is wrong.
+function getDefaultApiBase(): string {
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host !== "localhost" && host !== "127.0.0.1") return "https://wander-wisely-new.onrender.com";
+  }
+  return import.meta.env.PROD ? "https://wander-wisely-new.onrender.com" : "http://localhost:3001";
+}
+const API_BASE = import.meta.env.VITE_API_URL ?? getDefaultApiBase();
 const API_TIMEOUT_MS = 15000;
 
 export function getApiUrl(path: string): string {
