@@ -102,5 +102,6 @@ app.listen(Number(PORT), "0.0.0.0", () => {
   const dbUrl = process.env.DATABASE_URL ?? "";
   if (dbUrl) logDbUrl("Partner portal DATABASE_URL", dbUrl);
   console.log("[DB] Car bookings use DATABASE_URL (single DB, same as bus/listings).");
-  console.log(`Partner Portal API running at http://localhost:${PORT}`);
+  const publicUrl = process.env.RENDER_EXTERNAL_URL ?? process.env.PUBLIC_URL;
+  console.log(publicUrl ? `Partner Portal API running at ${publicUrl}` : `Partner Portal API running at http://localhost:${PORT}`);
 });
