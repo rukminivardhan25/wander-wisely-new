@@ -76,7 +76,8 @@ router.get("/listings", authMiddleware, async (req: Request, res: Response): Pro
     const listingIds = Array.from(map.keys());
     if (listingIds.length === 0) {
       const listings: ListingRow[] = [];
-      return res.json({ listings });
+      res.json({ listings });
+      return;
     }
 
     try {

@@ -487,12 +487,14 @@ router.patch("/", async (req: Request, res: Response): Promise<void> => {
 
     let recurringToUse = body.recurring_slots as { day: string; time: string }[] | undefined;
     if (body.schedule_days && body.schedule_by_day && typeof body.schedule_days === "object" && typeof body.schedule_by_day === "object") {
-      recurringToUse = buildRecurringSlotsFromSchedule(body.schedule_days, body.schedule_by_day);
+      const scheduleDays = body.schedule_days as Record<string, boolean>;
+      const scheduleByDay = body.schedule_by_day as Record<string, { startTime: string; endTime: string; numberOfSlots: number }>;
+      recurringToUse = buildRecurringSlotsFromSchedule(scheduleDays, scheduleByDay);
       try {
         await query("DELETE FROM experience_schedule_template WHERE experience_id = $1", [experienceId]);
         for (const day of DAY_KEYS) {
-          if (!body.schedule_days[day]) continue;
-          const s = body.schedule_by_day[day];
+          if (!scheduleDays[day]) continue;
+          const s = scheduleByDay[day];
           if (!s) continue;
           const startTime = String(s.startTime || "09:00").slice(0, 5);
           const endTime = String(s.endTime || "17:00").slice(0, 5);
