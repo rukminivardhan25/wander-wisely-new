@@ -204,6 +204,16 @@ export default function AddHotel() {
                 <Check size={32} className="text-amber-600" />
               </div>
               <h2 className="font-display font-semibold text-lg text-foreground">Submit for verification</h2>
+              <p className="text-xs font-medium text-amber-700 dark:text-amber-400">Submit only</p>
+              <div className="rounded-xl bg-muted/50 border border-border/50 p-4 text-left max-w-md mx-auto">
+                <h3 className="text-sm font-semibold text-foreground mb-2">Verify to do</h3>
+                <ul className="text-sm text-muted-foreground space-y-1.5">
+                  <li className="flex items-center gap-2"><Check size={14} className="text-amber-600 shrink-0" /> Company details filled</li>
+                  <li className="flex items-center gap-2"><Check size={14} className="text-amber-600 shrink-0" /> Authorized person details filled</li>
+                  <li className="flex items-center gap-2"><Check size={14} className="text-amber-600 shrink-0" /> Submit for verification (below)</li>
+                  <li className="flex items-center gap-2 text-foreground/80">After approval → My Listings → Manage Hotels to add hotels</li>
+                </ul>
+              </div>
               <p className="text-sm text-muted-foreground max-w-md mx-auto">Once approved, you can add multiple hotels from My Listings → Manage Hotels. You cannot add hotels until the company is approved.</p>
               {submitError && <p className="text-sm text-destructive">{submitError}</p>}
               <div className="flex flex-wrap justify-center gap-3 pt-2">
