@@ -26,7 +26,7 @@ export const pool = new Pool({
   ssl: connectionString.includes("localhost") ? false : { rejectUnauthorized: false },
 });
 
-export async function query<T = pg.QueryResultRow>(
+export async function query<T extends pg.QueryResultRow = pg.QueryResultRow>(
   text: string,
   params?: unknown[]
 ): Promise<pg.QueryResult<T>> {

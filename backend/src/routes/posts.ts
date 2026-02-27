@@ -53,11 +53,11 @@ router.get("/", optionalAuthMiddleware, async (req: Request, res: Response): Pro
     }
 
     sql += " order by p.created_at desc limit 100";
-    const result = await query(sql, params);
+    const result = await query<{ id: string }>(sql, params);
     const posts = result.rows;
 
     const withCounts = await Promise.all(
-      posts.map(async (p: { id: string }) => {
+      posts.map(async (p) => {
         const [likesRes, commentsRes, likedByMeRes, bookmarkedByMeRes] = await Promise.all([
           query<{ count: string }>("select count(*) as count from post_likes where post_id = $1", [p.id]),
           query<{ count: string }>("select count(*) as count from comments where post_id = $1", [p.id]),

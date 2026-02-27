@@ -124,8 +124,8 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: "booking_type must be one of: " + BOOKING_TYPES.join(", ") });
       return;
     }
-    if (!booking_id) {
-      res.status(400).json({ error: "booking_id is required" });
+    if (!booking_type || !booking_id) {
+      res.status(400).json({ error: "booking_type and booking_id are required" });
       return;
     }
     // For transport we accept either UUID (row id) or booking_id (text); other types require UUID
@@ -139,7 +139,7 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const resolved = await resolveListingAndScope(booking_type, booking_id, userId);
+    const resolved = await resolveListingAndScope(booking_type, booking_id, userId as string);
     if (!resolved) {
       res.status(404).json({ error: "Booking not found or you are not the owner" });
       return;

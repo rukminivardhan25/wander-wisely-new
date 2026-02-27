@@ -152,8 +152,10 @@ router.get("/nearby-restaurants", async (req: Request, res: Response): Promise<v
     res.status(400).json({ error: "Valid lat and lon required" });
     return;
   }
+  type OverpassElement = { id: string; type: string; lat?: number; lon?: number; tags?: Record<string, unknown> };
+  type OverpassData = { elements?: OverpassElement[] };
+  let data: OverpassData | null = null;
   const endpoints = [OVERPASS_PRIMARY, OVERPASS_ALT];
-  let data: { elements?: Array<{ id: string; type: string; lat?: number; lon?: number; tags?: Record<string, unknown> }> } | null = null;
   const radii = [requestedRadius, Math.floor(requestedRadius / 2)].filter((r) => r >= 150);
   for (const baseUrl of endpoints) {
     for (const r of radii) {
@@ -168,7 +170,7 @@ router.get("/nearby-restaurants", async (req: Request, res: Response): Promise<v
           signal: AbortSignal.timeout(15000),
         });
         if (resp.ok) {
-          data = (await resp.json()) as typeof data;
+          data = (await resp.json()) as OverpassData;
           break;
         }
         const errText = await resp.text().catch(() => "");

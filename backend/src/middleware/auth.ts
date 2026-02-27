@@ -7,9 +7,11 @@ if (!JWT_SECRET) {
   throw new Error("JWT_SECRET environment variable is not set");
 }
 
+const secret: string = JWT_SECRET;
+
 export interface JwtPayload {
   sub: string;
-  email: string;
+  email?: string;
   iat?: number;
   exp?: number;
 }
@@ -28,7 +30,7 @@ export function authMiddleware(
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    const decoded = jwt.verify(token, secret) as JwtPayload;
     req.userId = decoded.sub;
     next();
   } catch {
@@ -45,7 +47,7 @@ export function optionalAuthMiddleware(req: Request, _res: Response, next: NextF
     return;
   }
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    const decoded = jwt.verify(token, secret) as JwtPayload;
     req.userId = decoded.sub;
   } catch {
     // ignore invalid/expired
