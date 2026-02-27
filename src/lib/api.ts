@@ -1,4 +1,7 @@
-const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+// Use VITE_API_URL if set; in production build default to deployed backend so Vercel works without env
+const API_BASE =
+  import.meta.env.VITE_API_URL ??
+  (import.meta.env.PROD ? "https://wander-wisely-new.onrender.com" : "http://localhost:3001");
 const API_TIMEOUT_MS = 15000;
 
 export function getApiUrl(path: string): string {
