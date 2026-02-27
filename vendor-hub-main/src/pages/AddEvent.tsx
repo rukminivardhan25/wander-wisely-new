@@ -22,7 +22,6 @@ export default function AddEvent() {
     name: "",
     category: "",
     city: "",
-    venueName: "",
     venueAddress: "",
     startDate: "",
     endDate: "",
@@ -51,7 +50,6 @@ export default function AddEvent() {
     }
     const category = (details.category || "Other").trim() || "Other";
     const city = (details.city || "").trim() || "Not set";
-    const venueName = (details.venueName || "").trim() || "TBA";
     const startDate = (details.startDate || "").trim();
     const endDate = (details.endDate || "").trim() || startDate;
     const startTime = (details.startTime || "09:00").trim().slice(0, 5) || "09:00";
@@ -91,7 +89,7 @@ export default function AddEvent() {
           name,
           category,
           city,
-          venue_name: venueName,
+          venue_name: "",
           venue_address: (details.venueAddress || "").trim() || null,
           start_date: startDate,
           end_date: endDate,
@@ -189,15 +187,8 @@ export default function AddEvent() {
                   <Input className="mt-1.5 rounded-xl" placeholder="e.g. Mumbai" value={details.city} onChange={(e) => setDetails((p) => ({ ...p, city: e.target.value }))} />
                 </div>
                 <div className="sm:col-span-2">
-                  <Label>Venue Name</Label>
-                  <Input className="mt-1.5 rounded-xl" placeholder="e.g. Jawaharlal Nehru Stadium" value={details.venueName} onChange={(e) => setDetails((p) => ({ ...p, venueName: e.target.value }))} />
-                </div>
-                <div className="sm:col-span-2">
-                  <Label className="flex items-center gap-1.5"><MapPin size={14} /> Venue Address & Map</Label>
-                  <Input className="mt-1.5 rounded-xl" placeholder="Full address" value={details.venueAddress} onChange={(e) => setDetails((p) => ({ ...p, venueAddress: e.target.value }))} />
-                  <div className="mt-2 h-32 rounded-xl bg-muted border border-border flex items-center justify-center">
-                    <span className="text-xs text-muted-foreground">Map — pick venue location</span>
-                  </div>
+                  <Label className="flex items-center gap-1.5"><MapPin size={14} /> Venue full address</Label>
+                  <Input className="mt-1.5 rounded-xl" placeholder="Full address of the venue" value={details.venueAddress} onChange={(e) => setDetails((p) => ({ ...p, venueAddress: e.target.value }))} />
                 </div>
                 <div>
                   <Label>Start Date</Label>

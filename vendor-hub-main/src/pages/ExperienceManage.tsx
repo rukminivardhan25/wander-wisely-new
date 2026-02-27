@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useParams, useLocation } from "react-router-dom";
-import { Compass, ArrowLeft, MapPin, Calendar, Clock, Users, IndianRupee, FileText, ToggleLeft, ToggleRight, Pencil, Upload, X } from "lucide-react";
+import { Compass, ArrowLeft, MapPin, Calendar, Clock, Users, IndianRupee, FileText, ToggleLeft, ToggleRight, Pencil, Upload } from "lucide-react";
 
 const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 import { cn } from "@/lib/utils";
@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 const DAY_LABELS: Record<string, string> = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
+
+type DaySchedule = { startTime: string; endTime: string; numberOfSlots: number };
 
 type Experience = {
   id: string;
@@ -32,6 +34,8 @@ type Experience = {
   updated_at: string;
   slots: { id: string; slot_date: string; slot_time: string; capacity: number }[];
   recurring_slots?: { day: string; time: string }[];
+  schedule_days?: Record<string, boolean>;
+  schedule_by_day?: Record<string, DaySchedule>;
   media: { id: string; file_url: string; is_cover: boolean; sort_order: number }[];
 };
 
@@ -45,8 +49,12 @@ export default function ExperienceManage() {
   const [toggling, setToggling] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState(false);
   const [scheduleDays, setScheduleDays] = useState<Record<string, boolean>>({ mon: false, tue: false, wed: false, thu: false, fri: false, sat: false, sun: false });
-  const [slotsByDay, setSlotsByDay] = useState<Record<string, string[]>>({ mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] });
+  const defaultDaySchedule = (): DaySchedule => ({ startTime: "09:00", endTime: "17:00", numberOfSlots: 1 });
+  const [scheduleByDay, setScheduleByDay] = useState<Record<string, DaySchedule>>(() =>
+    Object.fromEntries(DAY_KEYS.map((d) => [d, { startTime: "09:00", endTime: "17:00", numberOfSlots: 1 }]))
+  );
   const [savingSchedule, setSavingSchedule] = useState(false);
+  const [scheduleError, setScheduleError] = useState("");
 
   useEffect(() => {
     if (!listingId) return;
@@ -75,45 +83,88 @@ export default function ExperienceManage() {
   };
 
   const startEditSchedule = () => {
-    const byDay: Record<string, string[]> = {};
-    DAY_KEYS.forEach((d) => { byDay[d] = []; });
-    (experience?.recurring_slots ?? []).forEach(({ day, time }) => {
-      const d = day.toLowerCase().slice(0, 3);
-      if (byDay[d] && !byDay[d].includes(time)) byDay[d].push(time);
-      if (!byDay[d]) byDay[d] = [time];
-    });
-    const days: Record<string, boolean> = {};
-    DAY_KEYS.forEach((d) => { days[d] = (byDay[d]?.length ?? 0) > 0; });
-    setScheduleDays(days);
-    setSlotsByDay(byDay);
+    const template = experience?.schedule_by_day;
+    const daysMap = experience?.schedule_days;
+    const hasTemplate = template && daysMap && DAY_KEYS.some((d) => daysMap[d] && template[d]);
+    if (hasTemplate && template && daysMap) {
+      const days: Record<string, boolean> = { mon: false, tue: false, wed: false, thu: false, fri: false, sat: false, sun: false };
+      const byDay: Record<string, DaySchedule> = {};
+      DAY_KEYS.forEach((d) => {
+        byDay[d] = defaultDaySchedule();
+        if (daysMap[d] && template[d]) {
+          days[d] = true;
+          const s = template[d];
+          byDay[d] = {
+            startTime: (s.startTime ?? "09:00").slice(0, 5),
+            endTime: (s.endTime ?? "17:00").slice(0, 5),
+            numberOfSlots: Math.max(1, s.numberOfSlots ?? 1),
+          };
+        }
+      });
+      setScheduleDays(days);
+      setScheduleByDay(byDay);
+    } else {
+      const byDay: Record<string, string[]> = {};
+      DAY_KEYS.forEach((d) => { byDay[d] = []; });
+      (experience?.recurring_slots ?? []).forEach(({ day, time }) => {
+        const d = day.toLowerCase().slice(0, 3);
+        if (byDay[d] && !byDay[d].includes(time)) byDay[d].push(time);
+        if (!byDay[d]) byDay[d] = [time];
+      });
+      const days: Record<string, boolean> = {};
+      const byDaySchedule: Record<string, DaySchedule> = {};
+      DAY_KEYS.forEach((d) => {
+        const times = (byDay[d] ?? []).sort();
+        days[d] = times.length > 0;
+        if (times.length > 0) {
+          byDaySchedule[d] = {
+            startTime: times[0].slice(0, 5),
+            endTime: times[times.length - 1].slice(0, 5),
+            numberOfSlots: times.length,
+          };
+        } else {
+          byDaySchedule[d] = defaultDaySchedule();
+        }
+      });
+      setScheduleDays(days);
+      setScheduleByDay(byDaySchedule);
+    }
+    setScheduleError("");
     setEditingSchedule(true);
   };
 
   const saveSchedule = async () => {
     if (!listingId || !experience) return;
-    const recurring_slots: { day: string; time: string }[] = [];
+    const schedule_days: Record<string, boolean> = { mon: false, tue: false, wed: false, thu: false, fri: false, sat: false, sun: false };
+    const schedule_by_day: Record<string, DaySchedule> = {};
     DAY_KEYS.forEach((day) => {
       if (!scheduleDays[day]) return;
-      const times = slotsByDay[day];
-      if (times?.length) {
-        times.forEach((time) => recurring_slots.push({ day, time: time.slice(0, 5) || "09:00" }));
-      } else {
-        // Selected day with no time slots: save with a default time so the day is persisted
-        recurring_slots.push({ day, time: "09:00" });
-      }
+      schedule_days[day] = true;
+      const s = scheduleByDay[day];
+      schedule_by_day[day] = {
+        startTime: (s?.startTime ?? "09:00").slice(0, 5),
+        endTime: (s?.endTime ?? "17:00").slice(0, 5),
+        numberOfSlots: Math.max(1, Math.min(100, s?.numberOfSlots ?? 1)),
+      };
     });
+    setScheduleError("");
     setSavingSchedule(true);
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 90_000);
       await vendorFetch(`/api/listings/${listingId}/experience`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recurring_slots }),
+        body: JSON.stringify({ schedule_days, schedule_by_day }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       const updated = await vendorFetch<Experience>(`/api/listings/${listingId}/experience`);
       setExperience(updated);
       setEditingSchedule(false);
-    } catch {
-      setError("Failed to save schedule");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to save schedule";
+      setScheduleError(err instanceof Error && err.name === "AbortError" ? "Save timed out. Please try again." : msg);
     } finally {
       setSavingSchedule(false);
     }
@@ -145,25 +196,13 @@ export default function ExperienceManage() {
       )}
       <div className="flex items-center gap-2 text-muted-foreground text-sm">
         <Link to="/listings" className="hover:text-foreground flex items-center gap-1">
-          <ArrowLeft size={14} /> My Listings
-        </Link>
-        <span className="text-foreground font-medium">{experience.name}</span>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-display font-bold text-foreground flex items-center gap-2">
-          <Compass className="h-7 w-7 text-emerald-600" />
-          Manage Experience
-        </h1>
-        <Link
-          to={`/listings/${listingId}/experience/edit`}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-emerald-600 text-emerald-700 dark:text-emerald-400 text-sm font-medium hover:bg-emerald-500/10 transition-colors"
-        >
-          <Pencil size={16} /> Edit details
+          <ArrowLeft size={14} /> Back to My Listings
         </Link>
       </div>
 
-      <p className="text-sm text-muted-foreground">Set active/inactive status and manage your schedule here. For basic info, pricing, and media, use <strong>Edit details</strong>.</p>
+      <h1 className="text-2xl font-display font-bold text-foreground">
+        {experience.name}
+      </h1>
 
       {/* Quick actions: Active / Inactive */}
       <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6">
@@ -202,7 +241,9 @@ export default function ExperienceManage() {
 
       {/* Full details */}
       <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6 space-y-6">
-        <h2 className="font-display font-semibold text-lg text-foreground border-b border-border/50 pb-3">Experience details</h2>
+        <div className="border-b border-border/50 pb-3">
+          <h2 className="font-display font-semibold text-lg text-foreground">Experience details</h2>
+        </div>
 
         <dl className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -293,6 +334,9 @@ export default function ExperienceManage() {
               </div>
             )}
           </div>
+          {scheduleError && (
+            <p className="text-sm text-destructive mb-2" role="alert">{scheduleError}</p>
+          )}
           <dd>
             {editingSchedule ? (
               <div className="space-y-4">
@@ -315,65 +359,129 @@ export default function ExperienceManage() {
                   </div>
                 </div>
                 <div>
-                  <Label className="block mb-2 text-xs">Time slots per day</Label>
-                  {DAY_KEYS.filter((d) => scheduleDays[d]).map((day) => (
-                    <div key={day} className="rounded-lg border border-border bg-muted/20 p-3 mb-2">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-sm">{DAY_LABELS[day]}</span>
-                        <button
-                          type="button"
-                          className="text-xs text-emerald-600 hover:underline"
-                          onClick={() => setSlotsByDay((prev) => ({ ...prev, [day]: [...(prev[day] || []), "09:00"] }))}
-                        >
-                          + Add slot
-                        </button>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {(slotsByDay[day] || []).map((time, idx) => (
-                          <div key={`${day}-${idx}`} className="flex items-center gap-1 rounded border border-border bg-background px-2 py-1">
+                  <Label className="block mb-2 text-xs">Start time, end time & number of slots per day</Label>
+                  {DAY_KEYS.filter((d) => scheduleDays[d]).map((day) => {
+                    const s = scheduleByDay[day] ?? defaultDaySchedule();
+                    return (
+                      <div key={day} className="rounded-lg border border-border bg-muted/20 p-3 mb-2">
+                        <span className="font-medium text-sm block mb-2">{DAY_LABELS[day]}</span>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <div className="flex items-center gap-1.5">
+                            <Label className="text-xs text-muted-foreground whitespace-nowrap">Start</Label>
                             <input
                               type="time"
-                              className="w-24 rounded border-0 bg-transparent text-sm"
-                              value={time}
-                              onChange={(e) => {
-                                const next = [...(slotsByDay[day] || [])];
-                                next[idx] = e.target.value;
-                                setSlotsByDay((prev) => ({ ...prev, [day]: next }));
-                              }}
+                              className="h-8 w-28 rounded border border-input bg-background px-2 text-sm"
+                              value={s.startTime}
+                              onChange={(e) => setScheduleByDay((prev) => ({
+                                ...prev,
+                                [day]: { ...(prev[day] ?? defaultDaySchedule()), startTime: e.target.value.slice(0, 5) || "09:00" },
+                              }))}
                             />
-                            <button type="button" onClick={() => setSlotsByDay((prev) => ({ ...prev, [day]: (prev[day] || []).filter((_, i) => i !== idx) }))} className="p-0.5 rounded text-muted-foreground hover:text-destructive" aria-label="Remove"><X size={12} /></button>
                           </div>
-                        ))}
+                          <div className="flex items-center gap-1.5">
+                            <Label className="text-xs text-muted-foreground whitespace-nowrap">End</Label>
+                            <input
+                              type="time"
+                              className="h-8 w-28 rounded border border-input bg-background px-2 text-sm"
+                              value={s.endTime}
+                              onChange={(e) => setScheduleByDay((prev) => ({
+                                ...prev,
+                                [day]: { ...(prev[day] ?? defaultDaySchedule()), endTime: e.target.value.slice(0, 5) || "17:00" },
+                              }))}
+                            />
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <Label className="text-xs text-muted-foreground whitespace-nowrap">Slots</Label>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={100}
+                              className="h-8 w-20"
+                              value={s.numberOfSlots}
+                              onChange={(e) => setScheduleByDay((prev) => ({
+                                ...prev,
+                                [day]: { ...(prev[day] ?? defaultDaySchedule()), numberOfSlots: Math.max(1, Math.min(100, parseInt(e.target.value, 10) || 1)) },
+                              }))}
+                            />
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
-            ) : (experience.recurring_slots?.length ?? 0) > 0 ? (
-              <>
-                {(() => {
-                  const byDay: Record<string, string[]> = {};
-                  (experience.recurring_slots ?? []).forEach(({ day, time }) => {
-                    if (!byDay[day]) byDay[day] = [];
-                    if (!byDay[day].includes(time)) byDay[day].push(time);
-                  });
-                  const days = Object.keys(byDay).sort();
-                  return (
+            ) : (() => {
+              const scheduleByDay = experience.schedule_by_day;
+              const scheduleDays = experience.schedule_days;
+              const hasTemplate = scheduleByDay && scheduleDays && DAY_KEYS.some((d) => scheduleDays[d] && scheduleByDay[d]);
+              if (hasTemplate) {
+                const days = DAY_KEYS.filter((d) => scheduleDays![d] && scheduleByDay![d]);
+                let totalSlotsPerWeek = 0;
+                return (
+                  <>
                     <ul className="space-y-2 text-sm text-foreground">
-                      {days.map((day) => (
-                        <li key={day}>
-                          <span className="font-medium">{DAY_LABELS[day] ?? day}</span>
-                          <span className="text-muted-foreground ml-2">{byDay[day].sort().join(", ")}</span>
-                        </li>
-                      ))}
+                      {days.map((day) => {
+                        const s = scheduleByDay![day];
+                        if (!s) return null;
+                        const n = Math.max(1, s.numberOfSlots ?? 1);
+                        totalSlotsPerWeek += n;
+                        const start = (s.startTime ?? "09:00").slice(0, 5);
+                        const end = (s.endTime ?? "17:00").slice(0, 5);
+                        return (
+                          <li key={day}>
+                            <span className="font-medium">{DAY_LABELS[day] ?? day}</span>
+                            <span className="text-muted-foreground ml-2">Start {start}, End {end}, {n} slot{n !== 1 ? "s" : ""}</span>
+                          </li>
+                        );
+                      })}
                     </ul>
-                  );
-                })()}
-                {experience.slots.length > 0 && (
-                  <p className="text-xs text-muted-foreground mt-2">{experience.slots.length} slot(s) generated for the next 12 weeks.</p>
-                )}
-              </>
-            ) : experience.slots.length > 0 ? (
+                    <p className="text-xs text-muted-foreground mt-3">
+                      Total slots per week: <strong>{totalSlotsPerWeek}</strong>
+                      {" · "}
+                      Max bookings per week: <strong>{totalSlotsPerWeek * (experience.max_participants_per_slot ?? 1)}</strong>
+                      {" "}({totalSlotsPerWeek} × {experience.max_participants_per_slot} per slot)
+                    </p>
+                  </>
+                );
+              }
+              if ((experience.recurring_slots?.length ?? 0) > 0) {
+                const byDay: Record<string, string[]> = {};
+                (experience.recurring_slots ?? []).forEach(({ day, time }) => {
+                  const d = day.toLowerCase().slice(0, 3);
+                  if (!byDay[d]) byDay[d] = [];
+                  const t = (time ?? "09:00").slice(0, 5);
+                  if (!byDay[d].includes(t)) byDay[d].push(t);
+                });
+                const days = Object.keys(byDay).sort();
+                let totalSlotsPerWeek = 0;
+                return (
+                  <>
+                    <ul className="space-y-2 text-sm text-foreground">
+                      {days.map((day) => {
+                        const times = (byDay[day] ?? []).sort();
+                        const n = times.length;
+                        totalSlotsPerWeek += n;
+                        const start = times[0] ?? "09:00";
+                        const end = times[n - 1] ?? "17:00";
+                        return (
+                          <li key={day}>
+                            <span className="font-medium">{DAY_LABELS[day] ?? day}</span>
+                            <span className="text-muted-foreground ml-2">Start {start}, End {end}, {n} slot{n !== 1 ? "s" : ""}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <p className="text-xs text-muted-foreground mt-3">
+                      Total slots per week: <strong>{totalSlotsPerWeek}</strong>
+                      {" · "}
+                      Max bookings per week: <strong>{totalSlotsPerWeek * (experience.max_participants_per_slot ?? 1)}</strong>
+                      {" "}({totalSlotsPerWeek} × {experience.max_participants_per_slot} per slot)
+                    </p>
+                  </>
+                );
+              }
+              return null;
+            })() ?? (experience.slots.length > 0 ? (
               <ul className="space-y-1 text-sm text-foreground">
                 {experience.slots.slice(0, 10).map((s) => (
                   <li key={s.id}>{s.slot_date} {s.slot_time} — capacity {s.capacity}</li>
@@ -382,7 +490,7 @@ export default function ExperienceManage() {
               </ul>
             ) : (
               <p className="text-sm text-muted-foreground">No schedule set. Click &quot;Edit schedule&quot; to add days and times.</p>
-            )}
+            ))}
           </dd>
         </div>
 
@@ -403,19 +511,6 @@ export default function ExperienceManage() {
             </dd>
           </div>
         )}
-      </div>
-
-      <div className="flex gap-2">
-        <Link to="/listings">
-          <Button variant="outline" className="rounded-xl">
-            <ArrowLeft size={16} className="mr-2" /> Back to My Listings
-          </Button>
-        </Link>
-        <Link to={`/listings/${listingId}/experience/edit`}>
-          <Button className="rounded-xl bg-emerald-600 hover:bg-emerald-700">
-            <Pencil size={16} className="mr-2" /> Edit details
-          </Button>
-        </Link>
       </div>
     </div>
   );

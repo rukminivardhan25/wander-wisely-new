@@ -529,7 +529,7 @@ export default function BusDetail() {
     return (
       <div className="space-y-4 p-6">
         <Button variant="ghost" size="icon" asChild>
-          <Link to="/listings"><ArrowLeft className="h-4 w-4" /></Link>
+          <Link to={listingId ? `/listings/${listingId}/transport` : "/listings"}><ArrowLeft className="h-4 w-4" /></Link>
         </Button>
         <p className="text-destructive">{error}</p>
       </div>
@@ -550,7 +550,7 @@ export default function BusDetail() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" asChild>
-            <Link to="/listings"><ArrowLeft className="h-4 w-4" /></Link>
+            <Link to={listingId ? `/listings/${listingId}/transport` : "/listings"}><ArrowLeft className="h-4 w-4" /></Link>
           </Button>
           <div>
             <h1 className="text-2xl font-semibold text-foreground">{bus.name}</h1>

@@ -547,7 +547,7 @@ export default function CarDetail() {
   if (error && !car) {
     return (
       <div className="p-6 space-y-4">
-        <Button variant="ghost" size="icon" asChild><Link to="/listings"><ArrowLeft className="h-4 w-4" /></Link></Button>
+        <Button variant="ghost" size="icon" asChild><Link to={listingId ? `/listings/${listingId}/transport` : "/listings"}><ArrowLeft className="h-4 w-4" /></Link></Button>
         <p className="text-destructive">{error}</p>
       </div>
     );

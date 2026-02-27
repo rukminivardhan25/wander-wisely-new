@@ -39,7 +39,6 @@ export default function EditEvent() {
     name: "",
     category: "",
     city: "",
-    venue_name: "",
     venue_address: "",
     start_date: "",
     end_date: "",
@@ -63,8 +62,7 @@ export default function EditEvent() {
           name: ev.name || "",
           category: ev.category || "",
           city: ev.city || "",
-          venue_name: ev.venue_name || "",
-          venue_address: ev.venue_address || "",
+          venue_address: ev.venue_address || ev.venue_name || "",
           start_date: ev.start_date?.slice(0, 10) || "",
           end_date: ev.end_date?.slice(0, 10) || "",
           start_time: ev.start_time?.slice(0, 5) || "09:00",
@@ -140,7 +138,7 @@ export default function EditEvent() {
           name: form.name.trim() || undefined,
           category: (form.category || "Other").trim() || undefined,
           city: (form.city || "").trim() || undefined,
-          venue_name: (form.venue_name || "").trim() || undefined,
+          venue_name: "",
           venue_address: (form.venue_address || "").trim() || null,
           start_date: form.start_date || undefined,
           end_date: form.end_date || form.start_date || undefined,
@@ -220,12 +218,8 @@ export default function EditEvent() {
             <Input className="mt-1.5 rounded-xl" value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} placeholder="e.g. Mumbai" />
           </div>
           <div className="sm:col-span-2">
-            <Label className="flex items-center gap-1.5"><MapPin size={14} /> Venue name</Label>
-            <Input className="mt-1.5 rounded-xl" value={form.venue_name} onChange={(e) => setForm((f) => ({ ...f, venue_name: e.target.value }))} placeholder="e.g. Jawaharlal Nehru Stadium" />
-          </div>
-          <div className="sm:col-span-2">
-            <Label>Venue address</Label>
-            <Input className="mt-1.5 rounded-xl" value={form.venue_address} onChange={(e) => setForm((f) => ({ ...f, venue_address: e.target.value }))} placeholder="Full address" />
+            <Label className="flex items-center gap-1.5"><MapPin size={14} /> Venue full address</Label>
+            <Input className="mt-1.5 rounded-xl" value={form.venue_address} onChange={(e) => setForm((f) => ({ ...f, venue_address: e.target.value }))} placeholder="Full address of the venue" />
           </div>
           <div>
             <Label>Start date</Label>

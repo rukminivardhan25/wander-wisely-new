@@ -5,18 +5,15 @@ import {
   Bus,
   Car,
   Plane,
-  UtensilsCrossed,
   Hotel,
   Ticket,
   Calendar as CalendarIcon,
-  Search,
   ChevronRight,
   User,
   Mail,
   Phone,
   CheckCircle2,
   XCircle,
-  Filter,
   Eye,
   Trash2,
 } from "lucide-react";
@@ -52,14 +49,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
 // ─── Types ─────────────────────────────────────────────────────────────
 
 type BookingStatus = "confirmed" | "pending" | "cancelled" | "completed" | "checked_in";
@@ -1453,20 +1442,6 @@ function BookingDetailModal({
   );
 }
 
-// ─── Placeholder sections for other categories ───────────────────────────
-
-function RestaurantBookingsSection() {
-  return (
-    <Card className="rounded-2xl border border-slate-200/80 shadow-sm">
-      <CardContent className="p-12 text-center">
-        <UtensilsCrossed className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-        <p className="font-medium text-foreground">Restaurant bookings</p>
-        <p className="text-sm text-muted-foreground mt-1">Coming soon.</p>
-      </CardContent>
-    </Card>
-  );
-}
-
 /** Hotel booking row from GET /api/listings/:listingId/hotel-bookings */
 type HotelBookingRow = {
   id: string;
@@ -2593,6 +2568,14 @@ export default function Bookings() {
   const [flightLoading, setFlightLoading] = useState(false);
   const [flightError, setFlightError] = useState("");
   const [flightBookingsActionId, setFlightBookingsActionId] = useState<string | null>(null);
+  const [flightBookingDetail, setFlightBookingDetail] = useState<{
+    id: string; bookingRef: string; flightNumber?: string; airlineName?: string; routeFrom: string; routeTo: string;
+    travelDate: string; passengers: number; totalCents: number; status: string; createdAt: string;
+    passengerList: Array<{ name: string; idType: string; idNumber: string; seatNumber?: string }>;
+    documents: Array<{ documentType: string; fileName: string; fileUrl: string }>;
+  } | null>(null);
+  const [flightBookingDetailOpen, setFlightBookingDetailOpen] = useState(false);
+  const [flightBookingDetailLoading, setFlightBookingDetailLoading] = useState(false);
 
   useEffect(() => {
     if (selectedCategory !== "transport" || !dateFilter || transportVehicleType !== "bus") return;
@@ -2853,6 +2836,28 @@ export default function Bookings() {
     }
   };
 
+  const openFlightBookingDetail = (b: { id: string; listingId?: string }) => {
+    if (!b.listingId) return;
+    setFlightBookingDetailOpen(true);
+    setFlightBookingDetail(null);
+    setFlightBookingDetailLoading(true);
+    vendorFetch<{
+      id: string; bookingRef: string; flightNumber?: string; airlineName?: string; routeFrom: string; routeTo: string;
+      travelDate: string; passengers: number; totalCents: number; status: string; createdAt: string;
+      passengerList: Array<{ name: string; idType: string; idNumber: string; seatNumber?: string }>;
+      documents: Array<{ documentType: string; fileName: string; fileUrl: string }>;
+    }>(`/api/listings/${b.listingId}/flight-bookings/${b.id}`)
+      .then((data) => {
+        setFlightBookingDetail(data);
+      })
+      .catch(() => {
+        setFlightBookingDetail(null);
+      })
+      .finally(() => {
+        setFlightBookingDetailLoading(false);
+      });
+  };
+
   const companyNameFromBuses =
     transportBuses.length > 0 && transportBuses[0].listingName
       ? transportBuses[0].listingName
@@ -2980,38 +2985,6 @@ export default function Bookings() {
               />
             </PopoverContent>
           </Popover>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[130px] rounded-xl h-9">
-              <Filter className="h-4 w-4 text-muted-foreground mr-1" />
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All status</SelectItem>
-              {transportVehicleType === "car" ? (
-                <>
-                  <SelectItem value="pending_vendor">Pending</SelectItem>
-                  <SelectItem value="approved_awaiting_payment">Approved (await payment)</SelectItem>
-                  <SelectItem value="confirmed">Confirmed</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
-                </>
-              ) : (
-                <>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                </>
-              )}
-            </SelectContent>
-          </Select>
-          <div className="relative flex-1 min-w-[160px] max-w-[220px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input
-              placeholder={transportVehicleType === "flight" ? "Search flight or booking…" : transportVehicleType === "car" ? "Search car or booking…" : "Search bus or customer..."}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 rounded-xl h-9 text-sm"
-            />
-          </div>
         </div>
       </div>
 
@@ -3027,13 +3000,6 @@ export default function Bookings() {
           >
             <Bus className="h-4 w-4" />
             Transport
-          </TabsTrigger>
-          <TabsTrigger
-            value="restaurant"
-            className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2"
-          >
-            <UtensilsCrossed className="h-4 w-4" />
-            Restaurant
           </TabsTrigger>
           <TabsTrigger
             value="hotel"
@@ -3360,7 +3326,8 @@ export default function Bookings() {
                         )}
             </div>
                       <div>
-                        <h3 className="text-sm font-semibold text-foreground mb-2">Flight booking requests</h3>
+                        <h3 className="text-sm font-semibold text-foreground mb-2">Flight bookings</h3>
+                        <p className="text-xs text-muted-foreground mb-2">All bookings for the selected date (requests and confirmed).</p>
                         <div className="rounded-xl border border-slate-200 overflow-hidden">
                           <Table>
                             <TableHeader>
@@ -3372,7 +3339,7 @@ export default function Bookings() {
                                 <TableHead className="font-medium">Passengers</TableHead>
                                 <TableHead className="font-medium">Amount</TableHead>
                                 <TableHead className="font-medium">Status</TableHead>
-                                <TableHead className="text-right font-medium w-32">Actions</TableHead>
+                                <TableHead className="text-right font-medium w-40">Actions</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -3394,23 +3361,28 @@ export default function Bookings() {
                                       </span>
                                     </TableCell>
                                     <TableCell className="py-3 text-right">
-                                      {b.status === "pending_vendor" && b.listingId && (
-                                        <>
-                                          <Button size="sm" variant="outline" className="rounded-lg gap-1 mr-1 text-emerald-700 border-emerald-300" disabled={flightBookingsActionId === b.id} onClick={() => handleFlightAccept(b.listingId!, b.id)}>
-                                            <CheckCircle2 className="h-3.5 w-3.5" /> Accept
-                                          </Button>
-                                          <Button size="sm" variant="outline" className="rounded-lg gap-1 text-red-600 border-red-200" disabled={flightBookingsActionId === b.id} onClick={() => handleFlightReject(b.listingId!, b.id)}>
-                                            <XCircle className="h-3.5 w-3.5" /> Reject
-                                          </Button>
-                                        </>
-                                      )}
+                                      <div className="flex items-center justify-end gap-1 flex-wrap">
+                                        <Button size="sm" variant="ghost" className="rounded-lg h-8 w-8 p-0 text-slate-600 hover:bg-slate-100" title="View booking & user details" onClick={() => openFlightBookingDetail(b)}>
+                                          <Eye className="h-4 w-4" />
+                                        </Button>
+                                        {b.status === "pending_vendor" && b.listingId && (
+                                          <>
+                                            <Button size="sm" variant="outline" className="rounded-lg gap-1 text-emerald-700 border-emerald-300" disabled={flightBookingsActionId === b.id} onClick={() => handleFlightAccept(b.listingId!, b.id)}>
+                                              <CheckCircle2 className="h-3.5 w-3.5" /> Accept
+                                            </Button>
+                                            <Button size="sm" variant="outline" className="rounded-lg gap-1 text-red-600 border-red-200" disabled={flightBookingsActionId === b.id} onClick={() => handleFlightReject(b.listingId!, b.id)}>
+                                              <XCircle className="h-3.5 w-3.5" /> Reject
+                                            </Button>
+                                          </>
+                                        )}
+                                      </div>
                                     </TableCell>
                                   </TableRow>
                                 ))
                               ) : (
                                 <TableRow>
                                   <TableCell colSpan={8} className="py-8 text-center text-muted-foreground text-sm">
-                                    No flight booking requests for this date.
+                                    No flight bookings for this date.
                                   </TableCell>
                                 </TableRow>
                               )}
@@ -3426,9 +3398,6 @@ export default function Bookings() {
           </Tabs>
         </TabsContent>
 
-        <TabsContent value="restaurant" className="mt-6">
-          <RestaurantBookingsSection />
-        </TabsContent>
         <TabsContent value="hotel" className="mt-6">
           <HotelBookingsSection dateFilter={dateFilter} />
         </TabsContent>
@@ -3478,6 +3447,88 @@ export default function Bookings() {
               <FlightBookingsTable bookings={selectedFlightForDetail.bookings} />
             </div>
           )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Flight booking detail sheet: full booking + user/passenger details */}
+      <Sheet open={flightBookingDetailOpen} onOpenChange={(o) => !o && (setFlightBookingDetailOpen(false), setFlightBookingDetail(null))}>
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto rounded-l-2xl">
+          <SheetHeader>
+            <SheetTitle className="text-lg font-display font-semibold">Flight booking details</SheetTitle>
+          </SheetHeader>
+          <div className="mt-6">
+            {flightBookingDetailLoading ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
+            ) : flightBookingDetail ? (
+              <div className="space-y-6">
+                <div className="rounded-xl border border-slate-200 p-4 space-y-2">
+                  <p className="font-mono text-sm font-medium text-foreground">{flightBookingDetail.bookingRef}</p>
+                  <p className="text-sm text-muted-foreground">{flightBookingDetail.flightNumber ?? "Flight"} · {flightBookingDetail.routeFrom} → {flightBookingDetail.routeTo}</p>
+                  <p className="text-xs text-muted-foreground">Travel date: {flightBookingDetail.travelDate}</p>
+                  <p className="text-xs text-muted-foreground">Passengers: {flightBookingDetail.passengers} · Amount: ₹ {(flightBookingDetail.totalCents / 100).toLocaleString("en-IN")}</p>
+                  <p className="text-xs text-muted-foreground">Booked at: {flightBookingDetail.createdAt ? new Date(flightBookingDetail.createdAt).toLocaleString() : "—"}</p>
+                  <span className={cn(
+                    "inline-flex text-xs font-medium px-2 py-0.5 rounded-full mt-1",
+                    flightBookingDetail.status === "pending_vendor" ? "bg-amber-100 text-amber-800" : flightBookingDetail.status === "confirmed" ? "bg-emerald-100 text-emerald-800" : flightBookingDetail.status === "rejected" ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-700"
+                  )}>
+                    {flightBookingDetail.status === "pending_vendor" ? "Pending" : flightBookingDetail.status === "approved_awaiting_payment" ? "Approved" : flightBookingDetail.status === "confirmed" ? "Confirmed" : "Rejected"}
+                  </span>
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground mb-2">Passengers (user shared details)</h4>
+                  <div className="rounded-xl border border-slate-200 overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50">
+                          <TableHead className="font-medium text-xs">Name</TableHead>
+                          <TableHead className="font-medium text-xs">ID type</TableHead>
+                          <TableHead className="font-medium text-xs">ID number</TableHead>
+                          <TableHead className="font-medium text-xs">Seat</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(flightBookingDetail.passengerList ?? []).map((p, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="py-2 text-sm">{p.name}</TableCell>
+                            <TableCell className="py-2 text-xs text-muted-foreground">{p.idType}</TableCell>
+                            <TableCell className="py-2 text-xs font-mono">{p.idNumber}</TableCell>
+                            <TableCell className="py-2 text-xs">{p.seatNumber ?? "—"}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+                {(flightBookingDetail.documents?.length ?? 0) > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground mb-2">Documents</h4>
+                    <ul className="space-y-1 text-sm">
+                      {flightBookingDetail.documents.map((d, i) => (
+                        <li key={i} className="flex items-center gap-2">
+                          <span className="text-muted-foreground shrink-0">{d.documentType}:</span>
+                          {d.fileUrl ? (
+                            <a
+                              href={d.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline truncate break-all"
+                              title={`Open ${d.fileName}`}
+                            >
+                              {d.fileName}
+                            </a>
+                          ) : (
+                            <span className="text-muted-foreground truncate" title="Document was not uploaded or link unavailable">{d.fileName}</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground py-8 text-center">Could not load booking details.</p>
+            )}
+          </div>
         </SheetContent>
       </Sheet>
 

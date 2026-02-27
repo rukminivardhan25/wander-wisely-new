@@ -25,6 +25,7 @@ import {
   Info,
   Upload,
   FileText,
+  Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +63,9 @@ const CATEGORIES = [
 
 type CategoryId = (typeof CATEGORIES)[number]["id"];
 
+/** Review summary shown on booking cards (company or fleet). */
+type ReviewSummary = { avgRating: number; reviewCount: number };
+
 /** API bus option (one schedule per row). */
 type ApiBusOption = {
   listingId: string;
@@ -91,7 +95,21 @@ type ApiBusOption = {
   routeFrom: string | null;
   routeTo: string | null;
   pricePerSeatCents: number | null;
+  companyReview?: ReviewSummary;
+  fleetReview?: ReviewSummary;
 };
+
+/** Inline review badge: "★ 4.5 (12)" next to company or fleet name. */
+function ReviewBadge({ review, className = "", title }: { review: ReviewSummary; className?: string; title?: string }) {
+  const tooltip = title ?? `${review.reviewCount} review${review.reviewCount !== 1 ? "s" : ""}`;
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-amber-600 text-xs font-medium ${className}`} title={tooltip}>
+      <Star className="h-3.5 w-3.5 fill-amber-500" />
+      {review.avgRating.toFixed(1)}
+      {review.reviewCount > 0 && <span className="text-muted-foreground font-normal">({review.reviewCount})</span>}
+    </span>
+  );
+}
 
 /** Format Date to YYYY-MM-DD in local time. */
 function dateToYYYYMMDD(d: Date): string {
@@ -116,12 +134,25 @@ type ApiCarOption = {
   pricePerKmCents: number | null;
   minimumFareCents: number | null;
   estimatedDurationMinutes?: number | null;
+  companyReview?: ReviewSummary;
+  fleetReview?: ReviewSummary;
 };
 
 const todayDate = () => new Date();
 
 /** Fallback cities for Car Local ride when API returns none (static UI). */
 const CAR_LOCAL_CITIES_FALLBACK = ["Hyderabad", "Bangalore", "Chennai", "Mumbai", "Delhi", "Pune", "Kolkata"];
+
+/** Format "09:00" -> "9:00 AM" for display */
+function formatTimeAMPM(t: string): string {
+  const [h, m] = String(t).slice(0, 5).split(":").map(Number);
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  const ampm = (h ?? 0) < 12 ? "AM" : "PM";
+  return `${h12}:${String(m ?? 0).padStart(2, "0")} ${ampm}`;
+}
+
+const DAY_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+const DAY_LABELS: Record<string, string> = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
 
 /** Experience card from GET /api/experiences?city= */
 type ApiExperienceCard = {
@@ -137,6 +168,7 @@ type ApiExperienceCard = {
   coverUrl?: string;
   availableDays: string;
   timeRange: string;
+  companyReview?: ReviewSummary;
 };
 
 /** Experience slot from GET /api/experiences/:id/slots */
@@ -147,6 +179,17 @@ type ApiExperienceSlot = {
   capacity: number;
   booked: number;
   available: number;
+};
+
+/** Experience detail from GET /api/experiences/:id (day-wise schedule, full description) */
+type ApiExperienceDetail = ApiExperienceCard & {
+  longDescription?: string;
+  locationAddress?: string;
+  cancellationPolicy?: string;
+  ageRestriction?: string;
+  availableDays?: string;
+  scheduleByDay?: Record<string, { startTime: string; endTime: string; numberOfSlots: number }>;
+  media?: { file_url: string; is_cover: boolean; sort_order: number }[];
 };
 
 /** Event card from GET /api/events?city=&date= */
@@ -165,6 +208,7 @@ type ApiEventCard = {
   organizerName: string;
   description?: string;
   coverUrl?: string;
+  companyReview?: ReviewSummary;
 };
 
 /** Event detail from GET /api/events/:id (with ticket types and available) */
@@ -200,6 +244,8 @@ type StaticFlightOption = {
   /** From API; required for POST /api/flight-bookings */
   listingId?: string;
   flightId?: string;
+  listingName?: string;
+  companyReview?: ReviewSummary;
 };
 
 const STATIC_FLIGHT_OPTIONS: StaticFlightOption[] = [
@@ -289,6 +335,8 @@ const BookingMarketplace = () => {
   const [experienceError, setExperienceError] = useState("");
   const [experienceDetailOpen, setExperienceDetailOpen] = useState(false);
   const [selectedExperience, setSelectedExperience] = useState<ApiExperienceCard | null>(null);
+  const [experienceDetail, setExperienceDetail] = useState<ApiExperienceDetail | null>(null);
+  const [experienceDetailLoading, setExperienceDetailLoading] = useState(false);
   const [experienceSlots, setExperienceSlots] = useState<ApiExperienceSlot[]>([]);
   const [experienceSlotsLoading, setExperienceSlotsLoading] = useState(false);
   const [experienceSlotsFrom, setExperienceSlotsFrom] = useState("");
@@ -316,7 +364,7 @@ const BookingMarketplace = () => {
   const [eventPaymentDone, setEventPaymentDone] = useState(false);
   const [eventPayLoading, setEventPayLoading] = useState(false);
   // Hotel: city → list → select hotel → dates, guest details, requirements, docs → submit
-  type ApiHotelCard = { id: string; name: string; city: string | null; areaLocality: string | null; fullAddress: string | null; description: string | null; listingId: string; listingName: string };
+  type ApiHotelCard = { id: string; name: string; city: string | null; areaLocality: string | null; fullAddress: string | null; description: string | null; listingId: string; listingName: string; companyReview?: ReviewSummary; fleetReview?: ReviewSummary };
   type HotelRoomType = { name: string; maxOccupancy?: string; pricePerNight?: string; totalRooms?: string; amenities?: string; cancellationPolicy?: string };
   type ApiHotelDetail = ApiHotelCard & { pincode: string | null; landmark: string | null; contactNumber: string | null; email: string | null; roomTypes: HotelRoomType[] };
   const [hotelCity, setHotelCity] = useState("");
@@ -633,6 +681,7 @@ const BookingMarketplace = () => {
 
   const openExperienceDetail = (exp: ApiExperienceCard) => {
     setSelectedExperience(exp);
+    setExperienceDetail(null);
     setExperienceDetailOpen(true);
     setSelectedExperienceSlot(null);
     const today = dateToYYYYMMDD(new Date());
@@ -641,6 +690,12 @@ const BookingMarketplace = () => {
     setExperienceSlotsFrom(today);
     setExperienceSlotsTo(dateToYYYYMMDD(end));
     setExperienceSlots([]);
+    setExperienceError("");
+    setExperienceDetailLoading(true);
+    apiFetch<ApiExperienceDetail>(`/api/experiences/${exp.id}`)
+      .then(({ data }) => data && setExperienceDetail(data))
+      .catch(() => setExperienceDetail({ ...exp, availableDays: exp.availableDays }))
+      .finally(() => setExperienceDetailLoading(false));
   };
 
   const handleExperienceBook = async () => {
@@ -865,6 +920,8 @@ const BookingMarketplace = () => {
         baggageAllowance: "15 kg",
         hasWifi: false,
         hasMeal: false,
+        listingName: f.listingName,
+        companyReview: f.companyReview,
       }));
       setFlightList(list);
       if (list.length === 0) setFlightError("No flights found for this route and date.");
@@ -898,7 +955,7 @@ const BookingMarketplace = () => {
   };
 
   /** Map API hotel row (snake_case) to ApiHotelCard */
-  const mapHotelRow = (r: { id: string; name: string; city: string | null; area_locality: string | null; full_address: string | null; description: string | null; listing_id: string; listing_name: string }) => ({
+  const mapHotelRow = (r: { id: string; name: string; city: string | null; area_locality: string | null; full_address: string | null; description: string | null; listing_id: string; listing_name: string; companyReview?: ReviewSummary; fleetReview?: ReviewSummary }) => ({
     id: r.id,
     name: r.name,
     city: r.city,
@@ -907,6 +964,8 @@ const BookingMarketplace = () => {
     description: r.description,
     listingId: r.listing_id,
     listingName: r.listing_name,
+    companyReview: r.companyReview,
+    fleetReview: r.fleetReview,
   });
 
   const runHotelSearch = () => {
@@ -917,7 +976,7 @@ const BookingMarketplace = () => {
     }
     setHotelLoading(true);
     setHotelError("");
-    apiFetch<{ hotels: { id: string; name: string; city: string | null; area_locality: string | null; full_address: string | null; description: string | null; listing_id: string; listing_name: string }[] }>(
+    apiFetch<{ hotels: { id: string; name: string; city: string | null; area_locality: string | null; full_address: string | null; description: string | null; listing_id: string; listing_name: string; companyReview?: ReviewSummary; fleetReview?: ReviewSummary }[] }>(
       `/api/hotels?city=${encodeURIComponent(city)}`
     )
       .then(({ data, error }) => {
@@ -1198,7 +1257,12 @@ const BookingMarketplace = () => {
                   {flightList.map((f) => (
                     <div key={f.id} className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col sm:flex-row gap-4">
                       <div className="flex-1">
-                        <p className="font-semibold text-foreground font-mono">{f.flightNumber}</p>
+                        <p className="font-semibold text-foreground font-mono flex items-center gap-2 flex-wrap">{f.flightNumber}{(f.listingName || f.companyReview) && (
+                          <span className="text-xs font-normal text-muted-foreground flex items-center gap-1.5">
+                            {f.listingName}
+                            {f.companyReview && <ReviewBadge review={f.companyReview} title="Company reviews" />}
+                          </span>
+                        )}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">{f.airlineName} · {f.aircraftType}</p>
                         <p className="text-sm font-medium text-foreground mt-1">{f.fromPlace} → {f.toPlace}</p>
                         <div className="flex flex-wrap gap-3 mt-2 text-sm text-muted-foreground">
@@ -1272,9 +1336,13 @@ const BookingMarketplace = () => {
                         className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col sm:flex-row gap-4"
                       >
                         <div className="flex-1">
-                          <p className="font-semibold text-foreground">{bus.listingName}</p>
-                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                          <p className="font-semibold text-foreground flex items-center gap-2 flex-wrap">
                             {bus.busName}
+                            {bus.companyReview && <ReviewBadge review={bus.companyReview} title="Company reviews" />}
+                          </p>
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1 flex-wrap">
+                            {bus.listingName}
+                            {bus.fleetReview && <ReviewBadge review={bus.fleetReview} className="ml-0.5" title="Bus reviews" />}
                             {bus.busNumber && ` · ${bus.busNumber}`}
                             {bus.routeFrom && bus.routeTo && ` · ${bus.routeFrom} → ${bus.routeTo}`}
                           </p>
@@ -1652,8 +1720,15 @@ const BookingMarketplace = () => {
                                 key={car.carId + car.areaId}
                                 className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col"
                               >
-                                <p className="font-semibold text-foreground">{car.carName}</p>
-                                <p className="text-xs text-muted-foreground mt-1">{car.carType} · {car.seats} seats</p>
+                                <p className="font-semibold text-foreground flex items-center gap-2 flex-wrap">
+                                  {car.carName}
+                                  {car.companyReview && <ReviewBadge review={car.companyReview} title="Company reviews" />}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
+                                  {car.listingName}
+                                  {car.fleetReview && <ReviewBadge review={car.fleetReview} title="Car reviews" />}
+                                  <span> · {car.carType} · {car.seats} seats</span>
+                                </p>
                                 <div className="mt-3 flex items-end justify-between gap-2">
                                   <div>
                                     <p className="text-lg font-semibold text-foreground">{fareStr}</p>
@@ -1840,10 +1915,9 @@ const BookingMarketplace = () => {
                               <div className="w-full h-full flex items-center justify-center text-slate-400"><Ticket className="h-12 w-12" /></div>
                             )}
                           </div>
-                          <h3 className="font-semibold text-foreground">{exp.name}</h3>
+                          <h3 className="font-semibold text-foreground flex items-center gap-2 flex-wrap">{exp.name}{exp.companyReview && <ReviewBadge review={exp.companyReview} title="Company reviews" />}</h3>
                           <p className="text-xs text-muted-foreground mt-0.5">{exp.category} · {exp.city}</p>
                           {exp.availableDays && <p className="text-xs text-foreground mt-1 flex items-center gap-1"><Clock size={12} /> {exp.availableDays}</p>}
-                          {exp.timeRange && <p className="text-xs text-foreground">{exp.timeRange}</p>}
                           <p className="text-sm font-medium text-emerald-600 mt-2">₹{(exp.pricePerPersonCents / 100).toFixed(0)} per person</p>
                         </button>
                         <Button
@@ -1917,7 +1991,7 @@ const BookingMarketplace = () => {
                               <div className="w-full h-full flex items-center justify-center text-slate-400"><CalendarDays className="h-12 w-12" /></div>
                             )}
                           </div>
-                          <h3 className="font-semibold text-foreground">{ev.name}</h3>
+                          <h3 className="font-semibold text-foreground flex items-center gap-2 flex-wrap">{ev.name}{ev.companyReview && <ReviewBadge review={ev.companyReview} title="Company reviews" />}</h3>
                           <p className="text-xs text-muted-foreground mt-0.5">{ev.category} · {ev.city}</p>
                           <p className="text-xs text-foreground mt-1 flex items-center gap-1"><MapPin size={12} /> {ev.venueName}</p>
                           <p className="text-xs text-foreground mt-0.5">{ev.startDate}{ev.endDate !== ev.startDate ? ` – ${ev.endDate}` : ""} · {ev.startTime} – {ev.endTime}</p>
@@ -1973,11 +2047,11 @@ const BookingMarketplace = () => {
                         className="bg-white rounded-2xl border border-slate-200 p-4 text-left hover:border-amber-400 hover:shadow-md transition-all flex flex-col"
                       >
                         <button type="button" onClick={() => openHotelDetail(h)} className="text-left flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Hotel className="h-6 w-6 text-amber-600" />
-                            <h3 className="font-semibold text-foreground">{h.name}</h3>
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            <Hotel className="h-6 w-6 text-amber-600 shrink-0" />
+                            <h3 className="font-semibold text-foreground flex items-center gap-2">{h.listingName}{h.companyReview && <ReviewBadge review={h.companyReview} title="Company reviews" />}</h3>
                           </div>
-                          <p className="text-xs text-muted-foreground">{h.listingName}</p>
+                          <p className="text-xs text-muted-foreground flex items-center gap-1.5">{h.name}{h.fleetReview && <ReviewBadge review={h.fleetReview} title="Branch reviews" />}</p>
                           {h.areaLocality && <p className="text-xs text-foreground mt-1 flex items-center gap-1"><MapPin size={12} /> {h.areaLocality}</p>}
                           {h.city && <p className="text-xs text-foreground">{h.city}</p>}
                           {h.description && <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{h.description}</p>}
@@ -2004,7 +2078,7 @@ const BookingMarketplace = () => {
       </div>
 
       {/* Experience detail + slot selection */}
-      <Sheet open={experienceDetailOpen} onOpenChange={(o) => !o && (setExperienceDetailOpen(false), setSelectedExperience(null), setSelectedExperienceSlot(null), setExperienceSlots([]))}>
+      <Sheet open={experienceDetailOpen} onOpenChange={(o) => !o && (setExperienceDetailOpen(false), setSelectedExperience(null), setExperienceDetail(null), setSelectedExperienceSlot(null), setExperienceSlots([]))}>
         <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto rounded-l-2xl">
           <SheetHeader>
             <SheetTitle className="text-lg font-semibold flex items-center gap-2">
@@ -2012,55 +2086,148 @@ const BookingMarketplace = () => {
             </SheetTitle>
           </SheetHeader>
           {selectedExperience && (
-            <div className="mt-6 space-y-4">
-              <div>
-                <h3 className="font-semibold text-foreground">{selectedExperience.name}</h3>
-                <p className="text-sm text-muted-foreground">{selectedExperience.category} · {selectedExperience.city}</p>
+            <div className="mt-6 space-y-6">
+              {/* Overview */}
+              <section>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Overview</h3>
+                <h4 className="font-semibold text-foreground">{selectedExperience.name}</h4>
+                <p className="text-sm text-muted-foreground mt-0.5">{selectedExperience.category} · {selectedExperience.city}</p>
                 {selectedExperience.shortDescription && (
                   <p className="text-sm text-foreground mt-2">{selectedExperience.shortDescription}</p>
                 )}
-                {selectedExperience.availableDays && <p className="text-xs text-foreground mt-1"><Clock size={12} className="inline mr-1" />{selectedExperience.availableDays}</p>}
-                {selectedExperience.timeRange && <p className="text-xs text-foreground">{selectedExperience.timeRange}</p>}
-                <p className="text-sm font-medium text-emerald-600 mt-1">₹{(selectedExperience.pricePerPersonCents / 100).toFixed(0)} per person</p>
-              </div>
-              <div>
-                <Label className="text-foreground">1. Pick a date range and load slots</Label>
-                <div className="flex gap-2 mt-1">
-                  <Input type="date" value={experienceSlotsFrom} onChange={(e) => setExperienceSlotsFrom(e.target.value)} className="rounded-xl" />
-                  <Input type="date" value={experienceSlotsTo} onChange={(e) => setExperienceSlotsTo(e.target.value)} className="rounded-xl" />
+                {selectedExperience.availableDays && (
+                  <p className="text-xs text-foreground mt-1.5 flex items-center gap-1"><Clock size={12} /> Available days: {selectedExperience.availableDays}</p>
+                )}
+                <p className="text-sm font-medium text-emerald-600 mt-2">₹{(selectedExperience.pricePerPersonCents / 100).toFixed(0)} per person</p>
+              </section>
+
+              {/* Day-wise schedule (from detail API) */}
+              {(experienceDetail?.scheduleByDay && Object.keys(experienceDetail.scheduleByDay).length > 0) && (
+                <section>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Schedule (day-wise)</h3>
+                  <ul className="space-y-1.5 text-sm">
+                    {DAY_ORDER.filter((d) => experienceDetail.scheduleByDay![d]).map((day) => {
+                      const s = experienceDetail.scheduleByDay![day];
+                      if (!s) return null;
+                      const start = formatTimeAMPM(s.startTime || "09:00");
+                      const end = formatTimeAMPM(s.endTime || "17:00");
+                      const n = Math.max(1, s.numberOfSlots ?? 1);
+                      return (
+                        <li key={day} className="flex justify-between items-baseline gap-2">
+                          <span className="font-medium text-foreground">{DAY_LABELS[day] ?? day}</span>
+                          <span className="text-muted-foreground">Start {start}, End {end} · {n} slot{n !== 1 ? "s" : ""}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              )}
+
+              {/* Description */}
+              {experienceDetail?.longDescription && (
+                <section>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Description</h3>
+                  <p className="text-sm text-foreground whitespace-pre-wrap">{experienceDetail.longDescription}</p>
+                </section>
+              )}
+
+              {/* Location */}
+              {experienceDetail?.locationAddress && (
+                <section>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Location</h3>
+                  <p className="text-sm text-foreground flex items-start gap-1.5"><MapPin size={14} className="shrink-0 mt-0.5" /> {experienceDetail.locationAddress}</p>
+                </section>
+              )}
+
+              {/* Cancellation & age */}
+              {(experienceDetail?.cancellationPolicy || experienceDetail?.ageRestriction) && (
+                <section>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Policy & requirements</h3>
+                  {experienceDetail.cancellationPolicy && <p className="text-sm text-foreground">{experienceDetail.cancellationPolicy}</p>}
+                  {experienceDetail.ageRestriction && <p className="text-sm text-muted-foreground mt-1">Age: {experienceDetail.ageRestriction}</p>}
+                </section>
+              )}
+
+              {/* Date range for booking */}
+              <section>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">1. Choose date range and load slots</h3>
+                <p className="text-xs text-muted-foreground mb-2">Pick a from and to date to see available slots you can book.</p>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <Label className="text-xs text-muted-foreground">From</Label>
+                    <Input type="date" value={experienceSlotsFrom} onChange={(e) => setExperienceSlotsFrom(e.target.value)} className="rounded-xl mt-0.5" />
+                  </div>
+                  <div className="flex-1">
+                    <Label className="text-xs text-muted-foreground">To</Label>
+                    <Input type="date" value={experienceSlotsTo} onChange={(e) => setExperienceSlotsTo(e.target.value)} className="rounded-xl mt-0.5" />
+                  </div>
                 </div>
-                <Button type="button" variant="outline" className="rounded-xl mt-2" onClick={fetchExperienceSlots} disabled={experienceSlotsLoading}>
+                <Button type="button" variant="outline" className="rounded-xl mt-2 w-full" onClick={fetchExperienceSlots} disabled={experienceSlotsLoading}>
                   {experienceSlotsLoading ? "Loading…" : "Show available slots"}
                 </Button>
-              </div>
+              </section>
+
+              {/* Select slot */}
               {experienceSlots.length > 0 && (
-                <div>
-                  <Label className="text-foreground">2. Select a slot (date & time)</Label>
-                  <div className="mt-1 max-h-48 overflow-y-auto space-y-1">
+                <section>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">2. Select a slot (date & time)</h3>
+                  <div className="max-h-48 overflow-y-auto space-y-1 rounded-xl border border-slate-200 p-1">
                     {experienceSlots.filter((s) => s.available > 0).map((s) => (
                       <button
                         key={s.id}
                         type="button"
                         onClick={() => setSelectedExperienceSlot(s)}
-                        className={`w-full text-left rounded-xl border px-3 py-2 text-sm ${selectedExperienceSlot?.id === s.id ? "border-emerald-500 bg-emerald-50" : "border-slate-200 hover:border-slate-300"}`}
+                        className={`w-full text-left rounded-lg border px-3 py-2 text-sm ${selectedExperienceSlot?.id === s.id ? "border-emerald-500 bg-emerald-50 text-foreground" : "border-transparent hover:bg-slate-50 text-foreground"}`}
                       >
                         {s.slotDate} · {s.slotTime} — {s.available} left
                       </button>
                     ))}
                   </div>
-                  {experienceSlots.filter((s) => s.available > 0).length === 0 && <p className="text-sm text-muted-foreground">No slots available in this range.</p>}
-                </div>
+                  {experienceSlots.filter((s) => s.available > 0).length === 0 && <p className="text-sm text-muted-foreground mt-1">No slots available in this range.</p>}
+                </section>
               )}
-              {selectedExperienceSlot && (
-                <div>
-                  <Label className="text-foreground">3. Participants & book</Label>
-                  <Input type="number" min={1} max={selectedExperience.maxParticipantsPerSlot} value={experienceParticipants} onChange={(e) => setExperienceParticipants(parseInt(e.target.value, 10) || 1)} className="rounded-xl mt-1 w-24" />
-                  <p className="text-xs text-muted-foreground mt-1">Total: ₹{((selectedExperience.pricePerPersonCents * experienceParticipants) / 100).toFixed(0)}</p>
-                  <Button type="button" className="rounded-xl mt-3 w-full bg-emerald-600 hover:bg-emerald-700" onClick={handleExperienceBook} disabled={!token}>
-                    {token ? "Book this slot (then pay & get ticket)" : "Sign in to book"}
-                  </Button>
+
+              {/* Participants & book */}
+              <section>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">3. Participants & book</h3>
+                {selectedExperienceSlot && (
+                  <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50/50 dark:bg-slate-900/30 px-3 py-2 text-sm">
+                    <p className="text-muted-foreground text-xs font-medium uppercase tracking-wider">Selected slot</p>
+                    <p className="text-foreground font-medium mt-0.5">{selectedExperienceSlot.slotDate} · {selectedExperienceSlot.slotTime}</p>
+                    <p className="text-xs text-muted-foreground mt-1">You can change the slot above in &quot;2. Select a slot&quot; if you need a different time.</p>
+                  </div>
+                )}
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Number of people</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={selectedExperience.maxParticipantsPerSlot}
+                      step={1}
+                      value={experienceParticipants}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === "") {
+                          setExperienceParticipants(1);
+                          return;
+                        }
+                        const n = parseInt(v, 10);
+                        if (!Number.isNaN(n)) {
+                          setExperienceParticipants(Math.max(1, Math.min(selectedExperience.maxParticipantsPerSlot, n)));
+                        }
+                      }}
+                      className="rounded-xl mt-0.5 w-24"
+                      aria-label="Number of participants"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">1 to {selectedExperience.maxParticipantsPerSlot} people for this slot</p>
+                  </div>
+                  <p className="text-sm text-foreground self-end pb-1">Total: <strong className="text-emerald-600">₹{((selectedExperience.pricePerPersonCents * experienceParticipants) / 100).toFixed(0)}</strong></p>
                 </div>
-              )}
+                <Button type="button" className="rounded-xl mt-3 w-full bg-emerald-600 hover:bg-emerald-700" onClick={handleExperienceBook} disabled={!token}>
+                  {token ? "Book this slot (then pay & get ticket)" : "Sign in to book"}
+                </Button>
+              </section>
             </div>
           )}
         </SheetContent>
@@ -2679,12 +2846,38 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                         type="file"
                         accept="image/*,.pdf"
                         className="rounded-lg text-sm text-muted-foreground file:mr-2 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground"
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const file = e.target.files?.[0];
-                          setFlightPassengerForms((prev) => { const n = [...prev]; n[index] = { ...n[index]!, docFileName: file ? file.name : "" }; return n; });
+                          if (!file) {
+                            setFlightPassengerForms((prev) => { const n = [...prev]; n[index] = { ...n[index]!, docFileName: "", docUrl: undefined }; return n; });
+                            return;
+                          }
+                          setFlightPassengerForms((prev) => { const n = [...prev]; n[index] = { ...n[index]!, docFileName: file.name, docUrl: undefined }; return n; });
+                          if (!token) return;
+                          const formData = new FormData();
+                          formData.append("image", file);
+                          try {
+                            const res = await fetch(getApiUrl("/api/upload"), {
+                              method: "POST",
+                              headers: { Authorization: `Bearer ${token}` },
+                              body: formData,
+                            });
+                            const data = await res.json().catch(() => ({}));
+                            const url = data?.url;
+                            if (url && typeof url === "string") {
+                              setFlightPassengerForms((prev) => { const n = [...prev]; n[index] = { ...n[index]!, docUrl: url.startsWith("http") ? url : getApiUrl(url) }; return n; });
+                            }
+                          } catch {
+                            // keep docUrl unset so backend will treat as placeholder if needed
+                          }
                         }}
                       />
-                      {flightPassengerForms[index]?.docFileName && <span className="text-xs text-muted-foreground truncate max-w-[120px]" title={flightPassengerForms[index]?.docFileName}>{flightPassengerForms[index]?.docFileName}</span>}
+                      {flightPassengerForms[index]?.docFileName && (
+                        <span className="text-xs text-muted-foreground truncate max-w-[120px]" title={flightPassengerForms[index]?.docUrl ? "Uploaded" : flightPassengerForms[index]?.docFileName}>
+                          {flightPassengerForms[index]?.docFileName}
+                          {flightPassengerForms[index]?.docUrl && <span className="text-emerald-600 ml-1">✓</span>}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -2,16 +2,14 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  UtensilsCrossed, Building2, ShoppingBag, Bus, Compass, PartyPopper,
+  Building2, Bus, Compass, PartyPopper,
   ChevronRight, ChevronLeft, Upload, X, Check
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { vendorFetch } from "@/lib/api";
 
 const businessTypes = [
-  { id: "restaurant", label: "Restaurant", icon: UtensilsCrossed },
   { id: "hotel", label: "Hotel", icon: Building2 },
-  { id: "shop", label: "Shop", icon: ShoppingBag },
   { id: "transport", label: "Transport", icon: Bus },
   { id: "experience", label: "Experience", icon: Compass },
   { id: "event", label: "Event", icon: PartyPopper },
@@ -64,7 +62,7 @@ export default function AddListing() {
           {currentStep === 0 && (
             <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6">
               <h2 className="font-display font-semibold text-lg text-foreground mb-4">Choose Business Type</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-4">
                 {businessTypes.map((bt) => (
                   <button
                     key={bt.id}

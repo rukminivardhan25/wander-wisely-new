@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { query } from "../config/db.js";
+import { attachReviewSummaries } from "../services/bookingReviewSummary.js";
 
 const router = Router();
 
@@ -30,7 +31,20 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
        ORDER BY hb.name`,
       [city]
     );
-    res.json({ hotels: result.rows });
+    const rows = result.rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      city: r.city,
+      area_locality: r.area_locality,
+      full_address: r.full_address,
+      description: r.description,
+      listing_id: r.listing_id,
+      listing_name: r.listing_name,
+      listingId: r.listing_id,
+    }));
+    const withReviews = await attachReviewSummaries(rows, { scopeType: "hotel_branch", scopeIdKey: "id" });
+    const hotels = withReviews.map(({ listingId: _l, ...h }) => h);
+    res.json({ hotels });
   } catch (err) {
     const e = err as { code?: string };
     if (e.code === "42P01") {

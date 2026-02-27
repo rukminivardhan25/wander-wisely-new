@@ -7,7 +7,6 @@ import {
   CalendarCheck,
   Users,
   Star,
-  BarChart3,
   Tag,
   ShieldCheck,
   Wallet,
@@ -20,14 +19,13 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/" },
-  { label: "My Listings", icon: ListPlus, path: "/listings" },
   { label: "Add New Listing", icon: PlusCircle, path: "/add-listing" },
+  { label: "Verification", icon: ShieldCheck, path: "/verification" },
+  { label: "My Listings", icon: ListPlus, path: "/listings" },
   { label: "Bookings", icon: CalendarCheck, path: "/bookings" },
   { label: "Customers", icon: Users, path: "/customers" },
   { label: "Reviews", icon: Star, path: "/reviews" },
-  { label: "Analytics", icon: BarChart3, path: "/analytics" },
   { label: "Promotions", icon: Tag, path: "/promotions" },
-  { label: "Verification", icon: ShieldCheck, path: "/verification" },
   { label: "Payouts", icon: Wallet, path: "/payouts" },
   { label: "Profile Settings", icon: Settings, path: "/settings" },
   { label: "Support", icon: HelpCircle, path: "/support" },
@@ -64,7 +62,7 @@ export function VendorSidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
+      <nav className="flex-1 overflow-y-auto scrollbar-invisible py-4 px-2 space-y-1">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (

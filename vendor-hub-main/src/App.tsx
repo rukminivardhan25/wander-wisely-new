@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { VendorAuthProvider } from "@/contexts/VendorAuthContext";
 import { VendorLayout } from "./components/VendorLayout";
 import { ProtectedVendorRoute } from "./components/ProtectedVendorRoute";
@@ -32,7 +32,6 @@ import Bookings from "./pages/Bookings";
 import Customers from "./pages/Customers";
 import Messages from "./pages/Messages";
 import Reviews from "./pages/Reviews";
-import Analytics from "./pages/Analytics";
 import Promotions from "./pages/Promotions";
 import Verification from "./pages/Verification";
 import Payouts from "./pages/Payouts";
@@ -80,7 +79,7 @@ const App = () => (
                 <Route path="/customers" element={<Customers />} />
                 <Route path="/messages" element={<Messages />} />
                 <Route path="/reviews" element={<Reviews />} />
-                <Route path="/analytics" element={<Analytics />} />
+                <Route path="/analytics" element={<Navigate to="/" replace />} />
                 <Route path="/promotions" element={<Promotions />} />
                 <Route path="/verification" element={<Verification />} />
                 <Route path="/payouts" element={<Payouts />} />

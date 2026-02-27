@@ -1,9 +1,11 @@
 import { Router, Request, Response } from "express";
 import { query } from "../config/db.js";
+import { getReviewSummaries } from "../services/bookingReviewSummary.js";
 
 const router = Router();
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
 function formatTime(t: string): string {
   const [h, m] = String(t).slice(0, 5).split(":").map(Number);
@@ -110,12 +112,15 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       if (t > timeMaxByExp.get(s.experience_id)!) timeMaxByExp.set(s.experience_id, t);
     }
 
+    const listingIds = [...new Set(expRows.rows.map((e) => e.listing_id))];
+    const reviewMap = await getReviewSummaries(listingIds.map((id) => ({ listingId: id })));
     const experiences = expRows.rows.map((e) => {
       const days = dowSetByExp.get(e.id);
       const dayNames = days ? Array.from(days).sort().map((d) => DAY_NAMES[d]).join(", ") : "";
       const tMin = timeMinByExp.get(e.id);
       const tMax = timeMaxByExp.get(e.id);
       const timeRange = tMin && tMax ? (tMin === tMax ? formatTime(tMin) : `${formatTime(tMin)} – ${formatTime(tMax)}`) : "";
+      const companyReview = reviewMap.get(`${e.listing_id}||`) ?? null;
       return {
         id: e.id,
         listingId: e.listing_id,
@@ -129,6 +134,7 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
         coverUrl: coverByExp.get(e.id) ?? undefined,
         availableDays: dayNames,
         timeRange,
+        ...(companyReview && { companyReview }),
       };
     });
 
@@ -180,6 +186,44 @@ router.get("/:id", async (req: Request, res: Response): Promise<void> => {
       `SELECT file_url, is_cover, sort_order FROM experience_media WHERE experience_id = $1 ORDER BY sort_order, created_at`,
       [id]
     );
+    const slotRows = await query<{ slot_date: string; slot_time: string }>(
+      `SELECT slot_date::text AS slot_date, slot_time::text AS slot_time
+       FROM experience_slots WHERE experience_id = $1
+       ORDER BY slot_date, slot_time LIMIT 2000`,
+      [id]
+    );
+    const byDateDow = new Map<string, { min: string; max: string; count: number }>();
+    for (const s of slotRows.rows) {
+      const d = new Date(s.slot_date + "T12:00:00Z");
+      const dow = d.getUTCDay();
+      const key = `${dow}:${s.slot_date}`;
+      const t = s.slot_time.slice(0, 5);
+      if (!byDateDow.has(key)) byDateDow.set(key, { min: t, max: t, count: 0 });
+      const info = byDateDow.get(key)!;
+      info.count += 1;
+      if (t < info.min) info.min = t;
+      if (t > info.max) info.max = t;
+    }
+    const byDow: Record<number, { min: string; max: string; slotsPerDay: number }> = {};
+    byDateDow.forEach((info, key) => {
+      const dow = parseInt(key.split(":")[0], 10);
+      if (!byDow[dow]) byDow[dow] = { min: info.min, max: info.max, slotsPerDay: info.count };
+      else {
+        if (info.min < byDow[dow].min) byDow[dow].min = info.min;
+        if (info.max > byDow[dow].max) byDow[dow].max = info.max;
+        if (info.count > byDow[dow].slotsPerDay) byDow[dow].slotsPerDay = info.count;
+      }
+    });
+    const scheduleByDay: Record<string, { startTime: string; endTime: string; numberOfSlots: number }> = {};
+    const availableDayNames: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const info = byDow[i];
+      if (info) {
+        const dayKey = DAY_KEYS[i];
+        scheduleByDay[dayKey] = { startTime: info.min, endTime: info.max, numberOfSlots: info.slotsPerDay };
+        availableDayNames.push(DAY_NAMES[i]);
+      }
+    }
     res.json({
       id: row.id,
       listingId: row.listing_id,
@@ -196,6 +240,8 @@ router.get("/:id", async (req: Request, res: Response): Promise<void> => {
       taxIncluded: row.tax_included,
       cancellationPolicy: row.cancellation_policy ?? undefined,
       media: media.rows,
+      availableDays: availableDayNames.join(", "),
+      scheduleByDay: Object.keys(scheduleByDay).length > 0 ? scheduleByDay : undefined,
     });
   } catch (err) {
     console.error("Get experience error:", err);

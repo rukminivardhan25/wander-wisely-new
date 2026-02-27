@@ -236,7 +236,7 @@ export default function TransportListing() {
   const [openAddRouteOnRoutesLoad, setOpenAddRouteOnRoutesLoad] = useState(false);
   const [fleetStatusFilter, setFleetStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [fleetSort, setFleetSort] = useState<"name" | "status" | "seats">("name");
-  const [fleetVehicleTypeFilter, setFleetVehicleTypeFilter] = useState<FleetVehicleType>("bus");
+  const [fleetVehicleTypeFilter, setFleetVehicleTypeFilter] = useState<FleetVehicleType>("all");
   const [addVehicleTypeModalOpen, setAddVehicleTypeModalOpen] = useState(false);
   const [showBusSetupFlow, setShowBusSetupFlow] = useState(false);
   const [busJustAddedId, setBusJustAddedId] = useState<string | null>(null);
@@ -1039,28 +1039,6 @@ export default function TransportListing() {
             <CardTitle className="flex items-center gap-2 text-base">
               {fleetVehicleTypeFilter === "flight" ? <Plane className="h-4 w-4" /> : <Bus className="h-4 w-4" />} Fleet
             </CardTitle>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {(fleetVehicleTypeFilter === "bus" || fleetVehicleTypeFilter === "all") && buses.length > 0 && (
-                <>
-                  <Select value={fleetStatusFilter} onValueChange={(v: "all" | "active" | "inactive") => setFleetStatusFilter(v)}>
-                    <SelectTrigger className="w-[130px] rounded-lg h-9"><SelectValue placeholder="Status" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={fleetSort} onValueChange={(v: "name" | "status" | "seats") => setFleetSort(v)}>
-                    <SelectTrigger className="w-[140px] rounded-lg h-9"><SelectValue placeholder="Sort by" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="name">Name A–Z</SelectItem>
-                      <SelectItem value="status">Status</SelectItem>
-                      <SelectItem value="seats">Seats</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </>
-              )}
-            </div>
           </CardHeader>
           <CardContent className="p-0">
             {fleetVehicleTypeFilter === "car" ? (
@@ -1081,7 +1059,7 @@ export default function TransportListing() {
                     </thead>
                     <tbody>
                       {filteredAndSortedCars.map((c) => (
-                        <tr key={c.id} className="border-b border-[#E5E7EB] hover:bg-muted/20 transition-colors">
+                        <tr key={c.id} className="hover:bg-muted/20 transition-colors">
                           <td className="py-3 px-4 font-medium text-foreground">{c.name}</td>
                           <td className="py-3 px-4 text-muted-foreground">{c.registration_number || "—"}</td>
                           <td className="py-3 px-4 text-muted-foreground">{c.category === "local" ? "Local" : "Intercity"}</td>
@@ -1116,7 +1094,7 @@ export default function TransportListing() {
                   </thead>
                   <tbody>
                     {filteredFlights.map((f) => (
-                      <tr key={f.id} className="border-b border-[#E5E7EB] hover:bg-muted/20 transition-colors">
+                      <tr key={f.id} className="hover:bg-muted/20 transition-colors">
                         <td className="py-3 px-4 font-medium text-foreground font-mono">{f.flightNumber}</td>
                         <td className="py-3 px-4 text-muted-foreground">{f.airlineName}</td>
                         <td className="py-3 px-4 text-muted-foreground">—</td>
@@ -1144,11 +1122,6 @@ export default function TransportListing() {
                     ))}
                   </tbody>
                 </table>
-                <div className="flex justify-center py-4">
-                  <Button asChild variant="outline" size="sm" className="rounded-xl gap-2">
-                    <Link to={`/listings/${listingId}/transport/flight`}>Manage flights</Link>
-                  </Button>
-                </div>
               </div>
             ) : fleetVehicleTypeFilter !== "bus" && fleetVehicleTypeFilter !== "all" ? (
               <p className="text-sm text-muted-foreground p-6">No {fleetVehicleTypeFilter}s yet. Vehicle setup coming soon.</p>
@@ -1170,7 +1143,7 @@ export default function TransportListing() {
                     {filteredAndSortedBuses.map((b) => (
                       <tr
                         key={b.id}
-                        className="border-b border-[#E5E7EB] hover:bg-muted/20 transition-colors"
+                        className="hover:bg-muted/20 transition-colors"
                       >
                         <td className="py-3 px-4 font-medium text-foreground">{b.name}</td>
                         <td className="py-3 px-4 text-muted-foreground">{b.registration_number || "—"}</td>
@@ -1209,7 +1182,7 @@ export default function TransportListing() {
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
-          <Link to="/listings"><ArrowLeft className="h-4 w-4" /></Link>
+          <Link to={`/listings/${listingId}/transport`}><ArrowLeft className="h-4 w-4" /></Link>
         </Button>
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground">{listing.name}</h1>
@@ -1227,10 +1200,13 @@ export default function TransportListing() {
         </div>
       )}
 
-      {/* Vehicle-type bar: Bus | Car | All */}
+      {/* Vehicle-type bar: All | Bus | Car | Flight */}
       {!showBusSetupFlow && !showCarSetupFlow && (
         <Tabs value={fleetVehicleTypeFilter} onValueChange={(v) => setFleetVehicleTypeFilter(v as FleetVehicleType)} className="w-full">
           <TabsList className="flex flex-wrap gap-1 bg-muted/50 p-1.5 rounded-xl w-full sm:w-auto">
+            <TabsTrigger value="all" className="rounded-lg gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              All
+            </TabsTrigger>
             <TabsTrigger value="bus" className="rounded-lg gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Bus className="h-4 w-4" /> Bus
             </TabsTrigger>
@@ -1239,9 +1215,6 @@ export default function TransportListing() {
             </TabsTrigger>
             <TabsTrigger value="flight" className="rounded-lg gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Plane className="h-4 w-4" /> Flight
-            </TabsTrigger>
-            <TabsTrigger value="all" className="rounded-lg gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-              All
             </TabsTrigger>
         </TabsList>
         </Tabs>
@@ -1260,66 +1233,139 @@ export default function TransportListing() {
                 {fleetVehicleTypeFilter === "flight" && "Your flights. Add flights with flight number, airline, routes and schedules. Manage them in the dedicated Flights page."}
                 {fleetVehicleTypeFilter === "all" && "Your buses, cars and flights. Select a type above to filter, or add a vehicle below."}
               </p>
-              <div className="flex flex-wrap items-center gap-2 mt-2 justify-between">
-                <div className="flex flex-wrap gap-2">
-                  {(fleetVehicleTypeFilter === "bus" || fleetVehicleTypeFilter === "all") && buses.length > 0 && (
-                    <>
-                      <Select value={fleetStatusFilter} onValueChange={(v: "all" | "active" | "inactive") => setFleetStatusFilter(v)}>
-                        <SelectTrigger className="w-[130px] rounded-lg h-9"><SelectValue placeholder="Status" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All</SelectItem>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="inactive">Inactive</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Select value={fleetSort} onValueChange={(v: "name" | "status" | "seats") => setFleetSort(v)}>
-                        <SelectTrigger className="w-[140px] rounded-lg h-9"><SelectValue placeholder="Sort by" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="name">Name A–Z</SelectItem>
-                          <SelectItem value="status">Status</SelectItem>
-                          <SelectItem value="seats">Seats</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </>
-                  )}
-                  {fleetVehicleTypeFilter === "car" && cars.length > 0 && (
-                    <>
-                      <Select value={fleetCarStatusFilter} onValueChange={(v: "all" | "active" | "inactive") => setFleetCarStatusFilter(v)}>
-                        <SelectTrigger className="w-[130px] rounded-lg h-9"><SelectValue placeholder="Status" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All</SelectItem>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="inactive">Inactive</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Select value={fleetCarSort} onValueChange={(v: "name" | "status" | "seats") => setFleetCarSort(v)}>
-                        <SelectTrigger className="w-[140px] rounded-lg h-9"><SelectValue placeholder="Sort by" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="name">Name A–Z</SelectItem>
-                          <SelectItem value="status">Status</SelectItem>
-                          <SelectItem value="seats">Seats</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </>
-                  )}
-                  {fleetVehicleTypeFilter === "flight" && (
-                    <Select value={fleetFlightStatusFilter} onValueChange={(v: "all" | "active" | "inactive") => setFleetFlightStatusFilter(v)}>
-                      <SelectTrigger className="w-[130px] rounded-lg h-9"><SelectValue placeholder="Status" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="inactive">Inactive</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
+              <div className="flex flex-wrap items-center gap-2 mt-2 justify-end">
                 <Button type="button" variant="outline" onClick={() => setAddVehicleTypeModalOpen(true)} className="rounded-xl shrink-0">
                   Add Vehicle
                 </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {fleetVehicleTypeFilter === "car" ? (
+              {fleetVehicleTypeFilter === "all" ? (
+                <div className="space-y-8">
+                  {buses.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><Bus className="h-4 w-4" /> Buses</h4>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-[#E5E7EB] bg-muted/30">
+                              <th className="text-left font-medium py-3 px-4">Bus Name</th>
+                              <th className="text-left font-medium py-3 px-4">Registered Number</th>
+                              <th className="text-left font-medium py-3 px-4">Bus Number</th>
+                              <th className="text-left font-medium py-3 px-4">Status</th>
+                              <th className="text-right font-medium py-3 px-4 w-24" />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredAndSortedBuses.map((b) => (
+                              <tr key={b.id} className="hover:bg-muted/20 transition-colors">
+                                <td className="py-3 px-4 font-medium text-foreground">{b.name}</td>
+                                <td className="py-3 px-4 text-muted-foreground">{b.registration_number || "—"}</td>
+                                <td className="py-3 px-4 text-muted-foreground">{b.bus_number || "—"}</td>
+                                <td className="py-3 px-4">
+                                  <span className={cn("inline-flex text-xs font-medium px-2 py-0.5 rounded-full capitalize", b.status === "active" ? "bg-[#22C55E]/10 text-[#22C55E]" : "bg-muted text-muted-foreground")}>{b.status}</span>
+                                </td>
+                                <td className="py-3 px-4 text-right">
+                                  <span className="inline-flex items-center justify-end gap-1">
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" asChild title="View bus"><Link to={`/listings/${listingId}/transport/bus/${b.id}`}><Eye className="h-4 w-4" /></Link></Button>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" title="Verify bus" onClick={() => openVerifyBusModal(b)}><Shield className="h-4 w-4" /></Button>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50" title="Delete bus" onClick={() => handleDeleteBus(b.id)}><Trash2 className="h-4 w-4" /></Button>
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                  {cars.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><Car className="h-4 w-4" /> Cars</h4>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-[#E5E7EB] bg-muted/30">
+                              <th className="text-left font-medium py-3 px-4">Car Name</th>
+                              <th className="text-left font-medium py-3 px-4">Registration Number</th>
+                              <th className="text-left font-medium py-3 px-4">Car Category</th>
+                              <th className="text-left font-medium py-3 px-4">Seats</th>
+                              <th className="text-left font-medium py-3 px-4">Status</th>
+                              <th className="text-right font-medium py-3 px-4 w-24" />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredAndSortedCars.map((c) => (
+                              <tr key={c.id} className="hover:bg-muted/20 transition-colors">
+                                <td className="py-3 px-4 font-medium text-foreground">{c.name}</td>
+                                <td className="py-3 px-4 text-muted-foreground">{c.registration_number || "—"}</td>
+                                <td className="py-3 px-4 text-muted-foreground">{c.category === "local" ? "Local" : "Intercity"}</td>
+                                <td className="py-3 px-4 text-muted-foreground">{c.seats}</td>
+                                <td className="py-3 px-4">
+                                  <span className={cn("inline-flex text-xs font-medium px-2 py-0.5 rounded-full capitalize", c.status === "active" ? "bg-[#22C55E]/10 text-[#22C55E]" : "bg-muted text-muted-foreground")}>{c.status}</span>
+                                </td>
+                                <td className="py-3 px-4 text-right">
+                                  <span className="inline-flex items-center justify-end gap-1">
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" asChild title="View car"><Link to={`/listings/${listingId}/transport/car/${c.id}`}><Eye className="h-4 w-4" /></Link></Button>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" title="Verify car" onClick={() => openVerifyCarModal(c)}><Shield className="h-4 w-4" /></Button>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50" title="Delete car" onClick={() => handleDeleteCar(c.id)}><Trash2 className="h-4 w-4" /></Button>
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                  {flights.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><Plane className="h-4 w-4" /> Flights</h4>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-[#E5E7EB] bg-muted/30">
+                              <th className="text-left font-medium py-3 px-4">Flight</th>
+                              <th className="text-left font-medium py-3 px-4">Airline</th>
+                              <th className="text-left font-medium py-3 px-4">Route</th>
+                              <th className="text-left font-medium py-3 px-4">Aircraft</th>
+                              <th className="text-left font-medium py-3 px-4">Seats</th>
+                              <th className="text-left font-medium py-3 px-4">Status</th>
+                              <th className="text-right font-medium py-3 px-4 w-24" />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredFlights.map((f) => (
+                              <tr key={f.id} className="hover:bg-muted/20 transition-colors">
+                                <td className="py-3 px-4 font-medium text-foreground font-mono">{f.flightNumber}</td>
+                                <td className="py-3 px-4 text-muted-foreground">{f.airlineName}</td>
+                                <td className="py-3 px-4 text-muted-foreground">—</td>
+                                <td className="py-3 px-4 text-muted-foreground">{f.aircraftType}</td>
+                                <td className="py-3 px-4 text-muted-foreground">{f.totalSeats}</td>
+                                <td className="py-3 px-4">
+                                  <span className={cn("inline-flex text-xs font-medium px-2 py-0.5 rounded-full capitalize", f.status === "active" ? "bg-[#22C55E]/10 text-[#22C55E]" : "bg-muted text-muted-foreground")}>{f.status}</span>
+                                </td>
+                                <td className="py-3 px-4 text-right">
+                                  <span className="inline-flex items-center justify-end gap-1">
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" asChild title="View flight"><Link to={`/listings/${listingId}/transport/flight/${f.id}`}><Eye className="h-4 w-4" /></Link></Button>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" title="Verify flight" onClick={() => openVerifyFlightModal(f)}><Shield className="h-4 w-4" /></Button>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50" title="Delete flight" onClick={() => handleDeleteFlight(f.id)}><Trash2 className="h-4 w-4" /></Button>
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                  {buses.length === 0 && cars.length === 0 && flights.length === 0 && (
+                    <div className="flex flex-col items-center gap-3 py-8 text-center">
+                      <p className="text-sm text-muted-foreground">No fleet yet. Use Add Vehicle above to add a bus, car, or flight.</p>
+                    </div>
+                  )}
+                </div>
+              ) : fleetVehicleTypeFilter === "car" ? (
                 cars.length === 0 ? (
                   <div className="flex flex-col items-center gap-3 py-8 text-center">
                     <p className="text-sm text-muted-foreground">No cars yet. Add your first car using Add Vehicle → Car above, then complete Car info, Driver info, and Operating Cities & pricing.</p>
@@ -1339,7 +1385,7 @@ export default function TransportListing() {
                       </thead>
                       <tbody>
                         {filteredAndSortedCars.map((c) => (
-                          <tr key={c.id} className="border-b border-[#E5E7EB] hover:bg-muted/20 transition-colors">
+                          <tr key={c.id} className="hover:bg-muted/20 transition-colors">
                             <td className="py-3 px-4 font-medium text-foreground">{c.name}</td>
                             <td className="py-3 px-4 text-muted-foreground">{c.registration_number || "—"}</td>
                             <td className="py-3 px-4 text-muted-foreground">{c.category === "local" ? "Local" : "Intercity"}</td>
@@ -1385,7 +1431,7 @@ export default function TransportListing() {
                       </thead>
                       <tbody>
                         {filteredFlights.map((f) => (
-                          <tr key={f.id} className="border-b border-[#E5E7EB] hover:bg-muted/20 transition-colors">
+                          <tr key={f.id} className="hover:bg-muted/20 transition-colors">
                             <td className="py-3 px-4 font-medium text-foreground font-mono">{f.flightNumber}</td>
                             <td className="py-3 px-4 text-muted-foreground">{f.airlineName}</td>
                             <td className="py-3 px-4 text-muted-foreground">—</td>
@@ -1414,13 +1460,8 @@ export default function TransportListing() {
                       </tbody>
                     </table>
                     </div>
-                  <div className="flex justify-center pt-2">
-                    <Button asChild variant="outline" size="sm" className="rounded-xl gap-2">
-                      <Link to={`/listings/${listingId}/transport/flight`}>Manage flights</Link>
-                    </Button>
-                  </div>
                 </>
-              ) : fleetVehicleTypeFilter !== "bus" && fleetVehicleTypeFilter !== "all" ? (
+              ) : fleetVehicleTypeFilter !== "bus" ? (
                 <div className="flex flex-col items-center gap-3 py-8 text-center">
                   <p className="text-sm text-muted-foreground">No {fleetVehicleTypeFilter}s yet. Vehicle setup coming soon.</p>
                 </div>
@@ -1443,7 +1484,7 @@ export default function TransportListing() {
                       </thead>
                       <tbody>
                         {filteredAndSortedBuses.map((b) => (
-                          <tr key={b.id} className="border-b border-[#E5E7EB] hover:bg-muted/20 transition-colors">
+                          <tr key={b.id} className="hover:bg-muted/20 transition-colors">
                             <td className="py-3 px-4 font-medium text-foreground">{b.name}</td>
                             <td className="py-3 px-4 text-muted-foreground">{b.registration_number || "—"}</td>
                             <td className="py-3 px-4 text-muted-foreground">{b.bus_number || "—"}</td>

@@ -1,9 +1,21 @@
 const ADMIN_API_URL = import.meta.env.VITE_ADMIN_API_URL ?? "http://localhost:3003";
 const MAIN_APP_API_URL = import.meta.env.VITE_MAIN_APP_API_URL ?? "http://localhost:3001";
+const VENDOR_HUB_API_URL = import.meta.env.VITE_VENDOR_HUB_API_URL ?? "http://localhost:3002";
 const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY ?? "";
 
 function getUrl(base: string, path: string): string {
   return `${base.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+/** Call vendor-hub backend for admin (e.g. list vendors). Sends X-Admin-Key if set. */
+export async function vendorHubFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const url = getUrl(VENDOR_HUB_API_URL, path);
+  const headers: Record<string, string> = { "Content-Type": "application/json", ...(options?.headers as Record<string, string>) };
+  if (ADMIN_API_KEY) headers["X-Admin-Key"] = ADMIN_API_KEY;
+  const res = await fetch(url, { ...options, headers });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string }).error ?? "Request failed");
+  return data as T;
 }
 
 export async function adminFetch<T>(path: string, options?: RequestInit): Promise<T> {

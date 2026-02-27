@@ -193,6 +193,60 @@ router.get("/listings", authMiddleware, async (req: Request, res: Response): Pro
   }
 });
 
+/** GET /api/payouts/transactions — List payout transactions for the logged-in vendor. */
+router.get("/transactions", authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  const vendorId = req.vendorId;
+  if (!vendorId) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  try {
+    const rows = await query<{ id: string; amount_cents: string; status: string; created_at: string; vendor_confirmed_at: string | null }>(
+      `SELECT id::text, amount_cents::text, status, created_at::text, vendor_confirmed_at::text
+       FROM payout_transactions WHERE vendor_id = $1 ORDER BY created_at DESC`,
+      [vendorId]
+    );
+    res.json({
+      transactions: rows.rows.map((r) => ({
+        id: r.id,
+        amountCents: parseInt(r.amount_cents, 10) || 0,
+        status: r.status,
+        createdAt: r.created_at,
+        vendorConfirmedAt: r.vendor_confirmed_at || undefined,
+      })),
+    });
+  } catch (e) {
+    console.error("[payouts] transactions list", e);
+    res.status(500).json({ error: "Failed to load payout transactions" });
+  }
+});
+
+/** PATCH /api/payouts/transactions/:id/confirm — Mark transaction as received (vendor confirms). */
+router.patch("/transactions/:id/confirm", authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  const vendorId = req.vendorId;
+  const { id } = req.params;
+  if (!vendorId || !id) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  try {
+    const r = await query<{ id: string; status: string }>(
+      `UPDATE payout_transactions SET status = 'completed', vendor_confirmed_at = now()
+       WHERE id = $1 AND vendor_id = $2 AND status = 'pending_vendor_confirmation'
+       RETURNING id::text, status`,
+      [id, vendorId]
+    );
+    if (r.rows.length === 0) {
+      res.status(404).json({ error: "Transaction not found or already confirmed" });
+      return;
+    }
+    res.json({ id: r.rows[0].id, status: r.rows[0].status });
+  } catch (e) {
+    console.error("[payouts] confirm transaction", e);
+    res.status(500).json({ error: "Failed to confirm payout" });
+  }
+});
+
 /** GET /api/payouts/listings/:listingId — Detail for one listing: totals + fleets (bus, car, flight, hotel) with revenue. */
 router.get("/listings/:listingId", authMiddleware, async (req: Request, res: Response): Promise<void> => {
   const vendorId = req.vendorId;

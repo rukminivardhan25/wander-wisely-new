@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useParams, useLocation } from "react-router-dom";
-import { PartyPopper, ArrowLeft, MapPin, Calendar, Clock, Pencil, ToggleLeft, ToggleRight, Ticket, Users } from "lucide-react";
+import { PartyPopper, ArrowLeft, MapPin, Calendar, Clock, ToggleLeft, ToggleRight, Ticket } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { vendorFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -24,14 +24,11 @@ type EventData = {
   ticket_types: TicketType[];
   media: { id: string; file_url: string; is_poster: boolean; sort_order: number }[];
 };
-type BookingRow = { id: string; bookingRef: string; userId: string; totalCents: number; status: string; paidAt?: string; createdAt: string };
-
 export default function EventManage() {
   const { listingId } = useParams<{ listingId: string }>();
   const location = useLocation();
   const locationState = location.state as { message?: string; success?: boolean } | null;
   const [event, setEvent] = useState<EventData | null>(null);
-  const [bookings, setBookings] = useState<BookingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toggling, setToggling] = useState(false);
@@ -39,14 +36,8 @@ export default function EventManage() {
   useEffect(() => {
     if (!listingId) return;
     setError("");
-    Promise.all([
-      vendorFetch<EventData>(`/api/listings/${listingId}/event`),
-      vendorFetch<{ bookings: BookingRow[] }>(`/api/listings/${listingId}/event/bookings`),
-    ])
-      .then(([ev, bk]) => {
-        setEvent(ev);
-        setBookings(bk.bookings ?? []);
-      })
+    vendorFetch<EventData>(`/api/listings/${listingId}/event`)
+      .then(setEvent)
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
       .finally(() => setLoading(false));
   }, [listingId]);
@@ -99,20 +90,9 @@ export default function EventManage() {
         <span className="text-foreground font-medium">{event.name}</span>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-display font-bold text-foreground flex items-center gap-2">
-          <PartyPopper className="h-7 w-7 text-violet-600" />
-          Manage Event
-        </h1>
-        <Link
-          to={`/listings/${listingId}/event/edit`}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-violet-600 text-violet-700 dark:text-violet-400 text-sm font-medium hover:bg-violet-500/10 transition-colors"
-        >
-          <Pencil size={16} /> Edit details
-        </Link>
-      </div>
-
-      <p className="text-sm text-muted-foreground">Set active/inactive here. When <strong>Inactive</strong>, the event will not appear to users. Use <strong>Edit details</strong> to change venue, dates, or ticket types.</p>
+      <h1 className="text-2xl font-display font-bold text-foreground">
+        {event.name}
+      </h1>
 
       <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6">
         <h2 className="font-display font-semibold text-lg text-foreground border-b border-border/50 pb-3 mb-4">Active / Inactive status</h2>
@@ -201,37 +181,6 @@ export default function EventManage() {
         )}
       </div>
 
-      <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6">
-        <h2 className="font-display font-semibold text-lg text-foreground border-b border-border/50 pb-3 mb-4 flex items-center gap-2">
-          <Users size={18} /> Bookings ({bookings.length})
-        </h2>
-        {bookings.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No bookings yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left font-medium text-muted-foreground py-2 pr-2">Ref</th>
-                  <th className="text-left font-medium text-muted-foreground py-2 pr-2">Amount</th>
-                  <th className="text-left font-medium text-muted-foreground py-2 pr-2">Status</th>
-                  <th className="text-left font-medium text-muted-foreground py-2">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bookings.map((b) => (
-                  <tr key={b.id} className="border-b border-border/50 last:border-0">
-                    <td className="py-2 pr-2 font-mono text-foreground">{b.bookingRef}</td>
-                    <td className="py-2 pr-2 text-foreground">₹{(b.totalCents / 100).toLocaleString()}</td>
-                    <td className="py-2 pr-2 capitalize text-foreground">{b.status}</td>
-                    <td className="py-2 text-muted-foreground">{new Date(b.createdAt).toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

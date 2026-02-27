@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Compass, ChevronRight, ChevronLeft, Upload, X, Check, MapPin, Calendar } from "lucide-react";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { vendorFetch } from "@/lib/api";
+import { searchAddressSuggestions, type AddressSuggestion } from "@/lib/addressSuggestions";
 
 const EXPERIENCE_STEPS = ["Basic Info", "Schedule", "Pricing", "Media"];
 
@@ -30,16 +31,79 @@ export default function AddExperience() {
   });
   const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
   const DAY_LABELS: Record<string, string> = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
+  type DaySchedule = { startTime: string; endTime: string; numberOfSlots: number };
+  const defaultDaySchedule: DaySchedule = { startTime: "09:00", endTime: "17:00", numberOfSlots: 1 };
   const [scheduleDays, setScheduleDays] = useState<Record<string, boolean>>({ mon: false, tue: false, wed: false, thu: false, fri: false, sat: false, sun: false });
-  const [slotsByDay, setSlotsByDay] = useState<Record<string, string[]>>({ mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] });
+  const [scheduleByDay, setScheduleByDay] = useState<Record<string, DaySchedule>>({ mon: { ...defaultDaySchedule }, tue: { ...defaultDaySchedule }, wed: { ...defaultDaySchedule }, thu: { ...defaultDaySchedule }, fri: { ...defaultDaySchedule }, sat: { ...defaultDaySchedule }, sun: { ...defaultDaySchedule } });
   const [price, setPrice] = useState({ perPerson: "", taxIncluded: true, cancellationPolicy: "" });
   const [coverIndex, setCoverIndex] = useState(0);
   const [images, setImages] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [locationSuggestions, setLocationSuggestions] = useState<AddressSuggestion[]>([]);
+  const [locationSuggestionsOpen, setLocationSuggestionsOpen] = useState(false);
+  const [locationSuggestionsLoading, setLocationSuggestionsLoading] = useState(false);
+  const locationInputWrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const q = basic.location.trim();
+    if (q.length < 2) {
+      setLocationSuggestions([]);
+      setLocationSuggestionsOpen(false);
+      return;
+    }
+    const t = setTimeout(() => {
+      setLocationSuggestionsLoading(true);
+      searchAddressSuggestions(q)
+        .then((list) => {
+          setLocationSuggestions(list);
+          setLocationSuggestionsOpen(list.length > 0);
+        })
+        .catch(() => {
+          setLocationSuggestions([]);
+          setLocationSuggestionsOpen(false);
+        })
+        .finally(() => setLocationSuggestionsLoading(false));
+    }, 350);
+    return () => clearTimeout(t);
+  }, [basic.location]);
+
+  const chooseLocationSuggestion = useCallback((item: AddressSuggestion) => {
+    setBasic((p) => ({ ...p, location: item.displayName }));
+    setLocationSuggestions([]);
+    setLocationSuggestionsOpen(false);
+  }, []);
+
+  useEffect(() => {
+    const wrap = locationInputWrapRef.current;
+    if (!wrap) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrap.contains(e.target as Node)) return;
+      setLocationSuggestionsOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const next = () => setStep((s) => Math.min(s + 1, EXPERIENCE_STEPS.length - 1));
   const prev = () => (step === 0 ? navigate("/add-listing") : setStep((s) => s - 1));
+
+  function slotTimesFromRange(startTime: string, endTime: string, numberOfSlots: number): string[] {
+    if (numberOfSlots < 1) return [];
+    const [sh, sm] = startTime.split(":").map(Number);
+    const [eh, em] = endTime.split(":").map(Number);
+    let startMins = (sh ?? 0) * 60 + (sm ?? 0);
+    let endMins = (eh ?? 0) * 60 + (em ?? 0);
+    if (endMins <= startMins) endMins += 24 * 60;
+    const out: string[] = [];
+    for (let i = 0; i < numberOfSlots; i++) {
+      const mins = startMins + ((endMins - startMins) * i) / numberOfSlots;
+      const h = Math.floor(mins / 60) % 24;
+      const m = Math.round(mins % 60);
+      out.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+    }
+    return out;
+  }
 
   const createExperienceListing = async (asDraft: boolean) => {
     const name = basic.name.trim();
@@ -64,8 +128,11 @@ export default function AddExperience() {
 
       const recurring_slots: { day: string; time: string }[] = [];
       DAY_KEYS.forEach((day) => {
-        if (scheduleDays[day] && slotsByDay[day]?.length) {
-          (slotsByDay[day] || []).forEach((time) => recurring_slots.push({ day, time: time.slice(0, 5) || "09:00" }));
+        if (scheduleDays[day]) {
+          const s = scheduleByDay[day] ?? defaultDaySchedule;
+          const n = Math.max(1, s.numberOfSlots);
+          const times = slotTimesFromRange(s.startTime, s.endTime, n);
+          times.forEach((time) => recurring_slots.push({ day, time: time.slice(0, 5) || "09:00" }));
         }
       });
 
@@ -95,6 +162,8 @@ export default function AddExperience() {
           price_per_person_cents: Math.max(0, Math.floor(parseFloat(price.perPerson || "0") * 100)),
           tax_included: price.taxIncluded,
           cancellation_policy: (price.cancellationPolicy || "").trim() || null,
+          schedule_days: scheduleDays,
+          schedule_by_day: scheduleByDay,
           recurring_slots: recurring_slots.length ? recurring_slots : undefined,
           media: mediaUrls.length ? mediaUrls : undefined,
         }),
@@ -186,25 +255,48 @@ export default function AddExperience() {
                   <Label>City</Label>
                   <Input className="mt-1.5 rounded-xl" placeholder="e.g. Manali" value={basic.city} onChange={(e) => setBasic((p) => ({ ...p, city: e.target.value }))} />
                 </div>
-                <div className="sm:col-span-2">
-                  <Label className="flex items-center gap-1.5"><MapPin size={14} /> Exact Location (map pin required)</Label>
-                  <Input className="mt-1.5 rounded-xl" placeholder="Address or drop pin on map" value={basic.location} onChange={(e) => setBasic((p) => ({ ...p, location: e.target.value }))} />
-                  <div className="mt-2 h-36 rounded-xl bg-muted border border-border flex items-center justify-center">
-                    <span className="text-xs text-muted-foreground">Map placeholder — pick location</span>
-                  </div>
+                <div className="sm:col-span-2" ref={locationInputWrapRef}>
+                  <Label className="flex items-center gap-1.5"><MapPin size={14} /> Exact Location</Label>
+                  <Input
+                    className="mt-1.5 rounded-xl"
+                    placeholder="Start typing address for suggestions"
+                    value={basic.location}
+                    onChange={(e) => setBasic((p) => ({ ...p, location: e.target.value }))}
+                    autoComplete="off"
+                  />
+                  {locationSuggestionsLoading && (
+                    <p className="text-xs text-muted-foreground mt-1">Finding addresses…</p>
+                  )}
+                  {locationSuggestionsOpen && locationSuggestions.length > 0 && !locationSuggestionsLoading && (
+                    <ul className="mt-1 rounded-xl border border-border bg-card shadow-lg overflow-hidden divide-y divide-border max-h-48 overflow-y-auto z-10">
+                      {locationSuggestions.map((item, i) => (
+                        <li key={i}>
+                          <button
+                            type="button"
+                            className="w-full text-left px-3 py-2.5 text-sm text-foreground hover:bg-muted/80 transition-colors"
+                            onClick={() => chooseLocationSuggestion(item)}
+                          >
+                            {item.displayName}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
                 <div>
-                  <Label>Duration</Label>
-                  <select
-                    className="mt-1.5 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                  <Label>Duration per slot</Label>
+                  <Input
+                    className="mt-1.5 rounded-xl"
+                    list="duration-options"
+                    placeholder="e.g. 1 hour, 2 hours, or type your own"
                     value={basic.duration}
                     onChange={(e) => setBasic((p) => ({ ...p, duration: e.target.value }))}
-                  >
-                    <option value="">Select duration</option>
+                  />
+                  <datalist id="duration-options">
                     {DURATIONS.map((d) => (
-                      <option key={d} value={d}>{d}</option>
+                      <option key={d} value={d} />
                     ))}
-                  </select>
+                  </datalist>
                 </div>
                 <div>
                   <Label>Max Participants Per Slot</Label>
@@ -232,7 +324,6 @@ export default function AddExperience() {
                 <Calendar size={20} className="text-emerald-600" />
                 Schedule Setup
               </h2>
-              <p className="text-sm text-muted-foreground">Select which days the experience runs, then add time slots for each day.</p>
 
               <div>
                 <Label className="block mb-2">Days of the week</Label>
@@ -254,55 +345,50 @@ export default function AddExperience() {
               </div>
 
               <div>
-                <Label className="block mb-2">Time slots per day</Label>
-                <p className="text-xs text-muted-foreground mb-3">Add one or more start times for each selected day.</p>
-                <div className="space-y-4">
-                  {DAY_KEYS.filter((day) => scheduleDays[day]).map((day) => (
-                    <div key={day} className="rounded-xl border border-border bg-muted/20 p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium text-foreground">{DAY_LABELS[day]}</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="rounded-lg h-8 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
-                          onClick={() => setSlotsByDay((prev) => ({ ...prev, [day]: [...(prev[day] || []), "09:00"] }))}
-                        >
-                          + Add slot
-                        </Button>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {(slotsByDay[day] || []).map((time, idx) => (
-                          <div key={`${day}-${idx}`} className="flex items-center gap-1 rounded-lg border border-border bg-background px-2 py-1">
+                <Label className="block mb-2">Start time, end time & number of slots per day</Label>
+                <div className="space-y-4 mt-3">
+                  {DAY_KEYS.filter((day) => scheduleDays[day]).map((day) => {
+                    const s = scheduleByDay[day] ?? defaultDaySchedule;
+                    return (
+                      <div key={day} className="rounded-xl border border-border bg-muted/20 p-4">
+                        <span className="font-medium text-foreground block mb-3">{DAY_LABELS[day]}</span>
+                        <div className="grid gap-4 sm:grid-cols-3">
+                          <div>
+                            <Label className="text-xs">Start time</Label>
                             <input
                               type="time"
-                              className="w-28 rounded border-0 bg-transparent text-sm focus:outline-none focus:ring-0"
-                              value={time}
-                              onChange={(e) => {
-                                const next = [...(slotsByDay[day] || [])];
-                                next[idx] = e.target.value;
-                                setSlotsByDay((prev) => ({ ...prev, [day]: next }));
-                              }}
+                              className="mt-1 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                              value={s.startTime}
+                              onChange={(e) => setScheduleByDay((prev) => ({ ...prev, [day]: { ...(prev[day] ?? defaultDaySchedule), startTime: e.target.value } }))}
                             />
-                            <button
-                              type="button"
-                              onClick={() => setSlotsByDay((prev) => ({ ...prev, [day]: (prev[day] || []).filter((_, i) => i !== idx) }))}
-                              className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                              aria-label="Remove slot"
-                            >
-                              <X size={14} />
-                            </button>
                           </div>
-                        ))}
-                        {(slotsByDay[day] || []).length === 0 && (
-                          <p className="text-xs text-muted-foreground">No slots yet. Click &quot;+ Add slot&quot; to add a time.</p>
-                        )}
+                          <div>
+                            <Label className="text-xs">End time</Label>
+                            <input
+                              type="time"
+                              className="mt-1 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                              value={s.endTime}
+                              onChange={(e) => setScheduleByDay((prev) => ({ ...prev, [day]: { ...(prev[day] ?? defaultDaySchedule), endTime: e.target.value } }))}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Number of slots</Label>
+                            <Input
+                              type="number"
+                              min={1}
+                              className="mt-1 rounded-xl"
+                              value={s.numberOfSlots}
+                              onChange={(e) => setScheduleByDay((prev) => ({ ...prev, [day]: { ...(prev[day] ?? defaultDaySchedule), numberOfSlots: Math.max(1, parseInt(e.target.value || "1", 10) || 1) } }))}
+                            />
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">Max bookings this day = {s.numberOfSlots} × (max participants per slot) = {s.numberOfSlots * Math.max(1, parseInt(basic.maxParticipants || "10", 10) || 1)}</p>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {!DAY_KEYS.some((d) => scheduleDays[d]) && (
                     <p className="text-sm text-muted-foreground rounded-lg border border-dashed border-border p-4 text-center">
-                      Select at least one day above to add time slots.
+                      Select at least one day above to set start time, end time, and number of slots.
                     </p>
                   )}
                 </div>

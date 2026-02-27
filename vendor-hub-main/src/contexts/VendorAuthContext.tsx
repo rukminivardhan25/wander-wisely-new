@@ -17,6 +17,7 @@ interface VendorAuthContextValue extends AuthState {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (data: { name: string; email: string; phone?: string; password: string }) => Promise<void>;
   logout: () => void;
+  updateVendor: (partial: Partial<Vendor>) => void;
 }
 
 const STORAGE_TOKEN = "vendor_token";
@@ -103,11 +104,23 @@ export function VendorAuthProvider({ children }: { children: ReactNode }) {
     setState({ token: null, vendor: null, ready: true });
   }, []);
 
+  const updateVendor = useCallback((partial: Partial<Vendor>) => {
+    setState((s) => {
+      if (!s.vendor) return s;
+      const vendor = { ...s.vendor, ...partial };
+      try {
+        localStorage.setItem(STORAGE_VENDOR, JSON.stringify(vendor));
+      } catch {}
+      return { ...s, vendor };
+    });
+  }, []);
+
   const value: VendorAuthContextValue = {
     ...state,
     signIn,
     signUp,
     logout,
+    updateVendor,
   };
 
   return <VendorAuthContext.Provider value={value}>{children}</VendorAuthContext.Provider>;

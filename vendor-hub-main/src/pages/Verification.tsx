@@ -19,14 +19,9 @@ const VEHICLE_TYPES = [
 
 const COMPANY_TYPES = [
   "transport",
-  "restaurant",
   "hotel",
-  "shop",
   "experience",
-  "rental",
   "event",
-  "guide",
-  "emergency",
 ] as const;
 
 const DOCUMENT_TYPES = [
@@ -798,7 +793,7 @@ export default function Verification() {
       {/* Step 1: Select company type (listings types: Transport, Restaurant, etc.) */}
       <div className="bg-card rounded-2xl shadow-card border border-border/50 p-6">
         <label className="block text-sm font-medium text-foreground mb-3">Company type</label>
-        <p className="text-xs text-muted-foreground mb-4">Select the type of company you want to verify (e.g. Transport, Restaurant).</p>
+        <p className="text-xs text-muted-foreground mb-4">Select the type of company you want to verify (Transport, Hotel, Experience, or Event).</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {COMPANY_TYPES.map((t) => (
             <button

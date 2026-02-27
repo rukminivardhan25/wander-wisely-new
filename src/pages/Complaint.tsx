@@ -11,6 +11,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { apiFetch } from "@/lib/api";
 
 const COMPLAINT_TYPES = [
   "Technical issue (app, login, or bugs)",
@@ -24,9 +26,11 @@ const COMPLAINT_TYPES = [
 const Complaint = () => {
   const [complaintType, setComplaintType] = useState<string>("");
   const [description, setDescription] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const { toast } = useToast();
+  const { token } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!complaintType) {
       toast({ title: "Please select a type of complaint", variant: "destructive" });
@@ -34,6 +38,24 @@ const Complaint = () => {
     }
     if (!description.trim()) {
       toast({ title: "Please describe your complaint", variant: "destructive" });
+      return;
+    }
+    setSubmitting(true);
+    const message = `[${complaintType}] ${description.trim()}`;
+    const headers: HeadersInit = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const { error, networkError } = await apiFetch<{ ok: boolean }>("/api/feedback", {
+      method: "POST",
+      body: { rating: 1, type: "complaint", message },
+      headers,
+    });
+    setSubmitting(false);
+    if (networkError || error) {
+      toast({
+        title: "Could not submit complaint",
+        description: "Make sure the backend is running (e.g. npm run dev in the backend folder).",
+        variant: "destructive",
+      });
       return;
     }
     toast({
@@ -86,8 +108,8 @@ const Complaint = () => {
               />
             </div>
 
-            <Button type="submit" className="w-full">
-              Submit complaint
+            <Button type="submit" className="w-full" disabled={submitting}>
+              {submitting ? "Submitting…" : "Submit complaint"}
             </Button>
           </form>
         </div>

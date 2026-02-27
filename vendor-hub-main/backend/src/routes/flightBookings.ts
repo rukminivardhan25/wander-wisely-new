@@ -185,6 +185,111 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+/** GET /api/listings/:listingId/flight-bookings/:bookingId — Full booking details (passengers, documents) for vendor view */
+router.get("/:bookingId", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const vendorId = req.vendorId!;
+    const listingId = req.params.listingId ?? (req as unknown as { listingId?: string }).listingId;
+    const { bookingId } = req.params;
+    if (!listingId || !bookingId) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const ok = await ensureListingOwned(listingId, vendorId);
+    if (!ok) {
+      res.status(404).json({ error: "Listing not found" });
+      return;
+    }
+    const bookRow = await query<{
+      id: string;
+      booking_ref: string;
+      user_id: string;
+      flight_id: string;
+      schedule_id: string | null;
+      route_from: string;
+      route_to: string;
+      travel_date: string;
+      passengers: number;
+      total_cents: number;
+      status: string;
+      otp: string | null;
+      paid_at: string | null;
+      rejected_reason: string | null;
+      created_at: string;
+      flight_number: string | null;
+      airline_name: string | null;
+    }>(
+      `SELECT b.id, b.booking_ref, b.user_id, b.flight_id, b.schedule_id, b.route_from, b.route_to,
+        to_char(b.travel_date, 'YYYY-MM-DD') AS travel_date, b.passengers, b.total_cents, b.status,
+        b.otp, b.paid_at, b.rejected_reason, b.created_at,
+        f.flight_number, f.airline_name
+       FROM flight_bookings b
+       LEFT JOIN flights f ON f.id = b.flight_id
+       WHERE b.id = $1 AND b.listing_id = $2`,
+      [bookingId, listingId]
+    );
+    if (bookRow.rows.length === 0) {
+      res.status(404).json({ error: "Booking not found" });
+      return;
+    }
+    const b = bookRow.rows[0];
+    const passengers = await query<{ name: string; id_type: string; id_number: string; seat_number: string | null }>(
+      `SELECT name, id_type, id_number, seat_number FROM flight_booking_passengers WHERE flight_booking_id = $1 ORDER BY id`,
+      [bookingId]
+    ).catch(() => ({ rows: [] }));
+    const documents = await query<{ document_type: string; file_name: string; file_url: string }>(
+      `SELECT document_type, file_name, file_url FROM flight_booking_documents WHERE flight_booking_id = $1 ORDER BY id`,
+      [bookingId]
+    ).catch(() => ({ rows: [] }));
+    const mainAppUrl = (process.env.MAIN_APP_API_URL ?? "http://localhost:3001").replace(/\/$/, "");
+    const resolveDocUrl = (fileUrl: string): string | null => {
+      if (!fileUrl || typeof fileUrl !== "string") return null;
+      const trimmed = fileUrl.trim();
+      if (/placeholder\.local/i.test(trimmed)) return null;
+      if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
+      const path = trimmed.startsWith("/") ? trimmed : `/uploads/${trimmed}`;
+      return `${mainAppUrl}${path}`;
+    };
+    res.json({
+      id: b.id,
+      bookingRef: b.booking_ref,
+      userId: b.user_id,
+      flightId: b.flight_id,
+      scheduleId: b.schedule_id,
+      flightNumber: b.flight_number ?? undefined,
+      airlineName: b.airline_name ?? undefined,
+      routeFrom: b.route_from,
+      routeTo: b.route_to,
+      travelDate: b.travel_date,
+      passengers: b.passengers,
+      totalCents: b.total_cents,
+      status: b.status,
+      otp: b.otp ?? undefined,
+      paidAt: b.paid_at ?? undefined,
+      rejectedReason: b.rejected_reason ?? undefined,
+      createdAt: b.created_at,
+      passengerList: passengers.rows.map((p) => ({
+        name: p.name,
+        idType: p.id_type,
+        idNumber: p.id_number,
+        seatNumber: p.seat_number ?? undefined,
+      })),
+      documents: documents.rows.map((d) => ({
+        documentType: d.document_type,
+        fileName: d.file_name,
+        fileUrl: resolveDocUrl(d.file_url) ?? undefined,
+      })),
+    });
+  } catch (err) {
+    console.error("Get flight booking detail error:", err);
+    if (err && typeof err === "object" && "message" in err && String((err as Error).message).includes("flight_bookings")) {
+      res.status(503).json({ error: "Flight bookings table not set up." });
+      return;
+    }
+    res.status(500).json({ error: "Failed to load booking details" });
+  }
+});
+
 /** PATCH /api/listings/:listingId/flight-bookings/:bookingId/accept */
 router.patch("/:bookingId/accept", async (req: Request, res: Response): Promise<void> => {
   try {

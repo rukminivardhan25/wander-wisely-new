@@ -29,6 +29,8 @@ const schemaFiles = [
   "041_event_bookings.sql",
   "042_experiences_drop_discount.sql",
   "047_experience_schedule_template.sql",
+  "048_booking_reviews.sql",
+  "049_booking_reviews_user_name.sql",
 ];
 
 async function run() {

@@ -28,9 +28,11 @@ import {
   Hotel,
   Play,
   Eye,
-  Trash2,
   CheckCircle,
   XCircle,
+  Star,
+  CreditCard,
+  Smartphone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar as DateCalendar } from "@/components/ui/calendar";
@@ -38,6 +40,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import Layout from "@/components/Layout";
 import { useAuth } from "@/contexts/AuthContext";
 import { getStoredBusBookings, type StoredBusBooking } from "@/lib/bookingsStorage";
@@ -373,6 +376,9 @@ const MyTrip = () => {
   } | null>(null);
   const [flightTicketLoading, setFlightTicketLoading] = useState(false);
   const [flightPayId, setFlightPayId] = useState<string | null>(null);
+  const [flightPaymentModalOpen, setFlightPaymentModalOpen] = useState(false);
+  const [flightPaymentBookingId, setFlightPaymentBookingId] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<"upi" | "card" | null>(null);
   const [experiencePayId, setExperiencePayId] = useState<string | null>(null);
   const [eventPayId, setEventPayId] = useState<string | null>(null);
   const [experienceTicketModalOpen, setExperienceTicketModalOpen] = useState(false);
@@ -380,6 +386,10 @@ const MyTrip = () => {
   const [eventTicketModalOpen, setEventTicketModalOpen] = useState(false);
   const [eventTicketData, setEventTicketData] = useState<EventBookingItem | null>(null);
   const [bookingsFilterDate, setBookingsFilterDate] = useState<string>("");
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewTarget, setReviewTarget] = useState<{ category: string; id: string; name: string } | null>(null);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState("");
   const { token } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -1506,18 +1516,23 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {filteredStoredBusBookings.map((b) => {
                       const { bookedAt: _, ...stateForSuccess } = b;
+                      const busName = `${b.routeFrom} → ${b.routeTo}`;
                       return (
-                        <div key={b.bookingId} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3">
+                        <div key={b.bookingId} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3 relative">
+                          <button
+                            type="button"
+                            onClick={() => { setReviewTarget({ category: "Bus", id: b.bookingId, name: busName }); setReviewModalOpen(true); }}
+                            className="absolute top-3 right-3 p-1.5 rounded-lg text-amber-500 hover:bg-amber-500/10 transition-colors"
+                            title="Leave a review for this booking"
+                            aria-label="Leave a review"
+                          >
+                            <Star className="h-5 w-5" />
+                          </button>
                           <div className="w-14 h-14 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
                             <Bus className="h-6 w-6 text-slate-600" />
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="font-medium text-foreground truncate">{b.routeFrom} → {b.routeTo}</p>
-                              <Button type="button" size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600 hover:bg-red-50 shrink-0" title="Delete" onClick={() => toast({ title: "Bus booking", description: "Cancel not available for bus from this page.", variant: "destructive" })}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
+                          <div className="min-w-0 flex-1 pr-8">
+                            <p className="font-medium text-foreground truncate">{busName}</p>
                             <p className="text-xs text-muted-foreground">Bus · {b.travelDate}</p>
                             <p className="text-xs mt-1 text-amber-600">Confirmed</p>
                             <Button asChild size="sm" variant="outline" className="mt-2 rounded-lg text-xs">
@@ -1541,22 +1556,22 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                               : b.status === "rejected"
                                 ? "Rejected"
                                 : b.status;
-                      const showDelete = !isReadOnly && (b.status === "pending_vendor" || b.status === "approved_awaiting_payment" || b.status === "rejected" || b.status === "confirmed");
-                      const handleDelete = () => deleteCarBooking(b.id);
                       return (
-                        <div key={b.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3">
+                        <div key={b.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3 relative">
+                          <button
+                            type="button"
+                            onClick={() => { setReviewTarget({ category: "Car", id: b.id, name: title }); setReviewModalOpen(true); }}
+                            className="absolute top-3 right-3 p-1.5 rounded-lg text-amber-500 hover:bg-amber-500/10 transition-colors"
+                            title="Leave a review"
+                            aria-label="Leave a review"
+                          >
+                            <Star className="h-5 w-5" />
+                          </button>
                           <div className="w-14 h-14 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
                             <Car className="h-6 w-6 text-slate-600" />
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="font-medium text-foreground truncate">{title}</p>
-                              {showDelete && (
-                                <Button type="button" size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600 hover:bg-red-50 shrink-0" title="Delete" disabled={carCancelId === b.id} onClick={handleDelete}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </div>
+                          <div className="min-w-0 flex-1 pr-8">
+                            <p className="font-medium text-foreground truncate">{title}</p>
                             <p className="text-xs text-muted-foreground">Car · {b.travelDate}</p>
                             <p className={`text-xs mt-1 flex items-center gap-1 ${b.status === "confirmed" ? "text-emerald-600" : "text-amber-600"}`}>
                               {b.status === "confirmed" && <CheckCircle className="h-3.5 w-3.5 shrink-0" />}
@@ -1581,11 +1596,20 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                                 ? "Rejected"
                                 : b.status;
                       return (
-                        <div key={b.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3">
+                        <div key={b.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3 relative">
+                          <button
+                            type="button"
+                            onClick={() => { setReviewTarget({ category: "Flight", id: b.id, name: `${b.routeFrom} → ${b.routeTo}` }); setReviewModalOpen(true); }}
+                            className="absolute top-3 right-3 p-1.5 rounded-lg text-amber-500 hover:bg-amber-500/10 transition-colors"
+                            title="Leave a review"
+                            aria-label="Leave a review"
+                          >
+                            <Star className="h-5 w-5" />
+                          </button>
                           <div className="w-14 h-14 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
                             <Plane className="h-6 w-6 text-slate-600" />
                           </div>
-                          <div className="min-w-0 flex-1">
+                          <div className="min-w-0 flex-1 pr-8">
                             <div className="flex items-start justify-between gap-2">
                               <p className="font-medium text-foreground truncate">{b.routeFrom} → {b.routeTo}</p>
                             </div>
@@ -1601,7 +1625,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                                 </Button>
                               )}
                               {!isReadOnly && b.status === "approved_awaiting_payment" && (
-                                <Button type="button" size="sm" variant="hero" className="rounded-lg text-xs" disabled={flightPayId === b.id || !b.allSeatsAssigned} onClick={() => flightPay(b.id)} title={!b.allSeatsAssigned ? "Select seats for all passengers first" : undefined}>
+                                <Button type="button" size="sm" variant="hero" className="rounded-lg text-xs" disabled={flightPayId === b.id || !b.allSeatsAssigned} onClick={() => { setFlightPaymentBookingId(b.id); setPaymentMethod(null); setFlightPaymentModalOpen(true); }} title={!b.allSeatsAssigned ? "Select seats for all passengers first" : undefined}>
                                   {flightPayId === b.id ? "Processing…" : "Pay now"}
                                 </Button>
                               )}
@@ -1619,11 +1643,20 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                       const isPaid = !!b.paidAt;
                       const statusLabel = b.status === "cancelled" ? "Cancelled" : b.status === "completed" ? "Completed" : isPaid ? "Confirmed" : "Pay to confirm";
                       return (
-                        <div key={b.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3">
+                        <div key={b.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3 relative">
+                          <button
+                            type="button"
+                            onClick={() => { setReviewTarget({ category: "Experience", id: b.id, name: b.experienceName }); setReviewModalOpen(true); }}
+                            className="absolute top-3 right-3 p-1.5 rounded-lg text-amber-500 hover:bg-amber-500/10 transition-colors"
+                            title="Leave a review"
+                            aria-label="Leave a review"
+                          >
+                            <Star className="h-5 w-5" />
+                          </button>
                           <div className="w-14 h-14 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
                             <Mountain className="h-6 w-6 text-emerald-600" />
                           </div>
-                          <div className="min-w-0 flex-1">
+                          <div className="min-w-0 flex-1 pr-8">
                             <p className="font-medium text-foreground truncate">{b.experienceName}</p>
                             <p className="text-xs text-muted-foreground">Experience · {b.slotDate} · {b.slotTime} · {b.participantsCount} participant{b.participantsCount !== 1 ? "s" : ""}</p>
                             <p className={`text-xs mt-1 flex items-center gap-1 ${isPaid ? "text-emerald-600" : "text-amber-600"}`}>
@@ -1666,11 +1699,20 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                       const isPaid = !!b.paidAt;
                       const statusLabel = b.status === "cancelled" ? "Cancelled" : b.status === "completed" ? "Completed" : isPaid ? "Confirmed" : "Pay to confirm";
                       return (
-                        <div key={b.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3">
+                        <div key={b.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3 relative">
+                          <button
+                            type="button"
+                            onClick={() => { setReviewTarget({ category: "Event", id: b.id, name: b.eventName }); setReviewModalOpen(true); }}
+                            className="absolute top-3 right-3 p-1.5 rounded-lg text-amber-500 hover:bg-amber-500/10 transition-colors"
+                            title="Leave a review"
+                            aria-label="Leave a review"
+                          >
+                            <Star className="h-5 w-5" />
+                          </button>
                           <div className="w-14 h-14 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
                             <CalendarDays className="h-6 w-6 text-violet-600" />
                           </div>
-                          <div className="min-w-0 flex-1">
+                          <div className="min-w-0 flex-1 pr-8">
                             <p className="font-medium text-foreground truncate">{b.eventName}</p>
                             <p className="text-xs text-muted-foreground">Event · {b.venueName} · {b.startDate}{b.endDate !== b.startDate ? ` – ${b.endDate}` : ""} · {b.startTime} – {b.endTime}</p>
                             <p className={`text-xs mt-1 flex items-center gap-1 ${isPaid ? "text-emerald-600" : "text-amber-600"}`}>
@@ -1719,11 +1761,20 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                               ? "Rejected"
                               : b.status;
                       return (
-                        <div key={b.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3">
+                        <div key={b.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3 relative">
+                          <button
+                            type="button"
+                            onClick={() => { setReviewTarget({ category: "Hotel", id: b.id, name: "Hotel stay" }); setReviewModalOpen(true); }}
+                            className="absolute top-3 right-3 p-1.5 rounded-lg text-amber-500 hover:bg-amber-500/10 transition-colors"
+                            title="Leave a review"
+                            aria-label="Leave a review"
+                          >
+                            <Star className="h-5 w-5" />
+                          </button>
                           <div className="w-14 h-14 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
                             <Hotel className="h-6 w-6 text-amber-600" />
                           </div>
-                          <div className="min-w-0 flex-1">
+                          <div className="min-w-0 flex-1 pr-8">
                             <p className="font-medium text-foreground truncate">Hotel stay</p>
                             <p className="text-xs text-muted-foreground">Hotel · {b.checkIn} – {b.checkOut} · {b.nights} night{b.nights !== 1 ? "s" : ""}</p>
                             <p className={`text-xs mt-1 flex items-center gap-1 ${b.status === "approved" ? "text-emerald-600" : b.status === "rejected" ? "text-red-600" : "text-amber-600"}`}>
@@ -2340,6 +2391,241 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                 </div>
               </>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Flight payment modal: choose UPI/Card (mocked), show admin UPI details for UPI, then Pay now → ticket */}
+        <Dialog
+          open={flightPaymentModalOpen}
+          onOpenChange={(o) => {
+            if (!o) {
+              setFlightPaymentModalOpen(false);
+              setFlightPaymentBookingId(null);
+              setPaymentMethod(null);
+            }
+          }}
+        >
+          <DialogContent className="rounded-2xl max-w-[420px]" aria-describedby="payment-dialog-desc">
+            <DialogHeader>
+              <DialogTitle>Complete payment</DialogTitle>
+              <DialogDescription id="payment-dialog-desc">
+                Choose a payment method. This is a mocked flow — no real charge.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 pt-2">
+              {paymentMethod === null ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod("upi")}
+                    className="flex flex-col items-center gap-2 rounded-xl border-2 border-slate-200 bg-slate-50/50 p-4 hover:border-primary hover:bg-primary/5 transition-colors text-left"
+                  >
+                    <Smartphone className="h-8 w-8 text-primary" />
+                    <span className="font-medium text-foreground">UPI</span>
+                    <span className="text-xs text-muted-foreground">Pay via UPI ID</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod("card")}
+                    className="flex flex-col items-center gap-2 rounded-xl border-2 border-slate-200 bg-slate-50/50 p-4 hover:border-primary hover:bg-primary/5 transition-colors text-left"
+                  >
+                    <CreditCard className="h-8 w-8 text-primary" />
+                    <span className="font-medium text-foreground">Card</span>
+                    <span className="text-xs text-muted-foreground">Debit / Credit card</span>
+                  </button>
+                </div>
+              ) : paymentMethod === "upi" ? (
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-foreground">Send payment to (admin details — mock)</p>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-2 text-sm">
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">UPI ID</span>
+                      <span className="font-mono font-medium text-foreground">payments@wanderwisely</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Bank</span>
+                      <span className="text-foreground">Wander Wisely Payments</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Account</span>
+                      <span className="font-mono text-foreground">XXXX XXXX 1234</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Open your UPI app and send the amount to the UPI ID above. Then click Pay now below to confirm (mocked).</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-foreground">Card payment (mocked)</p>
+                  <p className="text-xs text-muted-foreground">No card details required. Click Pay now to complete the mock payment.</p>
+                </div>
+              )}
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              {paymentMethod !== null && (
+                <Button type="button" variant="ghost" onClick={() => setPaymentMethod(null)}>
+                  Back
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setFlightPaymentModalOpen(false);
+                  setFlightPaymentBookingId(null);
+                  setPaymentMethod(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="hero"
+                disabled={!flightPaymentBookingId || !token || paymentMethod === null}
+                onClick={async () => {
+                  if (!flightPaymentBookingId || !token) return;
+                  setFlightPayId(flightPaymentBookingId);
+                  try {
+                    const { data, error } = await apiFetch<{ ok: boolean; status: string; otp: string }>(`/api/flight-bookings/${flightPaymentBookingId}/pay`, {
+                      method: "PATCH",
+                      headers: { Authorization: `Bearer ${token}` },
+                    });
+                    if (!error && data?.status === "confirmed") {
+                      toast({ title: "Payment confirmed", description: "Your flight booking is confirmed. You can view your ticket below." });
+                      setFlightPaymentModalOpen(false);
+                      setFlightPaymentBookingId(null);
+                      setPaymentMethod(null);
+                      loadBookings();
+                    } else {
+                      toast({ title: "Payment failed", description: error ?? "Try again.", variant: "destructive" });
+                    }
+                  } catch {
+                    toast({ title: "Payment failed", variant: "destructive" });
+                  } finally {
+                    setFlightPayId(null);
+                  }
+                }}
+              >
+                Pay now
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Leave review modal — review goes to the company/vendor for this booking */}
+        <Dialog
+          open={reviewModalOpen}
+          onOpenChange={(o) => {
+            if (!o) {
+              setReviewModalOpen(false);
+              setReviewTarget(null);
+              setReviewRating(0);
+              setReviewComment("");
+            }
+          }}
+        >
+          <DialogContent className="rounded-2xl max-w-[420px]" aria-describedby="review-dialog-desc">
+            <DialogHeader>
+              <DialogTitle>Leave a review</DialogTitle>
+              <DialogDescription id="review-dialog-desc">
+                {reviewTarget
+                  ? `Your review will be shared with the company for this ${reviewTarget.category.toLowerCase()} booking. It won't go to admin — only to the vendor.`
+                  : "Rate and optionally comment on this booking. Your review is shared with the company only."}
+              </DialogDescription>
+            </DialogHeader>
+            {reviewTarget && (
+              <div className="space-y-4 pt-2">
+                <p className="text-sm font-medium text-foreground">{reviewTarget.name}</p>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Rating</Label>
+                  <div className="flex items-center gap-1 mt-1.5">
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        className="p-0.5 rounded focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary"
+                        onClick={() => setReviewRating(s)}
+                        aria-label={`${s} star${s !== 1 ? "s" : ""}`}
+                      >
+                        <Star
+                          className={cn("h-8 w-8 transition-colors", s <= reviewRating ? "text-amber-500 fill-amber-500" : "text-slate-300")}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="review-comment" className="text-xs text-muted-foreground">Comment (optional)</Label>
+                  <Textarea
+                    id="review-comment"
+                    placeholder="Share your experience..."
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    className="mt-1.5 min-h-[80px] resize-none rounded-xl"
+                    rows={3}
+                  />
+                </div>
+              </div>
+            )}
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setReviewModalOpen(false);
+                  setReviewTarget(null);
+                  setReviewRating(0);
+                  setReviewComment("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="hero"
+                disabled={!reviewTarget || reviewRating === 0 || !token}
+                onClick={async () => {
+                  if (!reviewTarget || reviewRating === 0 || !token) return;
+                  const bookingTypeMap: Record<string, string> = {
+                    Bus: "transport",
+                    Car: "car",
+                    Flight: "flight",
+                    Hotel: "hotel",
+                    Experience: "experience",
+                    Event: "event",
+                  };
+                  const booking_type = bookingTypeMap[reviewTarget.category] ?? reviewTarget.category.toLowerCase();
+                  const { data, error, status } = await apiFetch<{ id: string }>("/api/booking-reviews", {
+                    method: "POST",
+                    headers: { Authorization: `Bearer ${token}` },
+                    body: {
+                      booking_type,
+                      booking_id: reviewTarget.id,
+                      rating: reviewRating,
+                      comment: reviewComment.trim() || undefined,
+                    },
+                  });
+                  if (error && status === 409) {
+                    toast({ title: "Already reviewed", description: "You have already submitted a review for this booking.", variant: "destructive" });
+                    setReviewModalOpen(false);
+                    setReviewTarget(null);
+                    setReviewRating(0);
+                    setReviewComment("");
+                    return;
+                  }
+                  if (error) {
+                    toast({ title: "Could not submit review", description: error || "Please try again.", variant: "destructive" });
+                    return;
+                  }
+                  toast({ title: "Review submitted", description: "Your review has been sent to the company." });
+                  setReviewModalOpen(false);
+                  setReviewTarget(null);
+                  setReviewRating(0);
+                  setReviewComment("");
+                }}
+              >
+                Submit review
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

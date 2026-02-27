@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { query } from "../config/db.js";
+import { getReviewSummaries } from "../services/bookingReviewSummary.js";
 
 const router = Router();
 
@@ -92,21 +93,27 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
     );
     const posterByEvent = new Map(posterRows.rows.map((r) => [r.event_id, r.file_url]));
 
-    const events = evRows.rows.map((e) => ({
-      id: e.id,
-      listingId: e.listing_id,
-      name: e.name,
-      category: e.category,
-      city: e.city,
-      venueName: e.venue_name,
-      startDate: e.start_date,
-      endDate: e.end_date,
-      startTime: e.start_time?.slice(0, 5) ?? "",
-      endTime: e.end_time?.slice(0, 5) ?? "",
-      organizerName: e.organizer_name,
-      description: e.description ?? undefined,
-      coverUrl: posterByEvent.get(e.id),
-    }));
+    const listingIds = [...new Set(evRows.rows.map((e) => e.listing_id))];
+    const reviewMap = await getReviewSummaries(listingIds.map((id) => ({ listingId: id })));
+    const events = evRows.rows.map((e) => {
+      const companyReview = reviewMap.get(`${e.listing_id}||`) ?? null;
+      return {
+        id: e.id,
+        listingId: e.listing_id,
+        name: e.name,
+        category: e.category,
+        city: e.city,
+        venueName: e.venue_name,
+        startDate: e.start_date,
+        endDate: e.end_date,
+        startTime: e.start_time?.slice(0, 5) ?? "",
+        endTime: e.end_time?.slice(0, 5) ?? "",
+        organizerName: e.organizer_name,
+        description: e.description ?? undefined,
+        coverUrl: posterByEvent.get(e.id),
+        ...(companyReview && { companyReview }),
+      };
+    });
 
     res.json({ events });
   } catch (err) {

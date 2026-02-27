@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { getTransportPool } from "../config/db.js";
+import { getReviewSummaries } from "../services/bookingReviewSummary.js";
 
 const router = Router();
 
@@ -95,8 +96,14 @@ router.get("/search", async (req: Request, res: Response): Promise<void> => {
       fareCents: r.route_fare_cents ?? r.base_fare_cents ?? undefined,
       seatLayout: r.seat_layout ?? undefined,
     }));
+    const listingIds = [...new Set(flights.map((f) => f.listingId))];
+    const reviewMap = await getReviewSummaries(listingIds.map((id) => ({ listingId: id })));
+    const flightsWithReviews = flights.map((f) => {
+      const companyReview = reviewMap.get(`${f.listingId}||`) ?? null;
+      return { ...f, ...(companyReview && { companyReview }) };
+    });
 
-    res.json({ flights });
+    res.json({ flights: flightsWithReviews });
   } catch (err) {
     console.error("Flight search error:", err);
     const msg = err && typeof err === "object" && "message" in err ? String((err as Error).message) : "";

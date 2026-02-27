@@ -23,6 +23,10 @@ import hotelsRoutes from "./routes/hotels.js";
 import hotelBookingsRoutes from "./routes/hotelBookings.js";
 import feedbackRoutes from "./routes/feedback.js";
 import adminFeedbackRoutes from "./routes/adminFeedback.js";
+import adminUsersRoutes from "./routes/adminUsers.js";
+import adminBookingsRoutes from "./routes/adminBookings.js";
+import adminPayoutsRoutes from "./routes/adminPayouts.js";
+import bookingReviewsRoutes from "./routes/bookingReviews.js";
 
 /** Log DATABASE_URL (password redacted) so you can confirm main app and vendor hub use the same DB. */
 function logDbUrl(label: string, url: string): void {
@@ -38,12 +42,13 @@ function logDbUrl(label: string, url: string): void {
 const app = express();
 const PORT = process.env.PORT ?? 3001;
 
-const defaultOrigins = "http://localhost:8080,http://localhost:8081,http://localhost:5173,http://localhost:5174,http://localhost:8083";
+const defaultOrigins = "http://localhost:8080,http://localhost:8081,http://localhost:5173,http://localhost:5174,http://localhost:8083,http://localhost:8082,http://127.0.0.1:8082";
 const corsOrigin = process.env.CORS_ORIGIN ?? defaultOrigins;
 const corsOrigins = corsOrigin.split(",").map((o) => o.trim()).filter(Boolean);
 const allowedSet = new Set([
   ...(corsOrigins.length ? corsOrigins : defaultOrigins.split(",").map((o) => o.trim())),
   "http://localhost:8083", // admin-main
+  "http://localhost:8082", "http://127.0.0.1:8082", // admin-main (alternate port)
 ]);
 app.use(cors({
   origin: (origin, cb) => {
@@ -84,6 +89,10 @@ app.use("/api/hotels", hotelsRoutes);
 app.use("/api/hotel-bookings", hotelBookingsRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/admin/feedback", adminFeedbackRoutes);
+app.use("/api/admin/users", adminUsersRoutes);
+app.use("/api/admin/bookings", adminBookingsRoutes);
+app.use("/api/admin/payouts", adminPayoutsRoutes);
+app.use("/api/booking-reviews", bookingReviewsRoutes);
 
 app.listen(PORT, () => {
   const dbUrl = process.env.DATABASE_URL ?? "";

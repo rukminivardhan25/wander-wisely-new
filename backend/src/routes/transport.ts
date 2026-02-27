@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { getTransportPool, query } from "../config/db.js";
+import { attachReviewSummaries } from "../services/bookingReviewSummary.js";
 
 const router = Router();
 
@@ -198,7 +199,8 @@ router.get("/available-buses", async (req: Request, res: Response): Promise<void
     });
 
     const filtered = buses.filter((b) => b.availableSeats >= passengers);
-    res.json({ date: dateParam, buses: filtered });
+    const withReviews = await attachReviewSummaries(filtered, { scopeType: "bus", scopeIdKey: "busId" });
+    res.json({ date: dateParam, buses: withReviews });
   } catch (err) {
     console.error("Transport available-buses error:", err);
     const message = err instanceof Error ? err.message : "Failed to fetch available buses";
@@ -279,7 +281,8 @@ router.get("/available-cars", async (req: Request, res: Response): Promise<void>
         pricePerKmCents: r.price_per_km_cents ?? null,
         minimumFareCents: r.minimum_fare_cents ?? null,
       }));
-      res.json({ type: "local", date: new Date().toISOString().slice(0, 10), cars });
+      const carsWithReviews = await attachReviewSummaries(cars, { scopeType: "car", scopeIdKey: "carId" });
+      res.json({ type: "local", date: new Date().toISOString().slice(0, 10), cars: carsWithReviews });
       return;
     }
 
@@ -336,7 +339,8 @@ router.get("/available-cars", async (req: Request, res: Response): Promise<void>
       pricePerKmCents: r.price_per_km_cents ?? null,
       estimatedDurationMinutes: r.estimated_duration_minutes ?? null,
     }));
-    res.json({ type: "intercity", date: dateParam, cars });
+    const carsWithReviews = await attachReviewSummaries(cars, { scopeType: "car", scopeIdKey: "carId" });
+    res.json({ type: "intercity", date: dateParam, cars: carsWithReviews });
   } catch (err) {
     console.error("Transport available-cars error:", err);
     const message = err instanceof Error ? err.message : "Failed to fetch available cars";
