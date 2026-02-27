@@ -79,6 +79,10 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", message: "Wander Wisely API" });
 });
 
+app.get("/", (_req, res) => {
+  res.json({ message: "Wander Wisely API", docs: "Use the frontend at your app URL; API routes are under /api/...", health: "/api/health" });
+});
+
 app.use("/api/auth", authRoutes);
 app.use("/api/trips", tripsRoutes);
 app.use("/api/destinations", destinationsRoutes);
@@ -109,5 +113,6 @@ app.listen(PORT, () => {
   const dbUrl = process.env.DATABASE_URL ?? "";
   if (dbUrl) logDbUrl("Main app DATABASE_URL", dbUrl);
   console.log("[DB] Single database (DATABASE_URL) used for app and transport (flights, buses, cars, bookings).");
-  console.log(`Server running at http://localhost:${PORT}`);
+  const publicUrl = process.env.RENDER_EXTERNAL_URL ?? process.env.PUBLIC_URL;
+  console.log(publicUrl ? `Server running at ${publicUrl}` : `Server running at http://localhost:${PORT}`);
 });
