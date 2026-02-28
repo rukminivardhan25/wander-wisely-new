@@ -79,7 +79,7 @@ export default function AddEvent() {
       const listingId = listingRes.id;
       const ticket_types = ticketTypesValid.map((t) => ({
         name: (t.name || "Ticket").trim(),
-        price_cents: Math.max(0, Math.floor(Number(t.price) || 0)),
+        price_cents: Math.max(0, Math.floor(Number(t.price) || 0) * 100),
         quantity_total: Math.max(1, Math.min(100000, Math.floor(Number(t.quantity) || 0))),
         max_per_user: Math.max(1, Math.min(50, Math.floor(Number(t.maxPerUser) || 5))),
       }));
