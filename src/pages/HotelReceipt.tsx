@@ -103,7 +103,7 @@ const HotelReceipt = () => {
   const statusLabel =
     booking.status === "pending_vendor"
       ? "Pending hotel approval"
-      : booking.status === "approved_awaiting_payment"
+      : booking.status === "approved_awaiting_payment" || booking.status === "approved"
         ? "Bill ready — Pay now"
         : booking.status === "confirmed"
           ? "Confirmed"
@@ -111,12 +111,12 @@ const HotelReceipt = () => {
             ? "Rejected"
             : booking.status;
   const isPending = booking.status === "pending_vendor";
-  const isAwaitingPayment = booking.status === "approved_awaiting_payment";
+  const isAwaitingPayment = booking.status === "approved_awaiting_payment" || booking.status === "approved";
 
   const [payLoading, setPayLoading] = useState(false);
 
   const handlePayNow = async () => {
-    if (!id || !token || booking.status !== "approved_awaiting_payment") return;
+    if (!id || !token || !isAwaitingPayment) return;
     setPayLoading(true);
     try {
       const { data: payData, error: payErr } = await apiFetch<{ ok: boolean; status: string }>(`/api/hotel-bookings/${id}/pay`, {
@@ -205,7 +205,7 @@ const HotelReceipt = () => {
                 </div>
               </div>
               <p className="text-amber-100 text-sm mt-2 font-mono">Booking ref: {booking.bookingRef}</p>
-              <p className={`text-sm mt-1 font-medium ${booking.status === "approved_awaiting_payment" ? "text-blue-200" : booking.status === "confirmed" ? "text-emerald-200" : booking.status === "rejected" ? "text-red-200" : "text-amber-100"}`}>
+              <p className={`text-sm mt-1 font-medium ${isAwaitingPayment ? "text-blue-200" : booking.status === "confirmed" ? "text-emerald-200" : booking.status === "rejected" ? "text-red-200" : "text-amber-100"}`}>
                 Status: {statusLabel}
               </p>
             </div>
@@ -299,7 +299,7 @@ const HotelReceipt = () => {
                     <span>Total</span>
                     <span>₹{(booking.totalCents / 100).toFixed(2)}</span>
                   </div>
-                  {booking.status === "approved_awaiting_payment" && (
+                  {isAwaitingPayment && (
                     <div className="flex flex-col gap-2 no-print">
                       <p className="text-sm text-muted-foreground">Pay now to confirm your booking.</p>
                       <Button type="button" className="w-full sm:w-auto rounded-xl bg-amber-600 hover:bg-amber-700" onClick={handlePayNow} disabled={payLoading}>

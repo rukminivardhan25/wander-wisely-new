@@ -1772,10 +1772,11 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                       );
                     })}
                     {filteredHotelBookings.map((b) => {
+                      const canPay = b.status === "approved_awaiting_payment" || b.status === "approved";
                       const statusLabel =
                         b.status === "pending_vendor"
                           ? "Pending approval"
-                          : b.status === "approved_awaiting_payment"
+                          : canPay
                             ? "Bill ready — Pay now"
                             : b.status === "confirmed"
                               ? "Confirmed"
@@ -1799,8 +1800,8 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                           <div className="min-w-0 flex-1 pr-8">
                             <p className="font-medium text-foreground truncate">Hotel stay</p>
                             <p className="text-xs text-muted-foreground">Hotel · {normDate(b.checkIn)} – {normDate(b.checkOut)} · {b.nights} night{b.nights !== 1 ? "s" : ""}</p>
-                            <p className={`text-xs mt-1 flex items-center gap-1 ${b.status === "approved_awaiting_payment" ? "text-blue-600" : b.status === "confirmed" ? "text-emerald-600" : b.status === "rejected" ? "text-red-600" : "text-amber-600"}`}>
-                              {(b.status === "approved_awaiting_payment" || b.status === "confirmed") && <CheckCircle className="h-3.5 w-3.5 shrink-0" />}
+                            <p className={`text-xs mt-1 flex items-center gap-1 ${canPay ? "text-blue-600" : b.status === "confirmed" ? "text-emerald-600" : b.status === "rejected" ? "text-red-600" : "text-amber-600"}`}>
+                              {(canPay || b.status === "confirmed") && <CheckCircle className="h-3.5 w-3.5 shrink-0" />}
                               {statusLabel}
                             </p>
                             <div className="flex flex-wrap gap-2 mt-2">
@@ -1809,7 +1810,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                                   <Link to={`/my-trip/hotel-booking/${b.id}`}>View request</Link>
                                 </Button>
                               )}
-                              {b.status === "approved_awaiting_payment" && (
+                              {canPay && (
                                 <>
                                   <Button
                                     type="button"

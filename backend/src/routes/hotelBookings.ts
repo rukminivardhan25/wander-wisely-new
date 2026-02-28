@@ -157,7 +157,8 @@ router.patch("/:id/pay", async (req: Request, res: Response): Promise<void> => {
       res.status(404).json({ error: "Booking not found" });
       return;
     }
-    if (current.rows[0].status !== "approved_awaiting_payment") {
+    const status = current.rows[0].status;
+    if (status !== "approved_awaiting_payment" && status !== "approved") {
       res.status(400).json({ error: "Booking is not awaiting payment. Hotel must approve and send the bill first." });
       return;
     }
