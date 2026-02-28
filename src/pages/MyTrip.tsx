@@ -1771,7 +1771,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                     })}
                     {filteredHotelBookings.map((b) => {
                       const status = (b.status || "").trim().toLowerCase();
-                      const canPay = status === "approved_awaiting_payment" || status === "approved";
+                      const canPay = status === "approved_awaiting_payment" || status === "approved" || (status.includes("approved") && status.includes("awaiting"));
                       const statusLabel =
                         status === "pending_vendor"
                           ? "Pending approval"
@@ -1841,6 +1841,12 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                               {status === "confirmed" && (
                                 <Button asChild size="sm" variant="hero" className="rounded-lg text-xs">
                                   <Link to={`/my-trip/hotel-booking/${b.id}`}>View receipt</Link>
+                                </Button>
+                              )}
+                              {/* Fallback: if status is not pending/confirmed/rejected but user might need to pay, show link to bill/receipt page */}
+                              {!status.startsWith("pending") && status !== "confirmed" && status !== "rejected" && !canPay && (
+                                <Button asChild size="sm" variant="outline" className="rounded-lg text-xs">
+                                  <Link to={`/my-trip/hotel-booking/${b.id}`}>View bill / receipt</Link>
                                 </Button>
                               )}
                             </div>
