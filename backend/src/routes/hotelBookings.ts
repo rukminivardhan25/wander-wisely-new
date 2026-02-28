@@ -186,9 +186,9 @@ router.patch("/:id/pay", async (req: Request, res: Response): Promise<void> => {
 
 /** GET /api/hotel-bookings/:id — Get one booking (for receipt) */
 router.get("/:id", async (req: Request, res: Response): Promise<void> => {
+  const userId = req.userId!;
+  const { id } = req.params;
   try {
-    const userId = req.userId!;
-    const { id } = req.params;
     const result = await query<{
       id: string;
       booking_ref: string;
