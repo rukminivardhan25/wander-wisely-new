@@ -794,11 +794,12 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
       if (!token) return;
       setFlightPayId(bookingId);
       try {
-        const { data, error } = await apiFetch<{ ok: boolean; status: string; otp: string }>(`/api/flight-bookings/${bookingId}/pay`, {
+        const { data, error, status: resStatus } = await apiFetch<{ ok?: boolean; status?: string; otp?: string }>(`/api/flight-bookings/${bookingId}/pay`, {
           method: "PATCH",
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!error && data?.status === "confirmed") {
+        const success = resStatus === 200 && !error && (data?.status === "confirmed" || data?.ok === true);
+        if (success) {
           toast({ title: "Payment confirmed", description: "Your flight booking is confirmed." });
           loadBookings();
         } else {
@@ -1591,13 +1592,29 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                           <div className="min-w-0 flex-1 pr-8">
                             <p className="font-medium text-foreground truncate">{title}</p>
                             <p className="text-xs text-muted-foreground">Car · {b.travelDate}</p>
-                            <p className={`text-xs mt-1 flex items-center gap-1 ${b.status === "confirmed" ? "text-emerald-600" : "text-amber-600"}`}>
-                              {b.status === "confirmed" && <CheckCircle className="h-3.5 w-3.5 shrink-0" />}
+                            <p className={`text-xs mt-1 flex items-center gap-1 ${b.status === "confirmed" ? "text-emerald-600" : b.status === "approved_awaiting_payment" ? "text-blue-600" : "text-amber-600"}`}>
+                              {(b.status === "confirmed" || b.status === "approved_awaiting_payment") && <CheckCircle className="h-3.5 w-3.5 shrink-0" />}
                               {statusLabel}
                             </p>
-                            <Button type="button" size="sm" variant="outline" className="mt-2 rounded-lg text-xs" onClick={() => openCarDetail(b.id)}>
-                              Check status
-                            </Button>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {/* Pay now always visible on company cards; disabled until vendor confirms */}
+                              {(b.status === "pending_vendor" || b.status === "approved_awaiting_payment") && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="hero"
+                                  className="rounded-lg text-xs shrink-0 min-w-[7rem]"
+                                  disabled={b.status === "pending_vendor"}
+                                  title={b.status === "pending_vendor" ? "Pay after the vendor confirms your request" : undefined}
+                                  onClick={() => openCarDetail(b.id)}
+                                >
+                                  Pay now
+                                </Button>
+                              )}
+                              <Button type="button" size="sm" variant="outline" className="rounded-lg text-xs" onClick={() => openCarDetail(b.id)}>
+                                Check status
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -1771,7 +1788,11 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                     })}
                     {filteredHotelBookings.map((b) => {
                       const status = (b.status || "").trim().toLowerCase();
-                      const canPay = status === "approved_awaiting_payment" || status === "approved" || (status.includes("approved") && status.includes("awaiting"));
+                      // Hotel flow: pending_vendor → (vendor approves + room number) → approved_awaiting_payment → (user pays) → confirmed
+                      const canPay =
+                        status === "approved_awaiting_payment" ||
+                        status === "approved" ||
+                        (status.includes("awaiting") && status.includes("payment"));
                       const statusLabel =
                         status === "pending_vendor"
                           ? "Pending approval"
@@ -1809,16 +1830,18 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                                   <Link to={`/my-trip/hotel-booking/${b.id}`}>View request</Link>
                                 </Button>
                               )}
-                              {canPay && (
+                              {/* Pay now always visible on company cards; disabled until vendor confirms */}
+                              {status !== "confirmed" && status !== "rejected" && (
                                 <>
                                   <Button
                                     type="button"
                                     size="sm"
                                     variant="hero"
                                     className="rounded-lg text-xs shrink-0 min-w-[7rem]"
-                                    disabled={hotelPayId === b.id}
+                                    disabled={hotelPayId === b.id || !canPay}
+                                    title={!canPay ? "Pay after the hotel confirms your request" : undefined}
                                     onClick={async () => {
-                                      if (!token || !b.id) return;
+                                      if (!token || !b.id || !canPay) return;
                                       setHotelPayId(b.id);
                                       try {
                                         await apiFetch(`/api/hotel-bookings/${b.id}/pay`, { method: "PATCH", headers: { Authorization: `Bearer ${token}` } });
@@ -1833,9 +1856,11 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                                   >
                                     {hotelPayId === b.id ? "Processing…" : "Pay now"}
                                   </Button>
-                                  <Button asChild size="sm" variant="outline" className="rounded-lg text-xs">
-                                    <Link to={`/my-trip/hotel-booking/${b.id}`}>View bill</Link>
-                                  </Button>
+                                  {canPay && (
+                                    <Button asChild size="sm" variant="outline" className="rounded-lg text-xs">
+                                      <Link to={`/my-trip/hotel-booking/${b.id}`}>View bill</Link>
+                                    </Button>
+                                  )}
                                 </>
                               )}
                               {status === "confirmed" && (
@@ -2552,11 +2577,12 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                   if (!flightPaymentBookingId || !token) return;
                   setFlightPayId(flightPaymentBookingId);
                   try {
-                    const { data, error } = await apiFetch<{ ok: boolean; status: string; otp: string }>(`/api/flight-bookings/${flightPaymentBookingId}/pay`, {
+                    const { data, error, status: resStatus } = await apiFetch<{ ok?: boolean; status?: string; otp?: string }>(`/api/flight-bookings/${flightPaymentBookingId}/pay`, {
                       method: "PATCH",
                       headers: { Authorization: `Bearer ${token}` },
                     });
-                    if (!error && data?.status === "confirmed") {
+                    const success = resStatus === 200 && !error && (data?.status === "confirmed" || data?.ok === true);
+                    if (success) {
                       toast({ title: "Payment confirmed", description: "Your flight booking is confirmed. You can view your ticket below." });
                       setFlightPaymentModalOpen(false);
                       setFlightPaymentBookingId(null);
