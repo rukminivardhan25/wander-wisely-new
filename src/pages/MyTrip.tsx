@@ -359,8 +359,16 @@ const MyTrip = () => {
   const [flightSeatModalOpen, setFlightSeatModalOpen] = useState(false);
   const [flightSeatBookingId, setFlightSeatBookingId] = useState<string | null>(null);
   const [flightSeatMap, setFlightSeatMap] = useState<{
-    seatLayout: { rows: number; colsPerRow: number; totalSeats: number; leftCols: number; rightCols: number; cabinClasses: Array<{ name: string; rowFrom: string; rowTo: string }> };
-    seats: Array<{ rowLetter: string; colNumber: number; label: string; status: string }>;
+    seatLayout: {
+      useVendorLayout?: boolean;
+      rows?: number;
+      colsPerRow?: number;
+      totalSeats?: number;
+      leftCols?: number;
+      rightCols?: number;
+      cabinClasses: Array<{ name: string; rowFrom: string; rowTo: string; leftCols?: number; rightCols?: number }>;
+    };
+    seats: Array<{ rowLetter?: string; rowNumber?: number; colNumber: number; label: string; status: string }>;
   } | null>(null);
   const [flightSeatClass, setFlightSeatClass] = useState<string>("");
   const [flightSeatSelection, setFlightSeatSelection] = useState<Record<number, string>>({});
@@ -1789,10 +1797,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                     {filteredHotelBookings.map((b) => {
                       const status = (b.status || "").trim().toLowerCase();
                       // Hotel flow: pending_vendor → (vendor approves + room number) → approved_awaiting_payment → (user pays) → confirmed
-                      const canPay =
-                        status === "approved_awaiting_payment" ||
-                        status === "approved" ||
-                        (status.includes("awaiting") && status.includes("payment"));
+                      const canPay = status === "approved_awaiting_payment";
                       const statusLabel =
                         status === "pending_vendor"
                           ? "Pending approval"
@@ -1803,6 +1808,9 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                               : status === "rejected"
                                 ? "Rejected"
                                 : "Awaiting payment";
+                      // Ensure Pay now shows whenever the booking is awaiting payment (even if status string varies)
+                      const showPayBlock = status !== "confirmed" && status !== "rejected";
+                      const payEnabled = canPay;
                       return (
                         <div key={b.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3 relative">
                           <button
@@ -1831,17 +1839,17 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                                 </Button>
                               )}
                               {/* Pay now always visible on company cards; disabled until vendor confirms */}
-                              {status !== "confirmed" && status !== "rejected" && (
+                              {showPayBlock && (
                                 <>
                                   <Button
                                     type="button"
                                     size="sm"
                                     variant="hero"
                                     className="rounded-lg text-xs shrink-0 min-w-[7rem]"
-                                    disabled={hotelPayId === b.id || !canPay}
-                                    title={!canPay ? "Pay after the hotel confirms your request" : undefined}
+                                    disabled={hotelPayId === b.id || !payEnabled}
+                                    title={!payEnabled ? "Pay after the hotel confirms your request" : undefined}
                                     onClick={async () => {
-                                      if (!token || !b.id || !canPay) return;
+                                      if (!token || !b.id || !payEnabled) return;
                                       setHotelPayId(b.id);
                                       try {
                                         await apiFetch(`/api/hotel-bookings/${b.id}/pay`, { method: "PATCH", headers: { Authorization: `Bearer ${token}` } });
@@ -1856,7 +1864,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                                   >
                                     {hotelPayId === b.id ? "Processing…" : "Pay now"}
                                   </Button>
-                                  {canPay && (
+                                  {payEnabled && (
                                     <Button asChild size="sm" variant="outline" className="rounded-lg text-xs">
                                       <Link to={`/my-trip/hotel-booking/${b.id}`}>View bill</Link>
                                     </Button>

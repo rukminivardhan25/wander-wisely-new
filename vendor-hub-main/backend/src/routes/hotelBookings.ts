@@ -191,6 +191,10 @@ router.patch("/:bookingId/approve", async (req: Request, res: Response): Promise
       return;
     }
     const totalCents = typeof req.body?.totalCents === "number" ? req.body.totalCents : null;
+    if (totalCents == null || !Number.isInteger(totalCents) || totalCents < 0) {
+      res.status(400).json({ error: "totalCents is required and must be a non-negative integer (amount in paise)" });
+      return;
+    }
     const vendorNotes = typeof req.body?.vendorNotes === "string" ? req.body.vendorNotes.trim() : null;
     const current = await pool.query<{ id: string; status: string }>(
       "SELECT id, status FROM hotel_bookings WHERE id = $1 AND listing_id = $2",
@@ -205,7 +209,7 @@ router.patch("/:bookingId/approve", async (req: Request, res: Response): Promise
       return;
     }
     await pool.query(
-      `UPDATE hotel_bookings SET status = 'approved_awaiting_payment', room_number = $1, total_cents = COALESCE($2, total_cents), vendor_notes = $5, updated_at = now() WHERE id = $3 AND listing_id = $4`,
+      `UPDATE hotel_bookings SET status = 'approved_awaiting_payment', room_number = $1, total_cents = $2, vendor_notes = $5, updated_at = now() WHERE id = $3 AND listing_id = $4`,
       [roomNumber, totalCents, bookingId, listingId, vendorNotes]
     );
     res.json({ ok: true, status: "approved_awaiting_payment", roomNumber });
@@ -238,11 +242,12 @@ router.patch("/:bookingId/reject", async (req: Request, res: Response): Promise<
       res.status(404).json({ error: "Hotel booking not found" });
       return;
     }
+    const rejectionReason = typeof req.body?.rejectionReason === "string" ? req.body.rejectionReason.trim() || null : null;
     await pool.query(
-      "UPDATE hotel_bookings SET status = 'rejected', updated_at = now() WHERE id = $1 AND listing_id = $2",
-      [bookingId, listingId]
+      "UPDATE hotel_bookings SET status = 'rejected', rejection_reason = $3, updated_at = now() WHERE id = $1 AND listing_id = $2",
+      [bookingId, listingId, rejectionReason]
     );
-    res.json({ ok: true, status: "rejected" });
+    res.json({ ok: true, status: "rejected", rejectionReason: rejectionReason ?? undefined });
   } catch (err) {
     console.error("Reject hotel booking error:", err);
     res.status(500).json({ error: "Failed to reject booking" });

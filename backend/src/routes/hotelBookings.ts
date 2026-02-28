@@ -158,7 +158,7 @@ router.patch("/:id/pay", async (req: Request, res: Response): Promise<void> => {
       return;
     }
     const status = current.rows[0].status;
-    if (status !== "approved_awaiting_payment" && status !== "approved") {
+    if (status !== "approved_awaiting_payment") {
       res.status(400).json({ error: "Booking is not awaiting payment. Hotel must approve and send the bill first." });
       return;
     }
@@ -207,6 +207,7 @@ router.get("/:id", async (req: Request, res: Response): Promise<void> => {
       room_number: string | null;
       total_cents: number | null;
       vendor_notes: string | null;
+      rejection_reason: string | null;
       created_at: string;
       paid_at: string | null;
       branch_name: string;
@@ -217,7 +218,7 @@ router.get("/:id", async (req: Request, res: Response): Promise<void> => {
     }>(
       `SELECT hb.id, hb.booking_ref, hb.hotel_branch_id, hb.listing_id, hb.check_in, hb.check_out, hb.nights,
               hb.guest_name, hb.guest_phone, hb.guest_email, hb.requirements_text, hb.document_urls,
-              hb.status, hb.room_type, hb.room_number, hb.total_cents, hb.vendor_notes, hb.created_at, hb.paid_at,
+              hb.status, hb.room_type, hb.room_number, hb.total_cents, hb.vendor_notes, hb.rejection_reason, hb.created_at, hb.paid_at,
               br.name AS branch_name, br.city AS branch_city, br.full_address AS branch_full_address, br.contact_number AS branch_contact_number,
               l.name AS listing_name
        FROM hotel_bookings hb
@@ -249,6 +250,7 @@ router.get("/:id", async (req: Request, res: Response): Promise<void> => {
       roomNumber: r.room_number ?? undefined,
       totalCents: r.total_cents ?? undefined,
       vendorNotes: r.vendor_notes ?? undefined,
+      rejectionReason: r.rejection_reason ?? undefined,
       createdAt: r.created_at,
       paidAt: r.paid_at ?? undefined,
       branchName: r.branch_name,

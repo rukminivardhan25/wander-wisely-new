@@ -896,6 +896,7 @@ const BookingMarketplace = () => {
         flightNumber: string; airlineName: string; aircraftType: string; flightType?: string;
         fromPlace: string; toPlace: string; departureTime: string; arrivalTime: string;
         totalSeats: number; availableSeats: number; fareCents?: number; seatLayout?: unknown;
+        companyReview?: ReviewSummary;
       }> }>(`/api/flights/search?${params.toString()}`);
       if (error) {
         setFlightError(error || "Failed to load flights");
@@ -1366,10 +1367,10 @@ const BookingMarketplace = () => {
                             )}
                             {(bus.hasWifi || bus.hasCharging || bus.hasEntertainment || bus.hasToilet) && (
                               <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                                {bus.hasWifi && <Wifi className="h-3.5 w-3" title="WiFi" />}
-                                {bus.hasCharging && <Battery className="h-3.5 w-3" title="Charging" />}
-                                {bus.hasEntertainment && <Tv className="h-3.5 w-3" title="Entertainment" />}
-                                {bus.hasToilet && <Droplets className="h-3.5 w-3" title="Toilet" />}
+                                {bus.hasWifi && <span title="WiFi"><Wifi className="h-3.5 w-3" /></span>}
+                                {bus.hasCharging && <span title="Charging"><Battery className="h-3.5 w-3" /></span>}
+                                {bus.hasEntertainment && <span title="Entertainment"><Tv className="h-3.5 w-3" /></span>}
+                                {bus.hasToilet && <span title="Toilet"><Droplets className="h-3.5 w-3" /></span>}
                               </span>
                             )}
                           </div>
@@ -2681,10 +2682,10 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
               </div>
               {(selectedBusForDetails.hasWifi || selectedBusForDetails.hasCharging || selectedBusForDetails.hasEntertainment || selectedBusForDetails.hasToilet) && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  {selectedBusForDetails.hasWifi && <Wifi className="h-4 w-4" title="WiFi" />}
-                  {selectedBusForDetails.hasCharging && <Battery className="h-4 w-4" title="Charging" />}
-                  {selectedBusForDetails.hasEntertainment && <Tv className="h-4 w-4" title="Entertainment" />}
-                  {selectedBusForDetails.hasToilet && <Droplets className="h-4 w-4" title="Toilet" />}
+                  {selectedBusForDetails.hasWifi && <span title="WiFi"><Wifi className="h-4 w-4" /></span>}
+                  {selectedBusForDetails.hasCharging && <span title="Charging"><Battery className="h-4 w-4" /></span>}
+                  {selectedBusForDetails.hasEntertainment && <span title="Entertainment"><Tv className="h-4 w-4" /></span>}
+                  {selectedBusForDetails.hasToilet && <span title="Toilet"><Droplets className="h-4 w-4" /></span>}
                 </div>
               )}
               <div className="pt-2 border-t border-slate-200">
@@ -2776,7 +2777,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                 <p className="text-sm font-medium text-foreground">{selectedFlightForDetails.availableSeats} of {selectedFlightForDetails.totalSeats} available</p>
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                {selectedFlightForDetails.hasWifi && <Wifi className="h-4 w-4" title="WiFi" />}
+                {selectedFlightForDetails.hasWifi && <span title="WiFi"><Wifi className="h-4 w-4" /></span>}
                 {selectedFlightForDetails.hasMeal && <span className="text-xs">Meal included</span>}
               </div>
               <div>

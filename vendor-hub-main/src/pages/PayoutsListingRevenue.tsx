@@ -135,47 +135,49 @@ export default function PayoutsListingRevenue() {
           <p className="text-sm text-muted-foreground mt-1">All buses, cars, flights, and hotel branches for this listing. Click one to see its bookings.</p>
         </div>
         {hasFleets ? (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/30">
-                <th className="text-left px-6 py-3 font-medium text-muted-foreground">Fleet</th>
-                <th className="text-left px-6 py-3 font-medium text-muted-foreground">Total revenue</th>
-                <th className="text-left px-6 py-3 font-medium text-muted-foreground">Bookings</th>
-                <th className="text-left px-6 py-3 font-medium text-muted-foreground w-32">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {fleets.map((f) => {
-                const Icon = FLEET_ICONS[f.fleetId] ?? Building2;
-                const displayName = f.entityName ?? f.fleetName;
-                const rowKey = f.entityId ? `${f.fleetId}-${f.entityId}` : f.fleetId;
-                const viewUrl = f.entityId
-                  ? `/payouts/listing/${listingId}/fleet/${f.fleetId}/entity/${f.entityId}`
-                  : `/payouts/listing/${listingId}/fleet/${f.fleetId}`;
-                return (
-                  <tr key={rowKey} className="border-b border-border/50 hover:bg-muted/20 transition-colors group">
-                    <td className="px-6 py-3.5">
-                      <span className="inline-flex items-center gap-2 font-medium text-foreground">
-                        <Icon size={18} className="text-muted-foreground" />
-                        {f.entityId ? `${f.fleetName} – ${displayName}` : displayName}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3.5 font-semibold text-foreground">{formatRevenue(f.totalShareCents)}</td>
-                    <td className="px-6 py-3.5 text-muted-foreground">{f.bookingCount}</td>
-                    <td className="px-6 py-3.5">
-                      <Link
-                        to={viewUrl}
-                        className="inline-flex items-center gap-1 text-accent hover:underline font-medium text-xs"
-                      >
-                        View details
-                        <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto overflow-y-visible">
+            <table className="w-full min-w-[28rem] text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="text-left px-6 py-3 font-medium text-muted-foreground whitespace-nowrap">Fleet</th>
+                  <th className="text-left px-6 py-3 font-medium text-muted-foreground whitespace-nowrap">Total revenue</th>
+                  <th className="text-left px-6 py-3 font-medium text-muted-foreground whitespace-nowrap">Bookings</th>
+                  <th className="text-left px-6 py-3 font-medium text-muted-foreground w-32 whitespace-nowrap">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fleets.map((f) => {
+                  const Icon = FLEET_ICONS[f.fleetId] ?? Building2;
+                  const displayName = f.entityName ?? f.fleetName;
+                  const rowKey = f.entityId ? `${f.fleetId}-${f.entityId}` : f.fleetId;
+                  const viewUrl = f.entityId
+                    ? `/payouts/listing/${listingId}/fleet/${f.fleetId}/entity/${f.entityId}`
+                    : `/payouts/listing/${listingId}/fleet/${f.fleetId}`;
+                  return (
+                    <tr key={rowKey} className="border-b border-border/50 hover:bg-muted/20 transition-colors group">
+                      <td className="px-6 py-3.5 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-2 font-medium text-foreground">
+                          <Icon size={18} className="text-muted-foreground" />
+                          {f.entityId ? `${f.fleetName} – ${displayName}` : displayName}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3.5 font-semibold text-foreground whitespace-nowrap">{formatRevenue(f.totalShareCents)}</td>
+                      <td className="px-6 py-3.5 text-muted-foreground whitespace-nowrap">{f.bookingCount}</td>
+                      <td className="px-6 py-3.5 whitespace-nowrap">
+                        <Link
+                          to={viewUrl}
+                          className="inline-flex items-center gap-1 text-accent hover:underline font-medium text-xs"
+                        >
+                          View details
+                          <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <div className="px-6 py-12 text-center text-muted-foreground text-sm">
             This listing has no fleets (e.g. experience or event). Revenue from this listing appears in your total payouts.

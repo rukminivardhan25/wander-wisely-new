@@ -155,32 +155,34 @@ export default function PayoutsFleetRevenue() {
           </Link>
         </div>
         {bookings.length > 0 ? (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/30">
-                <th className="text-left px-6 py-3 font-medium text-muted-foreground">Ref</th>
-                <th className="text-left px-6 py-3 font-medium text-muted-foreground">Date</th>
-                <th className="text-left px-6 py-3 font-medium text-muted-foreground">User</th>
-                <th className="text-left px-6 py-3 font-medium text-muted-foreground">Amount</th>
-                <th className="text-left px-6 py-3 font-medium text-muted-foreground">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bookings.map((b) => (
-                <tr key={b.id} className="border-b border-border/50">
-                  <td className="px-6 py-3.5 font-medium text-foreground">{b.bookingRef}</td>
-                  <td className="px-6 py-3.5 text-muted-foreground">{formatDate(b.paidAt)}</td>
-                  <td className="px-6 py-3.5 text-muted-foreground">{b.userName}</td>
-                  <td className="px-6 py-3.5 font-semibold text-foreground">{formatRevenue(b.amountCents)}</td>
-                  <td className="px-6 py-3.5">
-                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${b.status === "Paid" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
-                      {b.status}
-                    </span>
-                  </td>
+          <div className="overflow-x-auto overflow-y-visible">
+            <table className="w-full min-w-[32rem] text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="text-left px-6 py-3 font-medium text-muted-foreground whitespace-nowrap">Ref</th>
+                  <th className="text-left px-6 py-3 font-medium text-muted-foreground whitespace-nowrap">Date</th>
+                  <th className="text-left px-6 py-3 font-medium text-muted-foreground whitespace-nowrap">User</th>
+                  <th className="text-left px-6 py-3 font-medium text-muted-foreground whitespace-nowrap">Amount</th>
+                  <th className="text-left px-6 py-3 font-medium text-muted-foreground whitespace-nowrap">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {bookings.map((b) => (
+                  <tr key={b.id} className="border-b border-border/50">
+                    <td className="px-6 py-3.5 font-medium text-foreground whitespace-nowrap">{b.bookingRef}</td>
+                    <td className="px-6 py-3.5 text-muted-foreground whitespace-nowrap">{formatDate(b.paidAt)}</td>
+                    <td className="px-6 py-3.5 text-muted-foreground whitespace-nowrap">{b.userName}</td>
+                    <td className="px-6 py-3.5 font-semibold text-foreground whitespace-nowrap">{formatRevenue(b.amountCents)}</td>
+                    <td className="px-6 py-3.5 whitespace-nowrap">
+                      <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${b.status === "Paid" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
+                        {b.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <div className="px-6 py-12 text-center text-muted-foreground text-sm">No bookings for this fleet yet.</div>
         )}

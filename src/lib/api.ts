@@ -18,7 +18,7 @@ export function getApiUrl(path: string): string {
 
 export async function apiFetch<T = unknown>(
   path: string,
-  options: RequestInit & { body?: object; timeoutMs?: number } = {}
+  options: Omit<RequestInit, "body"> & { body?: object; timeoutMs?: number } = {}
 ): Promise<{ data?: T; error?: string; status: number; networkError?: boolean }> {
   const { body, timeoutMs = API_TIMEOUT_MS, ...rest } = options;
   const url = getApiUrl(path);

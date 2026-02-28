@@ -24,6 +24,7 @@ type HotelBookingDetail = {
   roomNumber?: string;
   totalCents?: number;
   vendorNotes?: string;
+  rejectionReason?: string;
   createdAt: string;
   branchName?: string;
   branchCity?: string;
@@ -55,13 +56,21 @@ const HotelReceipt = () => {
       setLoading(false);
       return;
     }
+    setError("");
     apiFetch<HotelBookingDetail>(`/api/hotel-bookings/${id}`, {
       headers: { Authorization: `Bearer ${token}` },
-    }).then(({ data, error: err }) => {
-      setLoading(false);
-      if (err) setError(err);
-      else if (data) setBooking(data);
-    });
+    })
+      .then(({ data, error: err }) => {
+        setLoading(false);
+        const errMsg = typeof err === "string" ? err : err ? String(err) : "";
+        if (errMsg) setError(errMsg);
+        else if (data) setBooking(data);
+        else setError("Booking not found.");
+      })
+      .catch((e) => {
+        setLoading(false);
+        setError(e instanceof Error ? e.message : "Something went wrong. Try again.");
+      });
   }, [id, token]);
 
   if (!token) {
@@ -101,11 +110,8 @@ const HotelReceipt = () => {
   }
 
   const status = (booking.status || "").trim().toLowerCase();
-  // Hotel flow: pending_vendor → vendor approves + room number → approved_awaiting_payment → user pays → confirmed
-  const isAwaitingPayment =
-    status === "approved_awaiting_payment" ||
-    status === "approved" ||
-    (status.includes("awaiting") && status.includes("payment"));
+  // Hotel flow: pending_vendor → vendor approves + room number → approved_awaiting_payment → user pays → confirmed (only approved_awaiting_payment is valid for pay)
+  const isAwaitingPayment = status === "approved_awaiting_payment";
   const statusLabel =
     status === "pending_vendor"
       ? "Pending hotel approval"
@@ -213,6 +219,9 @@ const HotelReceipt = () => {
               <p className={`text-sm mt-1 font-medium ${isAwaitingPayment ? "text-blue-200" : status === "confirmed" ? "text-emerald-200" : status === "rejected" ? "text-red-200" : "text-amber-100"}`}>
                 Status: {statusLabel}
               </p>
+              {status === "rejected" && booking.rejectionReason && (
+                <p className="text-sm mt-1 text-red-100">Reason: {booking.rejectionReason}</p>
+              )}
             </div>
 
             <div className="p-6 space-y-6">

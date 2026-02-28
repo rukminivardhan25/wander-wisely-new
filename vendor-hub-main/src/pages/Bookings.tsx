@@ -1563,8 +1563,12 @@ function HotelBookingsSection({ dateFilter }: { dateFilter: string }) {
       setApproveError("Room number is required.");
       return;
     }
-    const totalCents = approveTotalRupees.trim() ? Math.round(parseFloat(approveTotalRupees) * 100) : undefined;
-    if (approveTotalRupees.trim() && (Number.isNaN(totalCents!) || (totalCents ?? 0) < 0)) {
+    if (!approveTotalRupees.trim()) {
+      setApproveError("Total amount (₹) is required.");
+      return;
+    }
+    const totalCents = Math.round(parseFloat(approveTotalRupees) * 100);
+    if (Number.isNaN(totalCents) || totalCents < 0) {
       setApproveError("Enter a valid total amount.");
       return;
     }
@@ -1576,7 +1580,7 @@ function HotelBookingsSection({ dateFilter }: { dateFilter: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           roomNumber: approveRoomNumber.trim(),
-          totalCents: totalCents ?? undefined,
+          totalCents,
           vendorNotes: approveVendorNotes.trim() || undefined,
         }),
       });
@@ -1960,8 +1964,8 @@ function HotelBookingsSection({ dateFilter }: { dateFilter: string }) {
               <Input className="rounded-xl mt-1" value={approveRoomNumber} onChange={(e) => setApproveRoomNumber(e.target.value)} placeholder="e.g. 101" />
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground">Total amount (₹) — optional</label>
-              <Input type="number" min={0} step={0.01} className="rounded-xl mt-1" value={approveTotalRupees} onChange={(e) => setApproveTotalRupees(e.target.value)} placeholder="e.g. 5000" />
+              <label className="text-sm font-medium text-foreground">Total amount (₹) *</label>
+              <Input type="number" min={0} step={0.01} className="rounded-xl mt-1" value={approveTotalRupees} onChange={(e) => setApproveTotalRupees(e.target.value)} placeholder="e.g. 5000" required />
             </div>
             <div>
               <label className="text-sm font-medium text-foreground">Message to guest (optional)</label>

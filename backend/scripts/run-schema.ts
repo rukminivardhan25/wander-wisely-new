@@ -19,7 +19,7 @@ const pool = new pg.Pool({
 
 async function run() {
   const schemaDir = join(__dirname, "..", "schema");
-  const files = ["001_users.sql", "002_trips_itineraries.sql", "003_active_trip.sql", "004_expenses.sql", "005_trip_start_date.sql", "006_trip_budget_amount.sql", "007_transport_bookings.sql", "008_transport_bookings_bus_id.sql", "013_hotel_bookings.sql", "014_hotel_bookings_room_type.sql", "015_trip_activity_status.sql", "016_booking_trip_id.sql", "017_posts_community.sql", "018_post_bookmarks.sql", "019_posts_description.sql", "020_app_feedback.sql", "021_app_feedback_admin_reply.sql", "022_users_phone.sql", "023_payout_transactions.sql", "024_hotel_bookings_paid_at.sql"];
+  const files = ["001_users.sql", "002_trips_itineraries.sql", "003_active_trip.sql", "004_expenses.sql", "005_trip_start_date.sql", "006_trip_budget_amount.sql", "007_transport_bookings.sql", "008_transport_bookings_bus_id.sql", "013_hotel_bookings.sql", "014_hotel_bookings_room_type.sql", "015_trip_activity_status.sql", "016_booking_trip_id.sql", "017_posts_community.sql", "018_post_bookmarks.sql", "019_posts_description.sql", "020_app_feedback.sql", "021_app_feedback_admin_reply.sql", "022_users_phone.sql", "023_payout_transactions.sql", "024_hotel_bookings_paid_at.sql", "025_hotel_bookings_rejection_reason.sql"];
 
   try {
     for (const file of files) {
