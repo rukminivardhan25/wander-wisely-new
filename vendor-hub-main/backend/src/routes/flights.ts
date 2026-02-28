@@ -131,11 +131,12 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
     });
   } catch (err) {
     console.error("List flights error:", err);
-    if (err && typeof err === "object" && "message" in err && String((err as Error).message).includes("flights")) {
-      res.status(503).json({ error: "Flights table not set up. Run schema 034_flights.sql." });
+    const msg = err && typeof err === "object" && "message" in err ? String((err as Error).message) : "";
+    if (msg.includes("flights") || msg.includes("does not exist")) {
+      res.status(503).json({ error: "Flights table not set up. Run schema 034_flights.sql (and 037, 053 if needed).", details: msg });
       return;
     }
-    res.status(500).json({ error: "Failed to fetch flights" });
+    res.status(500).json({ error: "Failed to fetch flights", details: msg || undefined });
   }
 });
 
@@ -184,11 +185,17 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
     res.status(201).json({ id: row.id, flightNumber: row.flight_number, status: row.status });
   } catch (err) {
     console.error("Create flight error:", err);
-    if (err && typeof err === "object" && "message" in err && String((err as Error).message).includes("flights")) {
-      res.status(503).json({ error: "Flights table not set up. Run schema 034_flights.sql." });
+    const msg = err && typeof err === "object" && "message" in err ? String((err as Error).message) : "";
+    const code = err && typeof err === "object" && "code" in err ? String((err as { code: string }).code) : "";
+    if (code === "23505" || msg.includes("unique") || msg.includes("duplicate key")) {
+      res.status(400).json({ error: "This flight number is already used for this listing. Use a different flight number.", details: msg || undefined });
       return;
     }
-    res.status(500).json({ error: "Failed to create flight" });
+    if (msg.includes("flights") || msg.includes("does not exist")) {
+      res.status(503).json({ error: "Flights table not set up. Run schema 034_flights.sql (and 037, 053 if needed).", details: msg });
+      return;
+    }
+    res.status(500).json({ error: "Failed to create flight", details: msg || undefined });
   }
 });
 
