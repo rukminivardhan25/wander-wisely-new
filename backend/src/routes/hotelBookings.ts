@@ -265,6 +265,85 @@ router.get("/:id", async (req: Request, res: Response): Promise<void> => {
       res.status(404).json({ error: "Booking not found" });
       return;
     }
+    // Production DB may not have rejection_reason (migration 025). Retry without it.
+    if (e.code === "42703") {
+      try {
+        const fallbackResult = await query<{
+          id: string;
+          booking_ref: string;
+          hotel_branch_id: string;
+          listing_id: string;
+          check_in: string;
+          check_out: string;
+          nights: number;
+          guest_name: string;
+          guest_phone: string | null;
+          guest_email: string | null;
+          requirements_text: string | null;
+          document_urls: unknown;
+          status: string;
+          room_type: string | null;
+          room_number: string | null;
+          total_cents: number | null;
+          vendor_notes: string | null;
+          created_at: string;
+          paid_at: string | null;
+          branch_name: string;
+          branch_city: string | null;
+          branch_full_address: string | null;
+          branch_contact_number: string | null;
+          listing_name: string;
+        }>(
+          `SELECT hb.id, hb.booking_ref, hb.hotel_branch_id, hb.listing_id, hb.check_in, hb.check_out, hb.nights,
+                  hb.guest_name, hb.guest_phone, hb.guest_email, hb.requirements_text, hb.document_urls,
+                  hb.status, hb.room_type, hb.room_number, hb.total_cents, hb.vendor_notes, hb.created_at, hb.paid_at,
+                  br.name AS branch_name, br.city AS branch_city, br.full_address AS branch_full_address, br.contact_number AS branch_contact_number,
+                  l.name AS listing_name
+           FROM hotel_bookings hb
+           LEFT JOIN hotel_branches br ON br.id = hb.hotel_branch_id
+           LEFT JOIN listings l ON l.id = hb.listing_id
+           WHERE hb.id = $1 AND hb.user_id = $2`,
+          [id, userId]
+        );
+        if (fallbackResult.rows.length === 0) {
+          res.status(404).json({ error: "Booking not found" });
+          return;
+        }
+        const r = fallbackResult.rows[0];
+        res.json({
+          id: r.id,
+          bookingRef: r.booking_ref,
+          hotelBranchId: r.hotel_branch_id,
+          listingId: r.listing_id,
+          checkIn: r.check_in,
+          checkOut: r.check_out,
+          nights: r.nights,
+          guestName: r.guest_name,
+          guestPhone: r.guest_phone ?? undefined,
+          guestEmail: r.guest_email ?? undefined,
+          requirementsText: r.requirements_text ?? undefined,
+          documentUrls: (r.document_urls as { label?: string; url?: string }[]) ?? [],
+          status: r.status,
+          roomType: r.room_type ?? undefined,
+          roomNumber: r.room_number ?? undefined,
+          totalCents: r.total_cents ?? undefined,
+          vendorNotes: r.vendor_notes ?? undefined,
+          rejectionReason: undefined,
+          createdAt: r.created_at,
+          paidAt: r.paid_at ?? undefined,
+          branchName: r.branch_name,
+          branchCity: r.branch_city ?? undefined,
+          branchFullAddress: r.branch_full_address ?? undefined,
+          branchContactNumber: r.branch_contact_number ?? undefined,
+          listingName: r.listing_name,
+        });
+        return;
+      } catch (fallbackErr) {
+        console.error("Get hotel booking fallback error:", fallbackErr);
+        res.status(500).json({ error: "Failed to fetch booking" });
+        return;
+      }
+    }
     console.error("Get hotel booking error:", err);
     res.status(500).json({ error: "Failed to fetch booking" });
   }
