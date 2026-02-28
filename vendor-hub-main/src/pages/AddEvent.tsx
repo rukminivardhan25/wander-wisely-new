@@ -79,7 +79,7 @@ export default function AddEvent() {
       const listingId = listingRes.id;
       const ticket_types = ticketTypesValid.map((t) => ({
         name: (t.name || "Ticket").trim(),
-        price_cents: Math.max(0, Math.floor(Number(t.price) || 0) * 100),
+        price_cents: Math.max(0, Math.floor(Number(t.price) || 0)),
         quantity_total: Math.max(1, Math.min(100000, Math.floor(Number(t.quantity) || 0))),
         max_per_user: Math.max(1, Math.min(50, Math.floor(Number(t.maxPerUser) || 5))),
       }));
@@ -225,6 +225,7 @@ export default function AddEvent() {
                 Ticket Setup
               </h2>
               <p className="text-sm text-muted-foreground">Create ticket types. Quantity will decrease as users book. No overbooking.</p>
+              <p className="text-sm text-amber-600 dark:text-amber-500">Enter ticket price in paise (e.g. 100 = ₹1, 10000 = ₹100).</p>
               <div className="space-y-4">
                 {tickets.map((t, i) => (
                   <div key={i} className="rounded-xl border border-border p-4 space-y-3 bg-muted/20">
@@ -242,8 +243,8 @@ export default function AddEvent() {
                         <Input className="mt-1 rounded-lg" placeholder="General / VIP / Early Bird" value={t.name} onChange={(e) => updateTicket(i, "name", e.target.value)} />
                       </div>
                       <div>
-                        <Label className="text-xs">Price (₹)</Label>
-                        <Input type="number" min={0} className="mt-1 rounded-lg" placeholder="0" value={t.price} onChange={(e) => updateTicket(i, "price", e.target.value)} />
+                        <Label className="text-xs">Price (paise)</Label>
+                        <Input type="number" min={0} className="mt-1 rounded-lg" placeholder="e.g. 10000 for ₹100" value={t.price} onChange={(e) => updateTicket(i, "price", e.target.value)} />
                       </div>
                       <div>
                         <Label className="text-xs">Quantity</Label>

@@ -17,10 +17,16 @@ type MainApiBooking = {
 
 async function fetchBookingsForBusRange(busId: string, fromDate: string, toDate: string): Promise<MainApiBooking[]> {
   const url = `${MAIN_APP_API_URL}/api/bookings/for-bus-range?bus_id=${encodeURIComponent(busId)}&from_date=${encodeURIComponent(fromDate)}&to_date=${encodeURIComponent(toDate)}`;
-  const res = await fetch(url);
-  if (!res.ok) return [];
-  const data = (await res.json()) as { bookings?: MainApiBooking[] };
-  return Array.isArray(data.bookings) ? data.bookings : [];
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = (await res.json()) as { bookings?: MainApiBooking[] };
+    return Array.isArray(data.bookings) ? data.bookings : [];
+  } catch (e) {
+    // Main app unreachable (e.g. MAIN_APP_API_URL not set on Render, or main backend down)
+    console.warn("Main app unreachable for bus bookings:", (e as Error).message);
+    return [];
+  }
 }
 
 /** GET /api/customers?sync=1 - List customers for the vendor. If sync=1, sync from main app bookings then return. */
