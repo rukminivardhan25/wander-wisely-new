@@ -1,8 +1,14 @@
 # Why "Number of people booked" (Seats Booked) does not update
 
-## Where the number comes from
+## How it works now (single source of truth)
 
-1. **Vendor opens Bookings** and picks a **date**. The Partner Portal calls:
+- **Main app:** When a user books, it inserts a row into **`transport_bookings`** in the database.
+- **Vendor-hub:** Reads bus bookings **directly from the same `transport_bookings` table** (no HTTP call to the main app). So as soon as a booking is in the DB, the vendor sees it on the next load.
+- **Requirement:** Main app and vendor-hub must use the **same DATABASE_URL**. Then "Seats Booked" and the seat map stay in sync.
+
+---
+
+## Where the number comes from (detail)
    - **Vendor-hub:** `GET /api/transport-bookings?date=YYYY-MM-DD`
 2. Vendor-hub loads **buses** (and schedules) for that date from **its own database**.
 3. For **each bus**, vendor-hub then calls the **main app**:

@@ -2,8 +2,6 @@ import { Router, Request, Response } from "express";
 import { query } from "../config/db.js";
 import { authMiddleware } from "../middleware/auth.js";
 
-const MAIN_APP_API_URL = process.env.MAIN_APP_API_URL ?? "http://localhost:3001";
-
 /** Convert 1-based seat number to label (A1, B2, ...). colsPerRow = leftCols + rightCols. */
 function seatNumberToLabel(seatNum: number, colsPerRow: number): string {
   if (colsPerRow < 1 || seatNum < 1) return String(seatNum);
@@ -12,33 +10,51 @@ function seatNumberToLabel(seatNum: number, colsPerRow: number): string {
   return String.fromCharCode(65 + row) + String(col);
 }
 
-type MainApiBooking = {
-  id: string;
-  passengerName: string;
-  email: string;
-  phone: string;
-  selectedSeats: number[];
-  totalCents: number;
-  paymentStatus: string;
-  createdAt: string;
+type DbBookingRow = {
+  booking_id: string;
+  passenger_name: string | null;
+  passenger_phone: string | null;
+  email: string | null;
+  selected_seats: number[];
+  total_cents: number;
+  created_at: string;
 };
 
-async function fetchBookingsForBus(busId: string, date: string, listingName: string, busName: string): Promise<MainApiBooking[]> {
-  const params = new URLSearchParams({ bus_id: busId, date });
-  if (listingName) params.set("listing_name", listingName);
-  if (busName) params.set("bus_name", busName);
-  const url = `${MAIN_APP_API_URL}/api/bookings/for-bus?${params.toString()}`;
+/**
+ * Single source of truth: read bus bookings from the same transport_bookings table the main app writes to.
+ * When a user books, main app inserts a row here; vendor sees it on next load. No cross-service API call.
+ * Matches by bus_id + date, or by listing_name + bus_name + date (case-insensitive).
+ */
+async function getBookingsForBusFromDb(
+  busId: string,
+  date: string,
+  listingName: string,
+  busName: string
+): Promise<DbBookingRow[]> {
+  const hasNames = listingName != null && listingName.trim() !== "" && busName != null && busName.trim() !== "";
+  const sql = hasNames
+    ? `select booking_id, passenger_name, passenger_phone, email, selected_seats, total_cents, created_at
+       from transport_bookings
+       where travel_date = $2
+         and (
+           bus_id = $1
+           or (lower(trim(coalesce(listing_name,''))) = lower(trim($3)) and lower(trim(coalesce(bus_name,''))) = lower(trim($4)))
+         )
+       order by created_at asc`
+    : `select booking_id, passenger_name, passenger_phone, email, selected_seats, total_cents, created_at
+       from transport_bookings
+       where bus_id = $1 and travel_date = $2
+       order by created_at asc`;
+  const params = hasNames ? [busId, date, listingName.trim(), busName.trim()] : [busId, date];
   try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      console.warn("[transport-bookings] for-bus failed:", res.status, res.statusText, url);
+    const result = await query<DbBookingRow>(sql, params);
+    return result.rows ?? [];
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes("does not exist") || msg.includes("transport_bookings")) {
       return [];
     }
-    const data = (await res.json()) as { bookings?: MainApiBooking[] };
-    return Array.isArray(data.bookings) ? data.bookings : [];
-  } catch (e) {
-    console.warn("[transport-bookings] for-bus fetch error:", e instanceof Error ? e.message : e, "url:", url);
-    return [];
+    throw e;
   }
 }
 
@@ -182,7 +198,7 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
 
     const busesRaw = Array.from(busMap.values());
 
-    // Fetch user bookings from main app for each bus and attach to response
+    // Single source of truth: read bookings from transport_bookings (same table main app writes to)
     const buses = await Promise.all(
       busesRaw.map(async (bus) => {
         const colsPerRow = Math.max(1, (bus.leftCols ?? 0) + (bus.rightCols ?? 0)) || 4;
@@ -198,21 +214,25 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
           bookedOn: string;
         }> = [];
         try {
-          const mainBookings = await fetchBookingsForBus(bus.busId, dateParam, bus.listingName ?? "", bus.busName ?? "");
-          bookings = mainBookings.map((b) => ({
-            id: b.id,
-            customerName: b.passengerName,
-            email: b.email,
-            phone: b.phone,
-            seats: (b.selectedSeats ?? []).map((n) => seatNumberToLabel(n, colsPerRow)),
-            amount: Math.round(b.totalCents / 100),
-            paymentStatus: (b.paymentStatus === "paid" || b.paymentStatus === "refunded" ? b.paymentStatus : "pending") as "paid" | "pending" | "refunded",
+          const rows = await getBookingsForBusFromDb(
+            bus.busId,
+            dateParam,
+            bus.listingName ?? "",
+            bus.busName ?? ""
+          );
+          bookings = rows.map((r) => ({
+            id: r.booking_id,
+            customerName: r.passenger_name ?? "Passenger",
+            email: r.email ?? "",
+            phone: r.passenger_phone ?? "",
+            seats: (r.selected_seats ?? []).map((n) => seatNumberToLabel(n, colsPerRow)),
+            amount: Math.round(r.total_cents / 100),
+            paymentStatus: "paid" as const,
             status: "confirmed",
-            bookedOn: b.createdAt ? new Date(b.createdAt).toISOString().slice(0, 10) : "",
+            bookedOn: r.created_at ? new Date(r.created_at).toISOString().slice(0, 10) : "",
           }));
         } catch (e) {
-          console.warn("Fetch bookings from main app failed for bus", bus.busId, dateParam, e);
-          // ignore fetch errors; bus still returned with empty bookings
+          console.warn("Fetch bus bookings from DB failed for bus", bus.busId, dateParam, e);
         }
         const seatsBooked = bookings.reduce((sum, b) => sum + b.seats.length, 0);
         return {
