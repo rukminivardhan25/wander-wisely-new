@@ -161,7 +161,7 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
         ]
       );
     }
-    await query("UPDATE cars SET verification_status = 'no_request', verified_at = NULL, status = 'inactive' WHERE id = $1", [carId]);
+    await query("UPDATE cars SET verification_status = 'no_request', verified_at = NULL WHERE id = $1", [carId]);
     const result = await query<{ id: string }>(
       "SELECT id FROM car_operating_areas WHERE car_id = $1 ORDER BY created_at DESC LIMIT 1",
       [carId]
@@ -231,7 +231,7 @@ router.patch("/:areaId", async (req: Request, res: Response): Promise<void> => {
       res.status(404).json({ error: "Operating area not found" });
       return;
     }
-    await query("UPDATE cars SET verification_status = 'no_request', verified_at = NULL, status = 'inactive' WHERE id = $1", [carId]);
+    await query("UPDATE cars SET verification_status = 'no_request', verified_at = NULL WHERE id = $1", [carId]);
     res.json({ ok: true });
   } catch (err) {
     console.error("Update car operating area error:", err);

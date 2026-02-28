@@ -315,7 +315,7 @@ router.get("/available-cars", async (req: Request, res: Response): Promise<void>
        JOIN car_operating_areas a ON a.car_id = c.id
        WHERE LOWER(TRIM(l.type)) = 'transport'
          AND c.status = 'active'
-         AND COALESCE(c.verification_status, 'no_request') = 'approved'
+         AND COALESCE(c.verification_status, 'no_request') IN ('approved', 'no_request')
          AND a.area_type = 'intercity'
          AND LOWER(TRIM(a.from_city)) = LOWER(TRIM($1))
          AND LOWER(TRIM(a.to_city)) = LOWER(TRIM($2))
