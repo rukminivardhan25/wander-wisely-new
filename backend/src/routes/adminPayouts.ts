@@ -147,7 +147,7 @@ router.get("/summary", async (_req: Request, res: Response): Promise<void> => {
 
     try {
       const hotel = await query<{ total_cents: number }>(
-        `SELECT COALESCE(SUM(total_cents), 0)::bigint AS total_cents FROM hotel_bookings WHERE status = 'confirmed' AND total_cents > 0 AND status NOT IN ('rejected')`
+        `SELECT COALESCE(SUM(total_cents), 0)::bigint AS total_cents FROM hotel_bookings WHERE status = 'confirmed' AND total_cents > 0 AND paid_at IS NOT NULL`
       );
       const h = Number(hotel.rows[0]?.total_cents ?? 0);
       totalPaidCents += h;
@@ -312,7 +312,7 @@ router.get("/vendors", async (_req: Request, res: Response): Promise<void> => {
          FROM hotel_bookings hb
          JOIN vendor_listings vl ON vl.listing_id = hb.listing_id
          JOIN vendors v ON v.id = vl.vendor_id
-         WHERE hb.status = 'confirmed' AND hb.total_cents > 0
+         WHERE hb.status = 'confirmed' AND hb.total_cents > 0 AND hb.paid_at IS NOT NULL
          GROUP BY vl.vendor_id, v.name`
       );
       for (const r of hotel.rows) {
@@ -678,7 +678,7 @@ router.get("/vendors/:vendorId/listings", async (req: Request, res: Response): P
           `SELECT hb.listing_id::text, l.name AS listing_name, COALESCE(SUM(hb.total_cents), 0)::text AS total_cents
            FROM hotel_bookings hb
            JOIN listings l ON l.id = hb.listing_id
-           WHERE hb.status = 'confirmed' AND hb.total_cents > 0 AND hb.listing_id = ANY($1::uuid[])
+           WHERE hb.status = 'confirmed' AND hb.total_cents > 0 AND hb.paid_at IS NOT NULL AND hb.listing_id = ANY($1::uuid[])
            GROUP BY hb.listing_id, l.name`,
           [listingIds]
         );
@@ -757,7 +757,7 @@ router.get("/vendors/:vendorId/listings/:listingId", async (req: Request, res: R
       { id: "bus", name: "Bus", table: "transport_bookings" as const, listingCol: "listing_id", paidCond: "1=1" },
       { id: "car", name: "Car", table: "car_bookings", listingCol: "listing_id", paidCond: "paid_at IS NOT NULL AND status NOT IN ('rejected')" },
       { id: "flight", name: "Flight", table: "flight_bookings", listingCol: "listing_id", paidCond: "paid_at IS NOT NULL AND status NOT IN ('rejected')" },
-      { id: "hotel", name: "Hotel", table: "hotel_bookings", listingCol: "listing_id", paidCond: "status = 'confirmed' AND total_cents > 0" },
+      { id: "hotel", name: "Hotel", table: "hotel_bookings", listingCol: "listing_id", paidCond: "status = 'confirmed' AND total_cents > 0 AND paid_at IS NOT NULL" },
     ];
     const fleetTypeMap = new Map(fleetTypes.map((ft) => [ft.id, ft]));
 
@@ -794,7 +794,7 @@ router.get("/vendors/:vendorId/listings/:listingId", async (req: Request, res: R
           paidCents = parseInt(r.rows[0]?.paid_cents ?? "0", 10);
         } else if (ft.table === "hotel_bookings") {
           const r = await query<{ total_cents: string }>(
-            `SELECT COALESCE(SUM(total_cents), 0)::text AS total_cents FROM hotel_bookings WHERE listing_id = $1 AND status = 'confirmed' AND total_cents > 0`,
+            `SELECT COALESCE(SUM(total_cents), 0)::text AS total_cents FROM hotel_bookings WHERE listing_id = $1 AND status = 'confirmed' AND total_cents > 0 AND paid_at IS NOT NULL`,
             [listingId]
           );
           totalCents = parseInt(r.rows[0]?.total_cents ?? "0", 10);
@@ -961,7 +961,7 @@ router.get("/vendors/:vendorId/listings/:listingId/entity-fleets", async (req: R
         const r = await query<{ total_cents: string; cnt: string }>(
           `SELECT COALESCE(SUM(total_cents), 0)::text AS total_cents, COUNT(*)::text AS cnt
            FROM hotel_bookings
-           WHERE hotel_branch_id = $1 AND status = 'confirmed' AND total_cents > 0`,
+           WHERE hotel_branch_id = $1 AND status = 'confirmed' AND total_cents > 0 AND paid_at IS NOT NULL`,
           [hb.id]
         );
         const totalCents = parseInt(r.rows[0]?.total_cents ?? "0", 10);
@@ -1032,7 +1032,7 @@ router.get("/vendors/:vendorId/listings/:listingId/fleets/:fleetId", async (req:
       paidCents = parseInt(r.rows[0]?.paid_cents ?? "0", 10);
     } else if (fleetId === "hotel") {
       const r = await query<{ total_cents: string }>(
-        `SELECT COALESCE(SUM(total_cents), 0)::text AS total_cents FROM hotel_bookings WHERE listing_id = $1 AND status = 'confirmed' AND total_cents > 0`,
+        `SELECT COALESCE(SUM(total_cents), 0)::text AS total_cents FROM hotel_bookings WHERE listing_id = $1 AND status = 'confirmed' AND total_cents > 0 AND paid_at IS NOT NULL`,
         [listingId]
       );
       totalCents = parseInt(r.rows[0]?.total_cents ?? "0", 10);
@@ -1154,19 +1154,19 @@ router.get("/vendors/:vendorId/listings/:listingId/fleets/:fleetId/bookings", as
           })
         );
       } else if (fleetId === "hotel") {
-        const r = await query<{ id: string; ref: string; user_name: string | null; total_cents: number | null; status: string; updated_at: string }>(
-          `SELECT hb.id::text, hb.booking_ref AS ref, u.full_name AS user_name, hb.total_cents, hb.status, hb.updated_at::text
-           FROM hotel_bookings hb LEFT JOIN users u ON u.id = hb.user_id WHERE hb.listing_id = $1 ORDER BY hb.updated_at DESC`,
+        const r = await query<{ id: string; ref: string; user_name: string | null; total_cents: number | null; status: string; paid_at: string | null }>(
+          `SELECT hb.id::text, hb.booking_ref AS ref, u.full_name AS user_name, hb.total_cents, hb.status, hb.paid_at::text
+           FROM hotel_bookings hb LEFT JOIN users u ON u.id = hb.user_id WHERE hb.listing_id = $1 ORDER BY COALESCE(hb.paid_at, hb.updated_at) DESC`,
           [listingId]
         );
         r.rows.forEach((row) => {
-          const paid = row.status === "confirmed" && (row.total_cents ?? 0) > 0;
+          const paid = row.status === "confirmed" && row.paid_at != null;
           bookings.push({
             id: row.id,
             booking_ref: row.ref,
             user_name: row.user_name?.trim() || "—",
             amount_cents: row.total_cents ?? 0,
-            paid_at: paid ? row.updated_at : null,
+            paid_at: row.paid_at,
             status: paid ? "Paid" : "Pending",
           });
         });
@@ -1261,7 +1261,7 @@ router.get("/vendors/:vendorId/listings/:listingId/fleets/:fleetId/entity/:entit
       const r = await query<{ total_cents: string; cnt: string }>(
         `SELECT COALESCE(SUM(total_cents), 0)::text AS total_cents, COUNT(*)::text AS cnt
          FROM hotel_bookings
-         WHERE hotel_branch_id = $1 AND status = 'confirmed' AND total_cents > 0`,
+         WHERE hotel_branch_id = $1 AND status = 'confirmed' AND total_cents > 0 AND paid_at IS NOT NULL`,
         [entityId]
       );
       totalCents = parseInt(r.rows[0]?.total_cents ?? "0", 10);

@@ -95,16 +95,16 @@ router.get("/", async (_req: Request, res: Response): Promise<void> => {
   }
 
   try {
-    const hotel = await query<{ id: string; booking_ref: string; full_name: string | null; listing_name: string | null; total_cents: number | null; status: string; updated_at: string }>(
-      `SELECT hb.id::text, hb.booking_ref, u.full_name, l.name AS listing_name, hb.total_cents, hb.status, hb.updated_at::text
+    const hotel = await query<{ id: string; booking_ref: string; full_name: string | null; listing_name: string | null; total_cents: number | null; status: string; paid_at: string | null }>(
+      `SELECT hb.id::text, hb.booking_ref, u.full_name, l.name AS listing_name, hb.total_cents, hb.status, hb.paid_at::text
        FROM hotel_bookings hb
        LEFT JOIN users u ON u.id = hb.user_id
        LEFT JOIN listings l ON l.id = hb.listing_id
        WHERE hb.status NOT IN ('rejected')
-       ORDER BY hb.updated_at DESC`
+       ORDER BY COALESCE(hb.paid_at, hb.updated_at) DESC`
     );
     hotel.rows.forEach((r) => {
-      const paid = r.status === "confirmed" && r.total_cents != null && r.total_cents > 0;
+      const paid = r.status === "confirmed" && (r.paid_at != null || (r.total_cents != null && r.total_cents > 0));
       all.push({
         id: r.id,
         type: "Hotel",
@@ -113,7 +113,7 @@ router.get("/", async (_req: Request, res: Response): Promise<void> => {
         vendorName: r.listing_name?.trim() || "—",
         amountCents: r.total_cents ?? 0,
         paid,
-        paidAt: paid ? r.updated_at : null,
+        paidAt: paid ? (r.paid_at ?? null) : null,
       });
     });
   } catch (e) {

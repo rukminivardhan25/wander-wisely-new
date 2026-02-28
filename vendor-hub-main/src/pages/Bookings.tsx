@@ -1482,6 +1482,7 @@ function HotelBookingsSection({ dateFilter }: { dateFilter: string }) {
   const [approveOpen, setApproveOpen] = useState(false);
   const [approveRoomNumber, setApproveRoomNumber] = useState("");
   const [approveVendorNotes, setApproveVendorNotes] = useState("");
+  const [approveTotalRupees, setApproveTotalRupees] = useState("");
   const [approveLoading, setApproveLoading] = useState(false);
   const [approveError, setApproveError] = useState("");
   const [rejectLoading, setRejectLoading] = useState(false);
@@ -1551,6 +1552,7 @@ function HotelBookingsSection({ dateFilter }: { dateFilter: string }) {
   const openApprove = () => {
     if (!selectedBooking) return;
     setApproveRoomNumber(selectedBooking.roomNumber ?? "");
+    setApproveTotalRupees(selectedBooking.totalCents != null ? String(selectedBooking.totalCents / 100) : "");
     setApproveVendorNotes("");
     setApproveError("");
     setApproveOpen(true);
@@ -1561,6 +1563,11 @@ function HotelBookingsSection({ dateFilter }: { dateFilter: string }) {
       setApproveError("Room number is required.");
       return;
     }
+    const totalCents = approveTotalRupees.trim() ? Math.round(parseFloat(approveTotalRupees) * 100) : undefined;
+    if (approveTotalRupees.trim() && (Number.isNaN(totalCents!) || (totalCents ?? 0) < 0)) {
+      setApproveError("Enter a valid total amount.");
+      return;
+    }
     setApproveLoading(true);
     setApproveError("");
     try {
@@ -1569,6 +1576,7 @@ function HotelBookingsSection({ dateFilter }: { dateFilter: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           roomNumber: approveRoomNumber.trim(),
+          totalCents: totalCents ?? undefined,
           vendorNotes: approveVendorNotes.trim() || undefined,
         }),
       });
@@ -1950,6 +1958,10 @@ function HotelBookingsSection({ dateFilter }: { dateFilter: string }) {
             <div>
               <label className="text-sm font-medium text-foreground">Room number *</label>
               <Input className="rounded-xl mt-1" value={approveRoomNumber} onChange={(e) => setApproveRoomNumber(e.target.value)} placeholder="e.g. 101" />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground">Total amount (₹) — optional</label>
+              <Input type="number" min={0} step={0.01} className="rounded-xl mt-1" value={approveTotalRupees} onChange={(e) => setApproveTotalRupees(e.target.value)} placeholder="e.g. 5000" />
             </div>
             <div>
               <label className="text-sm font-medium text-foreground">Message to guest (optional)</label>

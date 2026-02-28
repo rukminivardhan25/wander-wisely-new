@@ -134,7 +134,7 @@ router.get("/listings", authMiddleware, async (req: Request, res: Response): Pro
         `SELECT hb.listing_id::text, l.name AS listing_name, COALESCE(SUM(hb.total_cents), 0)::text AS total_cents, COUNT(*)::text AS cnt
          FROM hotel_bookings hb
          JOIN listings l ON l.id = hb.listing_id
-         WHERE hb.listing_id = ANY($1::uuid[]) AND hb.status = 'confirmed' AND hb.total_cents > 0
+         WHERE hb.listing_id = ANY($1::uuid[]) AND hb.status = 'confirmed' AND hb.total_cents > 0 AND hb.paid_at IS NOT NULL
          GROUP BY hb.listing_id, l.name`,
         [listingIds]
       );
@@ -328,7 +328,7 @@ router.get("/listings/:listingId", authMiddleware, async (req: Request, res: Res
     }
     try {
       const hb = await query<{ total_cents: string; cnt: string }>(
-        `SELECT COALESCE(SUM(total_cents), 0)::text AS total_cents, COUNT(*)::text AS cnt FROM hotel_bookings WHERE listing_id = $1 AND status = 'confirmed' AND total_cents > 0`,
+        `SELECT COALESCE(SUM(total_cents), 0)::text AS total_cents, COUNT(*)::text AS cnt FROM hotel_bookings WHERE listing_id = $1 AND status = 'confirmed' AND total_cents > 0 AND paid_at IS NOT NULL`,
         [listingId]
       );
       addCents(parseInt(hb.rows[0]?.total_cents ?? "0", 10), parseInt(hb.rows[0]?.cnt ?? "0", 10));
@@ -436,7 +436,7 @@ router.get("/listings/:listingId", authMiddleware, async (req: Request, res: Res
           );
           for (const hb of branches.rows) {
             const r = await query<{ total_cents: string; cnt: string }>(
-              `SELECT COALESCE(SUM(total_cents), 0)::text AS total_cents, COUNT(*)::text AS cnt FROM hotel_bookings WHERE hotel_branch_id = $1 AND status = 'confirmed' AND total_cents > 0`,
+              `SELECT COALESCE(SUM(total_cents), 0)::text AS total_cents, COUNT(*)::text AS cnt FROM hotel_bookings WHERE hotel_branch_id = $1 AND status = 'confirmed' AND total_cents > 0 AND paid_at IS NOT NULL`,
               [hb.id]
             );
             const cents = parseInt(r.rows[0]?.total_cents ?? "0", 10);
@@ -599,19 +599,19 @@ router.get("/listings/:listingId/fleets/:fleetType/entity/:entityId", authMiddle
       );
       totalShareCents = Math.round(parseInt(r.rows[0]?.total_cents ?? "0", 10) * VENDOR_SHARE);
       bookingCount = parseInt(r.rows[0]?.cnt ?? "0", 10);
-      const rows = await query<{ id: string; ref: string; user_name: string | null; total_cents: number | null; status: string; updated_at: string }>(
-        `SELECT hb.id::text, hb.booking_ref AS ref, u.full_name AS user_name, hb.total_cents, hb.status, hb.updated_at::text
-         FROM hotel_bookings hb LEFT JOIN users u ON u.id = hb.user_id WHERE hb.hotel_branch_id = $1 ORDER BY hb.updated_at DESC`,
+      const rows = await query<{ id: string; ref: string; user_name: string | null; total_cents: number | null; status: string; paid_at: string | null }>(
+        `SELECT hb.id::text, hb.booking_ref AS ref, u.full_name AS user_name, hb.total_cents, hb.status, hb.paid_at::text
+         FROM hotel_bookings hb LEFT JOIN users u ON u.id = hb.user_id WHERE hb.hotel_branch_id = $1 ORDER BY COALESCE(hb.paid_at, hb.updated_at) DESC`,
         [entityId]
       );
       rows.rows.forEach((row) => {
-        const paid = row.status === "confirmed" && (row.total_cents ?? 0) > 0;
+        const paid = row.status === "confirmed" && row.paid_at != null;
         bookings.push({
           id: row.id,
           bookingRef: row.ref,
           userName: row.user_name?.trim() || "—",
           amountCents: row.total_cents ?? 0,
-          paidAt: paid ? row.updated_at : null,
+          paidAt: row.paid_at,
           status: paid ? "Paid" : "Pending",
         });
       });
@@ -732,24 +732,24 @@ router.get("/listings/:listingId/fleets/:fleetId", authMiddleware, async (req: R
       );
     } else if (fleetId === "hotel") {
       const r = await query<{ total_cents: string; cnt: string }>(
-        `SELECT COALESCE(SUM(total_cents), 0)::text AS total_cents, COUNT(*)::text AS cnt FROM hotel_bookings WHERE listing_id = $1 AND status = 'confirmed' AND total_cents > 0`,
+        `SELECT COALESCE(SUM(total_cents), 0)::text AS total_cents, COUNT(*)::text AS cnt FROM hotel_bookings WHERE listing_id = $1 AND status = 'confirmed' AND total_cents > 0 AND paid_at IS NOT NULL`,
         [listingId]
       );
       totalShareCents = Math.round(parseInt(r.rows[0]?.total_cents ?? "0", 10) * VENDOR_SHARE);
       bookingCount = parseInt(r.rows[0]?.cnt ?? "0", 10);
-      const rows = await query<{ id: string; ref: string; user_name: string | null; total_cents: number | null; status: string; updated_at: string }>(
-        `SELECT hb.id::text, hb.booking_ref AS ref, u.full_name AS user_name, hb.total_cents, hb.status, hb.updated_at::text
-         FROM hotel_bookings hb LEFT JOIN users u ON u.id = hb.user_id WHERE hb.listing_id = $1 ORDER BY hb.updated_at DESC`,
+      const rows = await query<{ id: string; ref: string; user_name: string | null; total_cents: number | null; status: string; paid_at: string | null }>(
+        `SELECT hb.id::text, hb.booking_ref AS ref, u.full_name AS user_name, hb.total_cents, hb.status, hb.paid_at::text
+         FROM hotel_bookings hb LEFT JOIN users u ON u.id = hb.user_id WHERE hb.listing_id = $1 ORDER BY COALESCE(hb.paid_at, hb.updated_at) DESC`,
         [listingId]
       );
       rows.rows.forEach((row) => {
-        const paid = row.status === "confirmed" && (row.total_cents ?? 0) > 0;
+        const paid = row.status === "confirmed" && row.paid_at != null;
         bookings.push({
           id: row.id,
           bookingRef: row.ref,
           userName: row.user_name?.trim() || "—",
           amountCents: row.total_cents ?? 0,
-          paidAt: paid ? row.updated_at : null,
+          paidAt: row.paid_at,
           status: paid ? "Paid" : "Pending",
         });
       });

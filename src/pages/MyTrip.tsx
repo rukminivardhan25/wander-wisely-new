@@ -468,12 +468,16 @@ const MyTrip = () => {
     }).then(({ data: res }) => {
       setStoredBusBookings(res?.bookings ?? []);
     }).catch(() => setStoredBusBookings([]));
+    apiFetch<{ bookings: HotelBookingItem[] }>(`/api/hotel-bookings${tripQuery}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(({ data: res }) => {
+      setHotelBookings(res?.bookings ?? []);
+    }).catch(() => setHotelBookings([]));
     if (!activeTripId) {
       setCarBookings([]);
       setFlightBookings([]);
       setExperienceBookings([]);
       setEventBookings([]);
-      setHotelBookings([]);
       return;
     }
     apiFetch<{ bookings: CarBookingItem[] }>(`/api/car-bookings${tripQuery}`, {
@@ -508,11 +512,6 @@ const MyTrip = () => {
     }).then(({ data: res }) => {
       setEventBookings(res?.bookings ?? []);
     }).catch(() => setEventBookings([]));
-    apiFetch<{ bookings: HotelBookingItem[] }>(`/api/hotel-bookings${tripQuery}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    }).then(({ data: res }) => {
-      setHotelBookings(res?.bookings ?? []);
-    }).catch(() => setHotelBookings([]));
   }, [token, activeTripId]);
 
   useEffect(() => {
