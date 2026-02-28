@@ -137,36 +137,38 @@ export default function Payouts() {
           <div className="px-6 py-12 text-center text-muted-foreground text-sm">Loading listings…</div>
         ) : (
           <>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  <th className="text-left px-6 py-3 font-medium text-muted-foreground">Listing</th>
-                  <th className="text-left px-6 py-3 font-medium text-muted-foreground">Type</th>
-                  <th className="text-left px-6 py-3 font-medium text-muted-foreground">Total revenue</th>
-                  <th className="text-left px-6 py-3 font-medium text-muted-foreground">Bookings</th>
-                  <th className="text-left px-6 py-3 font-medium text-muted-foreground w-32">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {listings.map((l) => (
-                  <tr key={l.listingId} className="border-b border-border/50 hover:bg-muted/20 transition-colors group">
-                    <td className="px-6 py-3.5 font-medium text-foreground">{l.listingName}</td>
-                    <td className="px-6 py-3.5 text-muted-foreground">{formatType(l.type)}</td>
-                    <td className="px-6 py-3.5 font-semibold text-foreground">{formatRevenue(l.totalShareCents)}</td>
-                    <td className="px-6 py-3.5 text-muted-foreground">{l.bookingCount}</td>
-                    <td className="px-6 py-3.5">
-                      <Link
-                        to={`/payouts/listing/${l.listingId}`}
-                        className="inline-flex items-center gap-1 text-accent hover:underline font-medium text-xs"
-                      >
-                        View revenue
-                        <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </Link>
-                    </td>
+            <div className="overflow-x-auto min-w-0 -mx-1">
+              <table className="w-full text-sm min-w-[32rem]">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30">
+                    <th className="text-left px-4 sm:px-6 py-3 font-medium text-muted-foreground">Listing</th>
+                    <th className="text-left px-4 sm:px-6 py-3 font-medium text-muted-foreground">Type</th>
+                    <th className="text-left px-4 sm:px-6 py-3 font-medium text-muted-foreground">Total revenue</th>
+                    <th className="text-left px-4 sm:px-6 py-3 font-medium text-muted-foreground">Bookings</th>
+                    <th className="text-left px-4 sm:px-6 py-3 font-medium text-muted-foreground w-32">Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {listings.map((l) => (
+                    <tr key={l.listingId} className="border-b border-border/50 hover:bg-muted/20 transition-colors group">
+                      <td className="px-4 sm:px-6 py-3.5 font-medium text-foreground">{l.listingName}</td>
+                      <td className="px-4 sm:px-6 py-3.5 text-muted-foreground">{formatType(l.type)}</td>
+                      <td className="px-4 sm:px-6 py-3.5 font-semibold text-foreground">{formatRevenue(l.totalShareCents)}</td>
+                      <td className="px-4 sm:px-6 py-3.5 text-muted-foreground">{l.bookingCount}</td>
+                      <td className="px-4 sm:px-6 py-3.5">
+                        <Link
+                          to={`/payouts/listing/${l.listingId}`}
+                          className="inline-flex items-center gap-1 text-accent hover:underline font-medium text-xs"
+                        >
+                          View revenue
+                          <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             {listings.length === 0 && !error && (
               <div className="px-6 py-12 text-center text-muted-foreground text-sm">No listings yet. Add a listing to see revenue here.</div>
             )}
@@ -175,66 +177,68 @@ export default function Payouts() {
       </div>
 
       <div className="bg-card rounded-2xl shadow-card border border-border/50 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-border">
           <h3 className="font-display font-semibold text-foreground">Transaction History</h3>
           <button className="flex items-center gap-1.5 text-xs font-medium text-accent hover:underline">
             <Download size={14} /> Download
           </button>
         </div>
-        <table className="w-full text-sm">
-          <thead><tr className="border-b border-border bg-muted/30">
-            <th className="text-left px-6 py-3 font-medium text-muted-foreground">ID</th>
-            <th className="text-left px-6 py-3 font-medium text-muted-foreground">Date</th>
-            <th className="text-left px-6 py-3 font-medium text-muted-foreground">Amount</th>
-            <th className="text-left px-6 py-3 font-medium text-muted-foreground">Status</th>
-            <th className="text-left px-6 py-3 font-medium text-muted-foreground w-36">Action</th>
-          </tr></thead>
-          <tbody>
-            {transactions.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">No payout transactions yet.</td>
-              </tr>
-            ) : (
-              transactions.map((t) => (
-                <tr key={t.id} className="border-b border-border/50">
-                  <td className="px-6 py-3.5 font-medium text-foreground font-mono text-xs">{t.id.slice(0, 8)}</td>
-                  <td className="px-6 py-3.5 text-muted-foreground">{formatDate(t.createdAt)}</td>
-                  <td className="px-6 py-3.5 font-semibold text-foreground">{formatRevenue(t.amountCents)}</td>
-                  <td className="px-6 py-3.5">
-                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${t.status === "completed" ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}>
-                      {t.status === "completed" ? "Completed" : "Pending confirmation"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-3.5">
-                    {t.status === "pending_vendor_confirmation" ? (
-                      <button
-                        type="button"
-                        disabled={confirmingId === t.id}
-                        onClick={async () => {
-                          setConfirmingId(t.id);
-                          try {
-                            await vendorFetch(`/api/payouts/transactions/${t.id}/confirm`, { method: "PATCH" });
-                            const res = await vendorFetch<{ transactions: PayoutTransaction[] }>("/api/payouts/transactions");
-                            setTransactions(res.transactions ?? []);
-                          } catch {
-                            // keep list as is
-                          } finally {
-                            setConfirmingId(null);
-                          }
-                        }}
-                        className="text-xs font-medium text-accent hover:underline disabled:opacity-50"
-                      >
-                        {confirmingId === t.id ? "Confirming…" : "Confirm received"}
-                      </button>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
+        <div className="overflow-x-auto min-w-0 -mx-1">
+          <table className="w-full text-sm min-w-[28rem]">
+            <thead><tr className="border-b border-border bg-muted/30">
+              <th className="text-left px-4 sm:px-6 py-3 font-medium text-muted-foreground">ID</th>
+              <th className="text-left px-4 sm:px-6 py-3 font-medium text-muted-foreground">Date</th>
+              <th className="text-left px-4 sm:px-6 py-3 font-medium text-muted-foreground">Amount</th>
+              <th className="text-left px-4 sm:px-6 py-3 font-medium text-muted-foreground">Status</th>
+              <th className="text-left px-4 sm:px-6 py-3 font-medium text-muted-foreground w-36">Action</th>
+            </tr></thead>
+            <tbody>
+              {transactions.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 sm:px-6 py-8 text-center text-muted-foreground">No payout transactions yet.</td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                transactions.map((t) => (
+                  <tr key={t.id} className="border-b border-border/50">
+                    <td className="px-4 sm:px-6 py-3.5 font-medium text-foreground font-mono text-xs">{t.id.slice(0, 8)}</td>
+                    <td className="px-4 sm:px-6 py-3.5 text-muted-foreground">{formatDate(t.createdAt)}</td>
+                    <td className="px-4 sm:px-6 py-3.5 font-semibold text-foreground">{formatRevenue(t.amountCents)}</td>
+                    <td className="px-4 sm:px-6 py-3.5">
+                      <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${t.status === "completed" ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}>
+                        {t.status === "completed" ? "Completed" : "Pending confirmation"}
+                      </span>
+                    </td>
+                    <td className="px-4 sm:px-6 py-3.5">
+                      {t.status === "pending_vendor_confirmation" ? (
+                        <button
+                          type="button"
+                          disabled={confirmingId === t.id}
+                          onClick={async () => {
+                            setConfirmingId(t.id);
+                            try {
+                              await vendorFetch(`/api/payouts/transactions/${t.id}/confirm`, { method: "PATCH" });
+                              const res = await vendorFetch<{ transactions: PayoutTransaction[] }>("/api/payouts/transactions");
+                              setTransactions(res.transactions ?? []);
+                            } catch {
+                              // keep list as is
+                            } finally {
+                              setConfirmingId(null);
+                            }
+                          }}
+                          className="text-xs font-medium text-accent hover:underline disabled:opacity-50"
+                        >
+                          {confirmingId === t.id ? "Confirming…" : "Confirm received"}
+                        </button>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
