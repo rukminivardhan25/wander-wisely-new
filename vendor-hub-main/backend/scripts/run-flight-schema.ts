@@ -28,6 +28,7 @@ const flightSchemaFiles = [
   "035_flight_routes.sql",
   "036_flight_schedules.sql",
   "037_flights_verification.sql",
+  "053_flights_amenities.sql",
 ];
 
 async function run() {
