@@ -3266,7 +3266,7 @@ export default function Bookings() {
                             listingName: bus.listingName ?? "—",
                           }))
                         );
-                        if (allBusBookingsForDate.length === 0) return null;
+                        const totalBusBookingsCount = allBusBookingsForDate.length;
                         const formattedDate = new Date(dateFilter + "T12:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
                         return (
                           <Card className="rounded-2xl border border-slate-200/80 shadow-sm mt-6">
@@ -3276,51 +3276,55 @@ export default function Bookings() {
                                 Bookings for {formattedDate}
                               </CardTitle>
                               <p className="text-sm text-muted-foreground font-normal">
-                                All bus bookings on this date. Use View details on a card above to manage a bus and its customers.
+                                {totalBusBookingsCount === 0
+                                  ? "No bus bookings on this date yet. Bookings will appear here when users book."
+                                  : `Total: ${totalBusBookingsCount} booking${totalBusBookingsCount !== 1 ? "s" : ""} on this date. Use View details on a card above to manage a bus and its customers.`}
                               </p>
                             </CardHeader>
-                            <CardContent>
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Ref</TableHead>
-                                    <TableHead>Bus / Route</TableHead>
-                                    <TableHead>Date · Departure</TableHead>
-                                    <TableHead>Guest</TableHead>
-                                    <TableHead>Seats</TableHead>
-                                    <TableHead>Amount</TableHead>
-                                    <TableHead>Status</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {allBusBookingsForDate.map((b) => (
-                                    <TableRow key={b.id}>
-                                      <TableCell className="font-mono text-xs">{b.id}</TableCell>
-                                      <TableCell>
-                                        <p className="font-medium text-foreground text-sm">{b.busName}</p>
-                                        <p className="text-xs text-muted-foreground">{b.route}</p>
-                                      </TableCell>
-                                      <TableCell className="text-sm">
-                                        {b.date} · {b.departure}
-                                      </TableCell>
-                                      <TableCell>{b.customerName}</TableCell>
-                                      <TableCell>{(b.seats ?? []).join(", ") || "—"}</TableCell>
-                                      <TableCell>₹{(b.amount ?? 0).toLocaleString("en-IN")}</TableCell>
-                                      <TableCell>
-                                        <span className={cn(
-                                          "text-xs font-medium capitalize",
-                                          b.status === "confirmed" && "text-emerald-600",
-                                          b.status === "pending" && "text-amber-600",
-                                          b.status === "cancelled" && "text-red-600"
-                                        )}>
-                                          {b.status}
-                                        </span>
-                                      </TableCell>
+                            {totalBusBookingsCount > 0 && (
+                              <CardContent>
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead>Ref</TableHead>
+                                      <TableHead>Bus / Route</TableHead>
+                                      <TableHead>Date · Departure</TableHead>
+                                      <TableHead>Guest</TableHead>
+                                      <TableHead>Seats</TableHead>
+                                      <TableHead>Amount</TableHead>
+                                      <TableHead>Status</TableHead>
                                     </TableRow>
-                                  ))}
-                                </TableBody>
-                              </Table>
-                            </CardContent>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {allBusBookingsForDate.map((b) => (
+                                      <TableRow key={b.id}>
+                                        <TableCell className="font-mono text-xs">{b.id}</TableCell>
+                                        <TableCell>
+                                          <p className="font-medium text-foreground text-sm">{b.busName}</p>
+                                          <p className="text-xs text-muted-foreground">{b.route}</p>
+                                        </TableCell>
+                                        <TableCell className="text-sm">
+                                          {b.date} · {b.departure}
+                                        </TableCell>
+                                        <TableCell>{b.customerName}</TableCell>
+                                        <TableCell>{(b.seats ?? []).join(", ") || "—"}</TableCell>
+                                        <TableCell>₹{(b.amount ?? 0).toLocaleString("en-IN")}</TableCell>
+                                        <TableCell>
+                                          <span className={cn(
+                                            "text-xs font-medium capitalize",
+                                            b.status === "confirmed" && "text-emerald-600",
+                                            b.status === "pending" && "text-amber-600",
+                                            b.status === "cancelled" && "text-red-600"
+                                          )}>
+                                            {b.status}
+                                          </span>
+                                        </TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </CardContent>
+                            )}
                           </Card>
                         );
                       })()}

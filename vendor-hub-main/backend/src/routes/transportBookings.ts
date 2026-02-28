@@ -28,10 +28,18 @@ async function fetchBookingsForBus(busId: string, date: string, listingName: str
   if (listingName) params.set("listing_name", listingName);
   if (busName) params.set("bus_name", busName);
   const url = `${MAIN_APP_API_URL}/api/bookings/for-bus?${params.toString()}`;
-  const res = await fetch(url);
-  if (!res.ok) return [];
-  const data = (await res.json()) as { bookings?: MainApiBooking[] };
-  return Array.isArray(data.bookings) ? data.bookings : [];
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn("[transport-bookings] for-bus failed:", res.status, res.statusText, url);
+      return [];
+    }
+    const data = (await res.json()) as { bookings?: MainApiBooking[] };
+    return Array.isArray(data.bookings) ? data.bookings : [];
+  } catch (e) {
+    console.warn("[transport-bookings] for-bus fetch error:", e instanceof Error ? e.message : e, "url:", url);
+    return [];
+  }
 }
 
 const router = Router();
