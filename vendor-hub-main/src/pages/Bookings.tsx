@@ -2698,7 +2698,7 @@ export default function Bookings() {
   const [selectedBus, setSelectedBus] = useState<BusBookingCard | null>(null);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerBooking | null>(null);
-  const [dateFilter, setDateFilter] = useState(todayYYYYMMDD);
+  const [dateFilter, setDateFilter] = useState(() => todayYYYYMMDD());
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 

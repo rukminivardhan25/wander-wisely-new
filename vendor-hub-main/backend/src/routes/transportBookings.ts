@@ -23,8 +23,11 @@ type MainApiBooking = {
   createdAt: string;
 };
 
-async function fetchBookingsForBus(busId: string, date: string): Promise<MainApiBooking[]> {
-  const url = `${MAIN_APP_API_URL}/api/bookings/for-bus?bus_id=${encodeURIComponent(busId)}&date=${encodeURIComponent(date)}`;
+async function fetchBookingsForBus(busId: string, date: string, listingName: string, busName: string): Promise<MainApiBooking[]> {
+  const params = new URLSearchParams({ bus_id: busId, date });
+  if (listingName) params.set("listing_name", listingName);
+  if (busName) params.set("bus_name", busName);
+  const url = `${MAIN_APP_API_URL}/api/bookings/for-bus?${params.toString()}`;
   const res = await fetch(url);
   if (!res.ok) return [];
   const data = (await res.json()) as { bookings?: MainApiBooking[] };
@@ -187,7 +190,7 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
           bookedOn: string;
         }> = [];
         try {
-          const mainBookings = await fetchBookingsForBus(bus.busId, dateParam);
+          const mainBookings = await fetchBookingsForBus(bus.busId, dateParam, bus.listingName ?? "", bus.busName ?? "");
           bookings = mainBookings.map((b) => ({
             id: b.id,
             customerName: b.passengerName,
@@ -199,7 +202,8 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
             status: "confirmed",
             bookedOn: b.createdAt ? new Date(b.createdAt).toISOString().slice(0, 10) : "",
           }));
-        } catch (_) {
+        } catch (e) {
+          console.warn("Fetch bookings from main app failed for bus", bus.busId, dateParam, e);
           // ignore fetch errors; bus still returned with empty bookings
         }
         const seatsBooked = bookings.reduce((sum, b) => sum + b.seats.length, 0);

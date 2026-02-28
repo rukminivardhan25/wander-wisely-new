@@ -99,15 +99,20 @@ router.get("/for-bus-range", async (req: Request, res: Response): Promise<void> 
   }
 });
 
-/** GET /api/bookings/for-bus?bus_id=uuid&date=YYYY-MM-DD - For vendor: list bookings for a bus on a date (no auth). */
+/** GET /api/bookings/for-bus?bus_id=uuid&date=YYYY-MM-DD[&listing_name=...&bus_name=...] - For vendor: list bookings for a bus on a date (no auth).
+ * When listing_name and bus_name are provided, also includes bookings where bus_id is null but travel_date and listing_name/bus_name match (so legacy or missed bus_id rows still count). */
 router.get("/for-bus", async (req: Request, res: Response): Promise<void> => {
   try {
     const busId = typeof req.query.bus_id === "string" ? req.query.bus_id.trim() : null;
     const date = typeof req.query.date === "string" ? req.query.date.trim() : null;
+    const listingName = typeof req.query.listing_name === "string" ? req.query.listing_name.trim() : null;
+    const busName = typeof req.query.bus_name === "string" ? req.query.bus_name.trim() : null;
     if (!busId || !/^[0-9a-f-]{36}$/i.test(busId) || !date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       res.status(400).json({ error: "Query params bus_id (uuid) and date (YYYY-MM-DD) are required" });
       return;
     }
+    const includeNullBusIdMatch = listingName !== null && listingName !== "" && busName !== null && busName !== "";
+
     const result = await query<{
       id: string;
       booking_id: string;
@@ -118,11 +123,20 @@ router.get("/for-bus", async (req: Request, res: Response): Promise<void> => {
       total_cents: number;
       created_at: string;
     }>(
-      `select id, booking_id, passenger_name, passenger_phone, email, selected_seats, total_cents, created_at
+      includeNullBusIdMatch
+        ? `select id, booking_id, passenger_name, passenger_phone, email, selected_seats, total_cents, created_at
+           from transport_bookings
+           where travel_date = $2
+             and (
+               (bus_id = $1)
+               or (bus_id is null and lower(trim(coalesce(listing_name,''))) = lower(trim($3)) and lower(trim(coalesce(bus_name,''))) = lower(trim($4)))
+             )
+           order by created_at asc`
+        : `select id, booking_id, passenger_name, passenger_phone, email, selected_seats, total_cents, created_at
        from transport_bookings
        where bus_id = $1 and travel_date = $2
        order by created_at asc`,
-      [busId, date]
+      includeNullBusIdMatch ? [busId, date, listingName, busName] : [busId, date]
     );
     const bookings = result.rows.map((r) => ({
       id: r.booking_id,
