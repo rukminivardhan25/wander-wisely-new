@@ -101,10 +101,15 @@ const HotelReceipt = () => {
   }
 
   const status = (booking.status || "").trim().toLowerCase();
+  // Hotel flow: pending_vendor → vendor approves + room number → approved_awaiting_payment → user pays → confirmed
+  const isAwaitingPayment =
+    status === "approved_awaiting_payment" ||
+    status === "approved" ||
+    (status.includes("awaiting") && status.includes("payment"));
   const statusLabel =
     status === "pending_vendor"
       ? "Pending hotel approval"
-      : status === "approved_awaiting_payment" || status === "approved"
+      : isAwaitingPayment
         ? "Bill ready — Pay now"
         : status === "confirmed"
           ? "Confirmed"
@@ -112,7 +117,6 @@ const HotelReceipt = () => {
             ? "Rejected"
             : "Awaiting payment";
   const isPending = status === "pending_vendor";
-  const isAwaitingPayment = status === "approved_awaiting_payment" || status === "approved";
 
   const [payLoading, setPayLoading] = useState(false);
 
@@ -313,6 +317,15 @@ const HotelReceipt = () => {
                       Payment complete. Present this receipt at check-in along with a valid ID.
                     </p>
                   )}
+                </div>
+              )}
+              {/* Pay now when approved but total not yet set (vendor approved with room only) */}
+              {isAwaitingPayment && booking.totalCents == null && (
+                <div className="border-t border-slate-200 pt-4 space-y-2 no-print">
+                  <p className="text-sm text-muted-foreground">Pay now to confirm your booking. Amount may be confirmed at check-in if not set by the hotel.</p>
+                  <Button type="button" className="w-full sm:w-auto rounded-xl bg-amber-600 hover:bg-amber-700" onClick={handlePayNow} disabled={payLoading}>
+                    {payLoading ? "Processing…" : "Pay now"}
+                  </Button>
                 </div>
               )}
 
