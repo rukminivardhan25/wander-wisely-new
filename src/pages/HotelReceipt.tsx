@@ -100,18 +100,19 @@ const HotelReceipt = () => {
     );
   }
 
+  const status = (booking.status || "").trim().toLowerCase();
   const statusLabel =
-    booking.status === "pending_vendor"
+    status === "pending_vendor"
       ? "Pending hotel approval"
-      : booking.status === "approved_awaiting_payment" || booking.status === "approved"
+      : status === "approved_awaiting_payment" || status === "approved"
         ? "Bill ready — Pay now"
-        : booking.status === "confirmed"
+        : status === "confirmed"
           ? "Confirmed"
-          : booking.status === "rejected"
+          : status === "rejected"
             ? "Rejected"
-            : booking.status;
-  const isPending = booking.status === "pending_vendor";
-  const isAwaitingPayment = booking.status === "approved_awaiting_payment" || booking.status === "approved";
+            : "Awaiting payment";
+  const isPending = status === "pending_vendor";
+  const isAwaitingPayment = status === "approved_awaiting_payment" || status === "approved";
 
   const [payLoading, setPayLoading] = useState(false);
 
@@ -205,7 +206,7 @@ const HotelReceipt = () => {
                 </div>
               </div>
               <p className="text-amber-100 text-sm mt-2 font-mono">Booking ref: {booking.bookingRef}</p>
-              <p className={`text-sm mt-1 font-medium ${isAwaitingPayment ? "text-blue-200" : booking.status === "confirmed" ? "text-emerald-200" : booking.status === "rejected" ? "text-red-200" : "text-amber-100"}`}>
+              <p className={`text-sm mt-1 font-medium ${isAwaitingPayment ? "text-blue-200" : status === "confirmed" ? "text-emerald-200" : status === "rejected" ? "text-red-200" : "text-amber-100"}`}>
                 Status: {statusLabel}
               </p>
             </div>
@@ -307,7 +308,7 @@ const HotelReceipt = () => {
                       </Button>
                     </div>
                   )}
-                  {booking.status === "confirmed" && (
+                  {status === "confirmed" && (
                     <p className="text-sm text-muted-foreground">
                       Payment complete. Present this receipt at check-in along with a valid ID.
                     </p>

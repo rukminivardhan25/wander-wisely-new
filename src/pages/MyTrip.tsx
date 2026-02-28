@@ -1575,7 +1575,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                               ? "Completed"
                               : b.status === "rejected"
                                 ? "Rejected"
-                                : b.status;
+                                : "Awaiting payment";
                       return (
                         <div key={b.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3 relative">
                           <button
@@ -1614,7 +1614,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                               ? "Confirmed"
                               : b.status === "rejected"
                                 ? "Rejected"
-                                : b.status;
+                                : "Awaiting payment";
                       return (
                         <div key={b.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3 relative">
                           <button
@@ -1772,17 +1772,18 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                       );
                     })}
                     {filteredHotelBookings.map((b) => {
-                      const canPay = b.status === "approved_awaiting_payment" || b.status === "approved";
+                      const status = (b.status || "").trim().toLowerCase();
+                      const canPay = status === "approved_awaiting_payment" || status === "approved";
                       const statusLabel =
-                        b.status === "pending_vendor"
+                        status === "pending_vendor"
                           ? "Pending approval"
                           : canPay
                             ? "Bill ready — Pay now"
-                            : b.status === "confirmed"
+                            : status === "confirmed"
                               ? "Confirmed"
-                              : b.status === "rejected"
+                              : status === "rejected"
                                 ? "Rejected"
-                                : b.status;
+                                : "Awaiting payment";
                       return (
                         <div key={b.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 flex gap-3 relative">
                           <button
@@ -1800,12 +1801,12 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                           <div className="min-w-0 flex-1 pr-8">
                             <p className="font-medium text-foreground truncate">Hotel stay</p>
                             <p className="text-xs text-muted-foreground">Hotel · {normDate(b.checkIn)} – {normDate(b.checkOut)} · {b.nights} night{b.nights !== 1 ? "s" : ""}</p>
-                            <p className={`text-xs mt-1 flex items-center gap-1 ${canPay ? "text-blue-600" : b.status === "confirmed" ? "text-emerald-600" : b.status === "rejected" ? "text-red-600" : "text-amber-600"}`}>
-                              {(canPay || b.status === "confirmed") && <CheckCircle className="h-3.5 w-3.5 shrink-0" />}
+                            <p className={`text-xs mt-1 flex items-center gap-1 ${canPay ? "text-blue-600" : status === "confirmed" ? "text-emerald-600" : status === "rejected" ? "text-red-600" : "text-amber-600"}`}>
+                              {(canPay || status === "confirmed") && <CheckCircle className="h-3.5 w-3.5 shrink-0" />}
                               {statusLabel}
                             </p>
                             <div className="flex flex-wrap gap-2 mt-2">
-                              {b.status === "pending_vendor" && (
+                              {status === "pending_vendor" && (
                                 <Button asChild size="sm" variant="outline" className="rounded-lg text-xs">
                                   <Link to={`/my-trip/hotel-booking/${b.id}`}>View request</Link>
                                 </Button>
@@ -1816,7 +1817,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                                     type="button"
                                     size="sm"
                                     variant="hero"
-                                    className="rounded-lg text-xs"
+                                    className="rounded-lg text-xs shrink-0 min-w-[7rem]"
                                     disabled={hotelPayId === b.id}
                                     onClick={async () => {
                                       if (!token || !b.id) return;
@@ -1839,7 +1840,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                                   </Button>
                                 </>
                               )}
-                              {b.status === "confirmed" && (
+                              {status === "confirmed" && (
                                 <Button asChild size="sm" variant="hero" className="rounded-lg text-xs">
                                   <Link to={`/my-trip/hotel-booking/${b.id}`}>View receipt</Link>
                                 </Button>
@@ -2049,7 +2050,17 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f1f5f9;padding:24px;m
                     <p><span className="text-muted-foreground">Amount:</span>{" "}
                       {carDetailData.booking.totalCents != null ? `₹ ${(carDetailData.booking.totalCents / 100).toLocaleString("en-IN")}` : "—"}
                     </p>
-                    <p><span className="text-muted-foreground">Status:</span> {carDetailData.booking.status === "confirmed" ? "Completed" : carDetailData.booking.status.replace(/_/g, " ")}</p>
+                    <p><span className="text-muted-foreground">Status:</span>{" "}
+                      {carDetailData.booking.status === "confirmed"
+                        ? "Completed"
+                        : carDetailData.booking.status === "approved_awaiting_payment"
+                          ? "Awaiting payment"
+                          : carDetailData.booking.status === "pending_vendor"
+                            ? "Pending approval"
+                            : carDetailData.booking.status === "rejected"
+                              ? "Rejected"
+                              : carDetailData.booking.status.replace(/_/g, " ")}
+                    </p>
                     {carDetailData.booking.otp && <p><span className="text-muted-foreground">OTP:</span> <span className="font-mono font-semibold">{carDetailData.booking.otp}</span></p>}
                   </div>
                 </div>
