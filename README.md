@@ -1,4 +1,7 @@
 # WanderWisely
+**Links**
+user-dashboard=>https://wanderly-xi.vercel.app
+partnerportal=>https://wanderlypartnerportal.vercel.app
 
 **A full-stack travel and booking platform** — users can discover and book transport, hotels, experiences, and events; vendors manage listings and bookings; admins handle verification and support.
 
@@ -152,7 +155,7 @@ wander-wisely-main/
 
 ## Author
 
-[Your Name]
+Boinapalli Rukmini Vardhan 
 
 ---
 
