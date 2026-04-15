@@ -11,6 +11,15 @@ router.use(authMiddleware);
 
 const UPLOAD_DIR = path.join(__dirname, "../../uploads");
 
+function getRequestBaseUrl(req: Request): string {
+  const configured = process.env.VENDOR_API_BASE_URL;
+  if (configured) return configured.replace(/\/$/, "");
+  const proto = (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0]?.trim() || req.protocol;
+  const host = req.get("x-forwarded-host") || req.get("host");
+  if (host) return `${proto}://${host}`.replace(/\/$/, "");
+  return `http://localhost:${process.env.PORT ?? 3002}`;
+}
+
 router.post("/", async (req: Request, res: Response): Promise<void> => {
   try {
     const { image, file: fileDataUrl } = req.body as { image?: string; file?: string };
@@ -43,8 +52,7 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
     const filename = `${crypto.randomUUID()}.${ext}`;
     const filepath = path.join(UPLOAD_DIR, filename);
     fs.writeFileSync(filepath, buffer);
-    const baseUrl = process.env.VENDOR_API_BASE_URL ?? `http://localhost:${process.env.PORT ?? 3002}`;
-    const url = `${baseUrl.replace(/\/$/, "")}/uploads/${filename}`;
+    const url = `${getRequestBaseUrl(req)}/uploads/${filename}`;
     res.json({ url });
   } catch (err) {
     console.error("Upload error:", err);

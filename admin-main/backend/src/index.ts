@@ -9,7 +9,22 @@ import dashboardRoutes from "./routes/dashboard.js";
 const app = express();
 const PORT = process.env.PORT ?? 3003;
 
-app.use(cors({ origin: true, credentials: true }));
+const defaultOrigins = "http://localhost:8082,http://127.0.0.1:8082,http://localhost:8083,http://127.0.0.1:8083";
+const corsOrigin = process.env.CORS_ORIGIN ?? defaultOrigins;
+const corsOrigins = corsOrigin.split(",").map((o) => o.trim()).filter(Boolean);
+const allowedSet = new Set(corsOrigins.length ? corsOrigins : defaultOrigins.split(",").map((o) => o.trim()));
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    if (allowedSet.has(origin)) return cb(null, origin);
+    if (/^https?:\/\/localhost(:\d+)?$/.test(origin) || /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) return cb(null, origin);
+    return cb(null, false);
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Admin-Key"],
+  optionsSuccessStatus: 204,
+}));
 app.use(express.json());
 
 app.get("/api/health", (_req, res) => {

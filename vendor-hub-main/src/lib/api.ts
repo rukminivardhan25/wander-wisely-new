@@ -1,10 +1,11 @@
-// Use VITE_VENDOR_API_URL if set; when running on a non-local host (e.g. Vercel), use deployed backend.
 function getVendorApiBaseUrl(): string {
+  if (import.meta.env.VITE_VENDOR_API_URL) return import.meta.env.VITE_VENDOR_API_URL;
+  if (import.meta.env.DEV) return "http://localhost:3002";
   if (typeof window !== "undefined") {
     const host = window.location.hostname;
-    if (host !== "localhost" && host !== "127.0.0.1") return "https://wander-wisely-new-1.onrender.com";
+    if (host === "localhost" || host === "127.0.0.1") return "http://localhost:3002";
   }
-  return import.meta.env.VITE_VENDOR_API_URL ?? "http://localhost:3002";
+  throw new Error("Missing VITE_VENDOR_API_URL. Set VITE_VENDOR_API_URL to your deployed backend URL.");
 }
 
 export function getVendorApiUrl(path: string): string {

@@ -1,29 +1,16 @@
-// When running on a non-local host (e.g. Vercel), use deployed backend URLs.
-function getAdminApiBase(): string {
+function resolveApiBase(envValue: string | undefined, envName: string, localDefault: string): string {
+  if (envValue) return envValue;
+  if (import.meta.env.DEV) return localDefault;
   if (typeof window !== "undefined") {
     const host = window.location.hostname;
-    if (host !== "localhost" && host !== "127.0.0.1") return "https://wander-wisely-new-2.onrender.com";
+    if (host === "localhost" || host === "127.0.0.1") return localDefault;
   }
-  return import.meta.env.VITE_ADMIN_API_URL ?? "http://localhost:3003";
-}
-function getMainAppApiBase(): string {
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname;
-    if (host !== "localhost" && host !== "127.0.0.1") return "https://wander-wisely-new.onrender.com";
-  }
-  return import.meta.env.VITE_MAIN_APP_API_URL ?? "http://localhost:3001";
-}
-function getVendorHubApiBase(): string {
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname;
-    if (host !== "localhost" && host !== "127.0.0.1") return "https://wander-wisely-new-1.onrender.com";
-  }
-  return import.meta.env.VITE_VENDOR_HUB_API_URL ?? "http://localhost:3002";
+  throw new Error(`Missing ${envName}. Set ${envName} to your deployed backend URL.`);
 }
 
-const ADMIN_API_URL = getAdminApiBase();
-const MAIN_APP_API_URL = getMainAppApiBase();
-const VENDOR_HUB_API_URL = getVendorHubApiBase();
+const ADMIN_API_URL = resolveApiBase(import.meta.env.VITE_ADMIN_API_URL, "VITE_ADMIN_API_URL", "http://localhost:3003");
+const MAIN_APP_API_URL = resolveApiBase(import.meta.env.VITE_MAIN_APP_API_URL, "VITE_MAIN_APP_API_URL", "http://localhost:3001");
+const VENDOR_HUB_API_URL = resolveApiBase(import.meta.env.VITE_VENDOR_HUB_API_URL, "VITE_VENDOR_HUB_API_URL", "http://localhost:3002");
 const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY ?? "";
 
 function getUrl(base: string, path: string): string {

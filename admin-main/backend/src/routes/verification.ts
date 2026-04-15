@@ -3,6 +3,15 @@ import { query } from "../config/db.js";
 
 const router = Router();
 
+function getAdminBaseUrl(req: Request): string {
+  const configured = process.env.ADMIN_API_BASE_URL;
+  if (configured) return configured.replace(/\/$/, "");
+  const proto = (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0]?.trim() || req.protocol;
+  const host = req.get("x-forwarded-host") || req.get("host");
+  if (host) return `${proto}://${host}`.replace(/\/$/, "");
+  return `http://localhost:${process.env.PORT ?? 3003}`;
+}
+
 /** List listings pending verification (admin view). Query: ?type=transport|restaurant|... (optional) */
 router.get("/pending", async (req: Request, res: Response): Promise<void> => {
   try {
@@ -88,8 +97,7 @@ router.get("/listing/:id", async (req: Request, res: Response): Promise<void> =>
       }
     }
 
-    const adminBase = process.env.ADMIN_API_BASE_URL ?? `http://localhost:${process.env.PORT ?? 3003}`;
-    const base = adminBase.replace(/\/$/, "");
+    const base = getAdminBaseUrl(req);
     res.json({
       id: row.id,
       name: row.name,
@@ -230,8 +238,7 @@ router.get("/bus/:id", async (req: Request, res: Response): Promise<void> => {
         "SELECT document_type, file_name, file_url FROM verification_bus_documents WHERE bus_id = $1 ORDER BY created_at",
         [id]
       );
-      const adminBase = process.env.ADMIN_API_BASE_URL ?? `http://localhost:${process.env.PORT ?? 3003}`;
-      const base = adminBase.replace(/\/$/, "");
+      const base = getAdminBaseUrl(req);
       const docTypeLabel: Record<string, string> = {
         driver_details: "Driver details",
         routes_pricing: "Routes & pricing",
@@ -392,8 +399,7 @@ router.get("/car/:id", async (req: Request, res: Response): Promise<void> => {
         "SELECT document_type, file_name, file_url FROM verification_car_documents WHERE car_id = $1 ORDER BY created_at",
         [id]
       );
-      const adminBase = process.env.ADMIN_API_BASE_URL ?? `http://localhost:${process.env.PORT ?? 3003}`;
-      const base = adminBase.replace(/\/$/, "");
+      const base = getAdminBaseUrl(req);
       const docTypeLabel: Record<string, string> = {
         insurance: "Insurance",
         rc: "RC (Registration Certificate)",
@@ -651,8 +657,7 @@ router.get("/hotel-branch/:id", async (req: Request, res: Response): Promise<voi
         "SELECT document_type, file_name, file_url FROM verification_hotel_branch_documents WHERE hotel_branch_id = $1 ORDER BY created_at",
         [id]
       );
-      const adminBase = process.env.ADMIN_API_BASE_URL ?? `http://localhost:${process.env.PORT ?? 3003}`;
-      const base = adminBase.replace(/\/$/, "");
+      const base = getAdminBaseUrl(req);
       const docTypeLabel: Record<string, string> = {
         local_trade_license: "Local Trade License",
         property_ownership: "Property Ownership / Rental Agreement",

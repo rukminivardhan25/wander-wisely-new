@@ -1,16 +1,20 @@
-// Use VITE_API_URL if set; in production build default to deployed backend so Vercel works without env.
-// Also use production API when running on a non-local host (e.g. wanderly-xi.vercel.app) so it works even if build cache or env is wrong.
-function getDefaultApiBase(): string {
+function resolveApiBase(): string | null {
+  const configured = import.meta.env.VITE_API_URL;
+  if (configured) return configured;
+  if (import.meta.env.DEV) return "http://localhost:3001";
   if (typeof window !== "undefined") {
     const host = window.location.hostname;
-    if (host !== "localhost" && host !== "127.0.0.1") return "https://wander-wisely-new.onrender.com";
+    if (host === "localhost" || host === "127.0.0.1") return "http://localhost:3001";
   }
-  return import.meta.env.PROD ? "https://wander-wisely-new.onrender.com" : "http://localhost:3001";
+  return null;
 }
-const API_BASE = import.meta.env.VITE_API_URL ?? getDefaultApiBase();
+const API_BASE = resolveApiBase();
 const API_TIMEOUT_MS = 15000;
 
 export function getApiUrl(path: string): string {
+  if (!API_BASE) {
+    throw new Error("Missing VITE_API_URL. Set VITE_API_URL to your deployed backend URL.");
+  }
   const base = API_BASE.replace(/\/$/, "");
   const p = path.startsWith("/") ? path : `/${path}`;
   return `${base}${p}`;
@@ -59,7 +63,7 @@ export async function apiFetch<T = unknown>(
       status: 0,
       error: isAbort
         ? "Request timed out. Is the backend running?"
-        : "Could not reach server. Is the backend running at " + API_BASE + "?",
+        : `Could not reach server. Is the backend running at ${API_BASE ?? "your configured VITE_API_URL"}?`,
       networkError: true,
     };
   }

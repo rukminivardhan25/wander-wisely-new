@@ -3,7 +3,6 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
-import { pool } from "./config/db.js";
 import authRoutes from "./routes/auth.js";
 import listingsIndexRoutes from "./routes/listingsIndex.js";
 import uploadRoutes from "./routes/upload.js";
@@ -48,23 +47,6 @@ app.get("/api/health", (_req, res) => {
 
 app.get("/", (_req, res) => {
   res.json({ message: "Partner Portal API", docs: "Use the vendor hub frontend; API routes are under /api/...", health: "/api/health" });
-});
-
-/** Debug: return ALL car_bookings (no filters). Uses same DB as DATABASE_URL (single DB). */
-app.get("/api/debug/all-car-bookings", async (_req, res) => {
-  try {
-    const result = await pool.query(
-      "SELECT id, booking_ref, listing_id, car_id, user_id, travel_date, status, created_at FROM car_bookings ORDER BY created_at DESC LIMIT 50"
-    );
-    res.json({
-      message: "All car_bookings (max 50), no filters (single DATABASE_URL)",
-      count: result.rows.length,
-      rows: result.rows,
-    });
-  } catch (err) {
-    console.error("Debug all-car-bookings error:", err);
-    res.status(500).json({ error: err instanceof Error ? err.message : "Query failed" });
-  }
 });
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
