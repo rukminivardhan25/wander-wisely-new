@@ -25,8 +25,8 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 function readStored(): { user: User | null; token: string | null } {
   try {
-    const token = localStorage.getItem(STORAGE_TOKEN);
-    const userJson = localStorage.getItem(STORAGE_USER);
+    const token = sessionStorage.getItem(STORAGE_TOKEN);
+    const userJson = sessionStorage.getItem(STORAGE_USER);
     if (!token || !userJson) return { token: null, user: null };
     const user = JSON.parse(userJson) as User;
     return { token, user };
@@ -48,19 +48,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = useCallback((user: User, token: string) => {
-    localStorage.setItem(STORAGE_TOKEN, token);
-    localStorage.setItem(STORAGE_USER, JSON.stringify(user));
+    sessionStorage.setItem(STORAGE_TOKEN, token);
+    sessionStorage.setItem(STORAGE_USER, JSON.stringify(user));
     setState({ user, token, isReady: true });
   }, []);
 
   const signOut = useCallback(() => {
-    localStorage.removeItem(STORAGE_TOKEN);
-    localStorage.removeItem(STORAGE_USER);
+    sessionStorage.removeItem(STORAGE_TOKEN);
+    sessionStorage.removeItem(STORAGE_USER);
     setState((s) => ({ ...s, user: null, token: null }));
   }, []);
 
   const setUser = useCallback((user: User) => {
-    localStorage.setItem(STORAGE_USER, JSON.stringify(user));
+    sessionStorage.setItem(STORAGE_USER, JSON.stringify(user));
     setState((s) => ({ ...s, user }));
   }, []);
 
