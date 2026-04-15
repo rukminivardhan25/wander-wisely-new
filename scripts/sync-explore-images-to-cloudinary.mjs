@@ -9,6 +9,7 @@ const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY;
 const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET;
 const DRY_RUN = process.argv.includes("--dry-run");
 const FETCH_PROXY_MODE = process.argv.includes("--fetch-proxy");
+const MATERIALIZE_FETCH_MODE = process.argv.includes("--materialize-fetch");
 
 if (!CLOUDINARY_CLOUD_NAME) {
   console.error("Missing CLOUDINARY_CLOUD_NAME.");
@@ -24,6 +25,11 @@ if (!FETCH_PROXY_MODE && (!CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET)) {
 
 function extractWikimediaUrls(content) {
   const regex = /https:\/\/upload\.wikimedia\.org\/wikipedia\/commons\/[^\s"'`]+/g;
+  return [...new Set(content.match(regex) || [])];
+}
+
+function extractCloudinaryFetchUrls(content) {
+  const regex = /https:\/\/res\.cloudinary\.com\/[^\s"'`]+\/image\/fetch\/[^\s"'`]+/g;
   return [...new Set(content.match(regex) || [])];
 }
 
@@ -103,8 +109,71 @@ async function uploadToCloudinary(sourceUrl, publicId) {
   return data.secure_url;
 }
 
+async function uploadRemoteUrlToCloudinary(remoteUrl, publicId) {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const paramsToSign = `folder=wander-wisely/explore&public_id=${publicId}&timestamp=${timestamp}${CLOUDINARY_API_SECRET}`;
+  const signature = sha1(paramsToSign);
+
+  const form = new FormData();
+  form.append("file", remoteUrl);
+  form.append("api_key", CLOUDINARY_API_KEY);
+  form.append("timestamp", String(timestamp));
+  form.append("folder", "wander-wisely/explore");
+  form.append("public_id", publicId);
+  form.append("signature", signature);
+
+  const endpoint = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+  const res = await fetch(endpoint, { method: "POST", body: form });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(`Cloudinary materialize failed for ${remoteUrl}: ${data?.error?.message || res.statusText}`);
+  }
+  return data.secure_url;
+}
+
 async function main() {
   const original = await fs.readFile(TARGET_FILE, "utf8");
+  if (MATERIALIZE_FETCH_MODE) {
+    const fetchUrls = extractCloudinaryFetchUrls(original);
+    if (fetchUrls.length === 0) {
+      console.log("No Cloudinary fetch URLs found in destinations.ts");
+      return;
+    }
+    console.log(`Found ${fetchUrls.length} Cloudinary fetch URLs.`);
+    const replacements = new Map();
+    for (let i = 0; i < fetchUrls.length; i++) {
+      const sourceUrl = fetchUrls[i];
+      const publicId = `wander-wisely/explore/m-${sha1(sourceUrl).slice(0, 12)}`;
+      process.stdout.write(`[${i + 1}/${fetchUrls.length}] ${DRY_RUN ? "Would materialize" : "Materializing"}... `);
+      if (DRY_RUN) {
+        replacements.set(sourceUrl, `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/${publicId}`);
+        process.stdout.write("ok (dry run)\n");
+        continue;
+      }
+      try {
+        const secureUrl = await uploadRemoteUrlToCloudinary(sourceUrl, publicId);
+        replacements.set(sourceUrl, secureUrl);
+        process.stdout.write("ok\n");
+        await sleep(250);
+      } catch (err) {
+        process.stdout.write("failed\n");
+        console.error(String(err));
+        throw err;
+      }
+    }
+    let updated = original;
+    for (const [from, to] of replacements.entries()) {
+      updated = updated.split(from).join(to);
+    }
+    if (!DRY_RUN) {
+      await fs.writeFile(TARGET_FILE, updated, "utf8");
+      console.log(`Updated ${TARGET_FILE} with uploaded Cloudinary asset URLs.`);
+    } else {
+      console.log("Dry run complete (materialize-fetch mode). No file changes written.");
+    }
+    return;
+  }
+
   const urls = extractWikimediaUrls(original);
 
   if (urls.length === 0) {
