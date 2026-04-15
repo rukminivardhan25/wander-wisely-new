@@ -14,7 +14,7 @@ export function getVendorApiUrl(path: string): string {
 }
 
 export function getAuthHeaders(): HeadersInit {
-  const token = localStorage.getItem("vendor_token");
+  const token = sessionStorage.getItem("vendor_token");
   const headers: HeadersInit = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
   return headers;

@@ -26,8 +26,8 @@ const STORAGE_VENDOR = "vendor_vendor";
 
 function readStored(): Pick<AuthState, "token" | "vendor"> {
   try {
-    const token = localStorage.getItem(STORAGE_TOKEN);
-    const vendorJson = localStorage.getItem(STORAGE_VENDOR);
+    const token = sessionStorage.getItem(STORAGE_TOKEN);
+    const vendorJson = sessionStorage.getItem(STORAGE_VENDOR);
     const vendor = vendorJson ? (JSON.parse(vendorJson) as Vendor) : null;
     return { token, vendor };
   } catch {
@@ -66,8 +66,8 @@ export function VendorAuthProvider({ children }: { children: ReactNode }) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error((data as { error?: string }).error ?? "Sign in failed");
     const { token, vendor } = data as { token: string; vendor: Vendor };
-    localStorage.setItem(STORAGE_TOKEN, token);
-    localStorage.setItem(STORAGE_VENDOR, JSON.stringify(vendor));
+    sessionStorage.setItem(STORAGE_TOKEN, token);
+    sessionStorage.setItem(STORAGE_VENDOR, JSON.stringify(vendor));
     setState({ token, vendor, ready: true });
   }, []);
 
@@ -90,14 +90,14 @@ export function VendorAuthProvider({ children }: { children: ReactNode }) {
     const result = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error((result as { error?: string }).error ?? "Sign up failed");
     const { token, vendor } = result as { token: string; vendor: Vendor };
-    localStorage.setItem(STORAGE_TOKEN, token);
-    localStorage.setItem(STORAGE_VENDOR, JSON.stringify(vendor));
+    sessionStorage.setItem(STORAGE_TOKEN, token);
+    sessionStorage.setItem(STORAGE_VENDOR, JSON.stringify(vendor));
     setState({ token, vendor, ready: true });
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(STORAGE_TOKEN);
-    localStorage.removeItem(STORAGE_VENDOR);
+    sessionStorage.removeItem(STORAGE_TOKEN);
+    sessionStorage.removeItem(STORAGE_VENDOR);
     setState({ token: null, vendor: null, ready: true });
   }, []);
 
@@ -106,7 +106,7 @@ export function VendorAuthProvider({ children }: { children: ReactNode }) {
       if (!s.vendor) return s;
       const vendor = { ...s.vendor, ...partial };
       try {
-        localStorage.setItem(STORAGE_VENDOR, JSON.stringify(vendor));
+        sessionStorage.setItem(STORAGE_VENDOR, JSON.stringify(vendor));
       } catch {}
       return { ...s, vendor };
     });
