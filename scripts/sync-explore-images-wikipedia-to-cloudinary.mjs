@@ -9,6 +9,7 @@ const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
 const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY;
 const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET;
 const DRY_RUN = process.argv.includes("--dry-run");
+const REWRITE_ONLY = process.argv.includes("--rewrite-only");
 
 if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
   console.error("Missing Cloudinary credentials.");
@@ -118,7 +119,7 @@ function buildBlock(ids, imagesById) {
   for (const id of ids) {
     const urls = imagesById.get(id) || [];
     if (!urls.length) continue;
-    const key = /^[a-z0-9-]+$/.test(id) ? id : `"${id}"`;
+    const key = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(id) ? id : `"${id}"`;
     lines.push(`  ${key}: [`);
     for (const u of urls) lines.push(`    "${u}",`);
     lines.push("  ],");
@@ -134,6 +135,14 @@ async function main() {
   const existingById = parseExistingImagesById(oldBlock);
   const namesById = parseDestinationNames(content);
   const ids = [...existingById.keys()];
+
+  if (REWRITE_ONLY) {
+    const rewritten = buildBlock(ids, existingById);
+    const updated = content.slice(0, start) + rewritten + content.slice(end);
+    await fs.writeFile(TARGET_FILE, updated, "utf8");
+    console.log("Rewrote DESTINATION_IMAGES block with valid key syntax only.");
+    return;
+  }
 
   console.log(`Processing ${ids.length} destinations.`);
   const replacements = new Map(existingById);

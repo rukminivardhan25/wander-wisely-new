@@ -26,12 +26,12 @@ export type Destination = {
 
 /** Location-relevant images from Wikimedia Commons (one primary, repeated for gallery). */
 const DESTINATION_IMAGES: Record<string, string[]> = {
-  angkor-wat: [
+  "angkor-wat": [
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276188/wander-wisely/explore/angkor-wat-ec79a650.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276188/wander-wisely/explore/angkor-wat-ec79a650.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276188/wander-wisely/explore/angkor-wat-ec79a650.jpg",
   ],
-  machu-picchu: [
+  "machu-picchu": [
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776273943/wander-wisely/explore/wander-wisely/explore/machu-picchu-ddc9424e.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776273943/wander-wisely/explore/wander-wisely/explore/machu-picchu-ddc9424e.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776273943/wander-wisely/explore/wander-wisely/explore/machu-picchu-ddc9424e.jpg",
@@ -81,7 +81,7 @@ const DESTINATION_IMAGES: Record<string, string[]> = {
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276294/wander-wisely/explore/cairo-7dae2318.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276294/wander-wisely/explore/cairo-7dae2318.jpg",
   ],
-  taj-mahal: [
+  "taj-mahal": [
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276297/wander-wisely/explore/taj-mahal-ae1bb35f.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276297/wander-wisely/explore/taj-mahal-ae1bb35f.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276297/wander-wisely/explore/taj-mahal-ae1bb35f.jpg",
@@ -141,7 +141,7 @@ const DESTINATION_IMAGES: Record<string, string[]> = {
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276367/wander-wisely/explore/tokyo-4ea76710.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276367/wander-wisely/explore/tokyo-4ea76710.jpg",
   ],
-  new-york: [
+  "new-york": [
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274044/wander-wisely/explore/wander-wisely/explore/new-york-d6625938.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274044/wander-wisely/explore/wander-wisely/explore/new-york-d6625938.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274044/wander-wisely/explore/wander-wisely/explore/new-york-d6625938.jpg",
@@ -186,7 +186,7 @@ const DESTINATION_IMAGES: Record<string, string[]> = {
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274064/wander-wisely/explore/wander-wisely/explore/phuket-5af88ca2.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274064/wander-wisely/explore/wander-wisely/explore/phuket-5af88ca2.jpg",
   ],
-  swiss-alps: [
+  "swiss-alps": [
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274067/wander-wisely/explore/wander-wisely/explore/swiss-alps-ae59a09c.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274067/wander-wisely/explore/wander-wisely/explore/swiss-alps-ae59a09c.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274067/wander-wisely/explore/wander-wisely/explore/swiss-alps-ae59a09c.jpg",
@@ -196,7 +196,7 @@ const DESTINATION_IMAGES: Record<string, string[]> = {
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276417/wander-wisely/explore/patagonia-f377f38b.png",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276417/wander-wisely/explore/patagonia-f377f38b.png",
   ],
-  nepal-himalaya: [
+  "nepal-himalaya": [
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276421/wander-wisely/explore/nepal-himalaya-3a76efc0.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276421/wander-wisely/explore/nepal-himalaya-3a76efc0.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276421/wander-wisely/explore/nepal-himalaya-3a76efc0.jpg",
@@ -211,7 +211,7 @@ const DESTINATION_IMAGES: Record<string, string[]> = {
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274081/wander-wisely/explore/wander-wisely/explore/serengeti-6b428e42.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274081/wander-wisely/explore/wander-wisely/explore/serengeti-6b428e42.jpg",
   ],
-  great-barrier-reef: [
+  "great-barrier-reef": [
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274084/wander-wisely/explore/wander-wisely/explore/great-barrier-reef-439f5b78.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274084/wander-wisely/explore/wander-wisely/explore/great-barrier-reef-439f5b78.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274084/wander-wisely/explore/wander-wisely/explore/great-barrier-reef-439f5b78.jpg",
@@ -221,12 +221,12 @@ const DESTINATION_IMAGES: Record<string, string[]> = {
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276444/wander-wisely/explore/iceland-035a1f11.png",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276444/wander-wisely/explore/iceland-035a1f11.png",
   ],
-  new-zealand: [
+  "new-zealand": [
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276446/wander-wisely/explore/new-zealand-3cf0251b.png",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276446/wander-wisely/explore/new-zealand-3cf0251b.png",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276446/wander-wisely/explore/new-zealand-3cf0251b.png",
   ],
-  costa-rica: [
+  "costa-rica": [
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276447/wander-wisely/explore/costa-rica-56b3ef4f.png",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276447/wander-wisely/explore/costa-rica-56b3ef4f.png",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276447/wander-wisely/explore/costa-rica-56b3ef4f.png",
@@ -246,7 +246,7 @@ const DESTINATION_IMAGES: Record<string, string[]> = {
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276460/wander-wisely/explore/khajuraho-62386f7c.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276460/wander-wisely/explore/khajuraho-62386f7c.jpg",
   ],
-  kerala-backwaters: [
+  "kerala-backwaters": [
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276464/wander-wisely/explore/kerala-backwaters-7a947214.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276464/wander-wisely/explore/kerala-backwaters-7a947214.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276464/wander-wisely/explore/kerala-backwaters-7a947214.jpg",
@@ -266,12 +266,12 @@ const DESTINATION_IMAGES: Record<string, string[]> = {
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274112/wander-wisely/explore/wander-wisely/explore/haridwar-3cb5dfca.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274112/wander-wisely/explore/wander-wisely/explore/haridwar-3cb5dfca.jpg",
   ],
-  ajanta-ellora: [
+  "ajanta-ellora": [
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274116/wander-wisely/explore/wander-wisely/explore/ajanta-ellora-feb20098.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274116/wander-wisely/explore/wander-wisely/explore/ajanta-ellora-feb20098.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274116/wander-wisely/explore/wander-wisely/explore/ajanta-ellora-feb20098.jpg",
   ],
-  leh-ladakh: [
+  "leh-ladakh": [
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274121/wander-wisely/explore/wander-wisely/explore/leh-ladakh-711f759d.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274121/wander-wisely/explore/wander-wisely/explore/leh-ladakh-711f759d.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274121/wander-wisely/explore/wander-wisely/explore/leh-ladakh-711f759d.jpg",
@@ -301,7 +301,7 @@ const DESTINATION_IMAGES: Record<string, string[]> = {
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274135/wander-wisely/explore/wander-wisely/explore/konark-55b0a316.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274135/wander-wisely/explore/wander-wisely/explore/konark-55b0a316.jpg",
   ],
-  fatehpur-sikri: [
+  "fatehpur-sikri": [
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276520/wander-wisely/explore/fatehpur-sikri-ae760e49.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276520/wander-wisely/explore/fatehpur-sikri-ae760e49.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276520/wander-wisely/explore/fatehpur-sikri-ae760e49.jpg",
@@ -336,7 +336,7 @@ const DESTINATION_IMAGES: Record<string, string[]> = {
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276556/wander-wisely/explore/jodhpur-b519fe3e.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776276556/wander-wisely/explore/jodhpur-b519fe3e.jpg",
   ],
-  valley-of-flowers: [
+  "valley-of-flowers": [
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274157/wander-wisely/explore/wander-wisely/explore/valley-of-flowers-bfe72b85.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274157/wander-wisely/explore/wander-wisely/explore/valley-of-flowers-bfe72b85.jpg",
     "https://res.cloudinary.com/dihhuyjjt/image/upload/v1776274157/wander-wisely/explore/wander-wisely/explore/valley-of-flowers-bfe72b85.jpg",
