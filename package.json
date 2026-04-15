@@ -15,7 +15,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "cloudinary:sync-explore": "node scripts/sync-explore-images-to-cloudinary.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
