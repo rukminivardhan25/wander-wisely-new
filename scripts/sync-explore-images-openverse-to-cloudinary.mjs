@@ -73,7 +73,62 @@ function queryFromId(id) {
   return id.replace(/-/g, " ");
 }
 
-async function fetchOpenverseImageUrl(query) {
+function parseDestinationMeta(content) {
+  const out = new Map();
+  const regex = /id:\s*"([^"]+)"[\s\S]*?name:\s*"([^"]+)"[\s\S]*?category:\s*"([^"]+)"/g;
+  let m;
+  while ((m = regex.exec(content))) {
+    out.set(m[1], { name: m[2], category: m[3] });
+  }
+  return out;
+}
+
+function buildCategoryQueries(meta, id) {
+  const place = (meta?.name || queryFromId(id)).split(",")[0].trim();
+  const category = meta?.category || "";
+  const base = [
+    `${place} famous landmark`,
+    `${place} travel destination`,
+  ];
+  const byCategory = {
+    Beaches: `${place} beach coastline`,
+    Spiritual: `${place} temple church mosque spiritual site`,
+    Mountains: `${place} mountains hills scenic`,
+    Nature: `${place} nature landscape river lake waterfall`,
+    History: `${place} historical monument heritage site`,
+    Cities: `${place} city skyline architecture`,
+    Adventure: `${place} adventure trekking scenic`,
+  };
+  const specific = byCategory[category] ? [byCategory[category]] : [];
+  return [...specific, ...base];
+}
+
+function scoreCandidate(result, tokens, categoryQuery) {
+  const title = String(result?.title || "").toLowerCase();
+  const tags = Array.isArray(result?.tags) ? result.tags.join(" ").toLowerCase() : "";
+  const text = `${title} ${tags}`;
+
+  let score = 0;
+  for (const t of tokens) if (text.includes(t)) score += 6;
+  for (const t of categoryQuery.split(/\s+/)) if (t.length > 3 && text.includes(t.toLowerCase())) score += 2;
+  if ((result?.width || 0) >= 1200) score += 4;
+  if ((result?.height || 0) >= 800) score += 4;
+
+  // Avoid human-centric results.
+  if (/\b(person|people|portrait|man|woman|selfie|face|model)\b/i.test(text)) score -= 12;
+  if (/\b(landmark|temple|church|mosque|cathedral|fort|palace|beach|mountain|waterfall|river|lake|forest|skyline|city)\b/i.test(text)) score += 5;
+
+  return score;
+}
+
+function isUsableSourceUrl(url) {
+  if (!url || !url.startsWith("http")) return false;
+  if (url.includes("api.openverse.org/v1/images/")) return false;
+  if (url.includes("upload.wikimedia.org") || url.includes("commons.wikimedia.org")) return false;
+  return true;
+}
+
+async function fetchOpenverseCandidates(query) {
   const url = `https://api.openverse.org/v1/images/?q=${encodeURIComponent(query)}&page_size=15&license_type=commercial`;
   const res = await fetch(url, {
     headers: {
@@ -83,12 +138,37 @@ async function fetchOpenverseImageUrl(query) {
   });
   if (!res.ok) throw new Error(`Openverse failed (${res.status}) for query "${query}"`);
   const data = await res.json();
-  const results = Array.isArray(data?.results) ? data.results : [];
-  for (const r of results) {
-    if (typeof r?.url === "string" && r.url.startsWith("http")) return r.url;
-    if (typeof r?.thumbnail === "string" && r.thumbnail.startsWith("http")) return r.thumbnail;
+  return Array.isArray(data?.results) ? data.results : [];
+}
+
+async function fetchOpenverseBestImage(meta, id) {
+  const queries = buildCategoryQueries(meta, id);
+  const tokens = (meta?.name || queryFromId(id))
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length > 2);
+
+  let bestUrl = null;
+  let bestThumb = null;
+  let bestScore = -Infinity;
+  for (const query of queries) {
+    const results = await fetchOpenverseCandidates(query);
+    for (const r of results) {
+      const candidateUrl =
+        (typeof r?.url === "string" && r.url.startsWith("http") && r.url) ||
+        (typeof r?.thumbnail === "string" && r.thumbnail.startsWith("http") && r.thumbnail) ||
+        null;
+      if (!isUsableSourceUrl(candidateUrl)) continue;
+      const score = scoreCandidate(r, tokens, query);
+      if (score > bestScore) {
+        bestScore = score;
+        bestUrl = candidateUrl;
+        bestThumb = typeof r?.thumbnail === "string" && isUsableSourceUrl(r.thumbnail) ? r.thumbnail : null;
+      }
+    }
   }
-  throw new Error(`No Openverse image found for "${query}"`);
+  if (!bestUrl) throw new Error(`No Openverse image found for "${id}"`);
+  return { sourceUrl: bestUrl, thumbnailUrl: bestThumb };
 }
 
 async function downloadImage(url, retries = 4) {
@@ -140,7 +220,7 @@ function buildNewBlock(ids, imageById) {
   for (const id of ids) {
     const urls = imageById.get(id);
     if (!urls || urls.length === 0) continue;
-    const key = /^[a-z0-9-]+$/.test(id) ? id : `"${id}"`;
+    const key = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(id) ? id : `"${id}"`;
     lines.push(`  ${key}: [`);
     for (const u of urls) lines.push(`    "${u}",`);
     lines.push("  ],");
@@ -151,6 +231,7 @@ function buildNewBlock(ids, imageById) {
 
 async function main() {
   const content = await fs.readFile(TARGET_FILE, "utf8");
+  const metaById = parseDestinationMeta(content);
   const { start, end } = extractDestinationImageBlock(content);
   const oldBlock = content.slice(start, end);
   const ids = extractDestinationIdsInOrder(oldBlock);
@@ -162,18 +243,26 @@ async function main() {
   let idx = 0;
   for (const id of bounded) {
     idx += 1;
-    const query = queryFromId(id);
-    process.stdout.write(`[${idx}/${bounded.length}] ${id}: finding image... `);
+    const meta = metaById.get(id);
+    process.stdout.write(`[${idx}/${bounded.length}] ${id}: selecting best image... `);
     try {
-      const sourceUrl = await fetchOpenverseImageUrl(query);
+      const { sourceUrl, thumbnailUrl } = await fetchOpenverseBestImage(meta, id);
       process.stdout.write("found, uploading... ");
       let secure;
       if (DRY_RUN) {
         secure = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/wander-wisely/explore/${id}`;
       } else {
-        const { buffer, contentType } = await downloadImage(sourceUrl);
         const publicId = `wander-wisely/explore/${id}-${sha1(sourceUrl).slice(0, 8)}`;
-        secure = await uploadToCloudinary(buffer, contentType, publicId);
+        try {
+          const { buffer, contentType } = await downloadImage(sourceUrl);
+          secure = await uploadToCloudinary(buffer, contentType, publicId);
+        } catch (err) {
+          const msg = String(err);
+          const canFallback = msg.includes("File size too large") && thumbnailUrl && thumbnailUrl !== sourceUrl;
+          if (!canFallback) throw err;
+          const { buffer, contentType } = await downloadImage(thumbnailUrl);
+          secure = await uploadToCloudinary(buffer, contentType, `${publicId}-thumb`);
+        }
         await sleep(250);
       }
       imageById.set(id, [secure, secure, secure]);
