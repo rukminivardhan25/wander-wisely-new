@@ -17,7 +17,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "cloudinary:sync-explore": "node scripts/sync-explore-images-to-cloudinary.mjs",
-    "cloudinary:sync-explore-openverse": "node scripts/sync-explore-images-openverse-to-cloudinary.mjs"
+    "cloudinary:sync-explore-openverse": "node scripts/sync-explore-images-openverse-to-cloudinary.mjs",
+    "cloudinary:sync-explore-wikipedia": "node scripts/sync-explore-images-wikipedia-to-cloudinary.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
