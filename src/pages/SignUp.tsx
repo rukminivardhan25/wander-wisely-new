@@ -34,6 +34,7 @@ const SignUp = () => {
     }
     setLoading(true);
     try {
+      await warmApi();
       const { data, error, status, networkError } = await apiFetch<{ user: { id: string; email: string; full_name: string | null }; token: string }>(
         "/api/auth/signup",
         {
@@ -46,6 +47,8 @@ const SignUp = () => {
       if (networkError || error) {
         const msg = status === 409
           ? "This email is already registered."
+          : status === 400
+            ? "Please check your details and try again."
           : error ?? "Something went wrong. The server may still be waking up, so please try again in a moment.";
         toast({ title: networkError ? "Connection failed" : "Sign up failed", description: msg, variant: "destructive" });
         return;

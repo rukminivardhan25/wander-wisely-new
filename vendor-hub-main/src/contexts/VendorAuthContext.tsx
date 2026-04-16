@@ -1,5 +1,5 @@
 import { createContext, useState, useCallback, useEffect, type ReactNode } from "react";
-import { getVendorApiUrl } from "@/lib/api";
+import { vendorFetch } from "@/lib/api";
 
 export interface Vendor {
   id: string;
@@ -48,48 +48,27 @@ export function VendorAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const url = getVendorApiUrl("/api/auth/signin");
-    let res: Response;
-    try {
-      res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Network error";
-      if (msg === "Failed to fetch" || msg.includes("fetch")) {
-        throw new Error("Cannot reach the API. Start the Partner Portal backend: cd vendor-hub-main/backend then npm run dev");
-      }
-      throw err;
-    }
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error((data as { error?: string }).error ?? "Sign in failed");
-    const { token, vendor } = data as { token: string; vendor: Vendor };
+    const { token, vendor } = await vendorFetch<{ token: string; vendor: Vendor }>("/api/auth/signin", {
+      method: "POST",
+      body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+      timeoutMs: 30000,
+      retries: 1,
+    });
     sessionStorage.setItem(STORAGE_TOKEN, token);
     sessionStorage.setItem(STORAGE_VENDOR, JSON.stringify(vendor));
     setState({ token, vendor, ready: true });
   }, []);
 
   const signUp = useCallback(async (data: { name: string; email: string; phone?: string; password: string }) => {
-    const url = getVendorApiUrl("/api/auth/signup");
-    let res: Response;
-    try {
-      res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Network error";
-      if (msg === "Failed to fetch" || msg.includes("fetch")) {
-        throw new Error("Cannot reach the API. Start the Partner Portal backend: cd vendor-hub-main/backend then npm run dev");
-      }
-      throw err;
-    }
-    const result = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error((result as { error?: string }).error ?? "Sign up failed");
-    const { token, vendor } = result as { token: string; vendor: Vendor };
+    const { token, vendor } = await vendorFetch<{ token: string; vendor: Vendor }>("/api/auth/signup", {
+      method: "POST",
+      body: JSON.stringify({
+        ...data,
+        email: data.email.trim().toLowerCase(),
+      }),
+      timeoutMs: 30000,
+      retries: 1,
+    });
     sessionStorage.setItem(STORAGE_TOKEN, token);
     sessionStorage.setItem(STORAGE_VENDOR, JSON.stringify(vendor));
     setState({ token, vendor, ready: true });

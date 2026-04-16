@@ -10,6 +10,7 @@ function resolveApiBase(): string | null {
 }
 const API_BASE = resolveApiBase();
 const API_TIMEOUT_MS = 15000;
+let warmApiPromise: Promise<void> | null = null;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -89,14 +90,21 @@ export async function apiFetch<T = unknown>(
   return { status: 0, error: "Request failed", networkError: true };
 }
 
-export async function warmApi(): Promise<void> {
-  try {
-    await apiFetch("/api/health", {
-      method: "GET",
-      timeoutMs: 10000,
-      retries: 1,
-    });
-  } catch {
-    // best-effort warmup only
+export function warmApi(): Promise<void> {
+  if (!warmApiPromise) {
+    warmApiPromise = (async () => {
+      try {
+        await apiFetch("/api/health", {
+          method: "GET",
+          timeoutMs: 10000,
+          retries: 1,
+        });
+      } catch {
+        // best-effort warmup only
+      } finally {
+        warmApiPromise = null;
+      }
+    })();
   }
+  return warmApiPromise;
 }

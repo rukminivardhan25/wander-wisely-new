@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useVendorAuth } from "@/hooks/useVendorAuth";
+import { warmVendorApi } from "@/lib/api";
 
 export default function SignIn() {
   const navigate = useNavigate();
@@ -14,16 +15,24 @@ export default function SignIn() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  if (token) {
-    navigate("/", { replace: true });
-    return null;
-  }
+  useEffect(() => {
+    void warmVendorApi();
+  }, []);
+
+  useEffect(() => {
+    if (token) {
+      navigate("/", { replace: true });
+    }
+  }, [navigate, token]);
+
+  if (token) return null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
+      await warmVendorApi();
       await signIn(email, password);
       navigate("/", { replace: true });
     } catch (err) {
