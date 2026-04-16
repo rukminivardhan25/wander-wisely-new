@@ -37,8 +37,10 @@ export type ItineraryPlan = { days: DayPlan[] };
 const GROQ_API = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL = "llama-3.1-8b-instant";
 const REQUEST_TIMEOUT_MS = 45000;
-const MAX_ATTEMPTS = 3;
-const DAY_CONCURRENCY = 2;
+const MAX_ATTEMPTS = 4;
+const DAY_CONCURRENCY = 1;
+const MAX_TOKENS = 1400;
+const INTER_DAY_DELAY_MS = 1200;
 
 const SINGLE_DAY_SYSTEM = `You are an expert-level Travel Planner and Budget-Aware Route Designer.
 
@@ -198,7 +200,10 @@ export async function generateItinerary(params: {
   const transportStr = params.transport_preference || "any";
 
   const dayNumbers = Array.from({ length: params.days }, (_, i) => i + 1);
-  const generatedDays = await mapWithConcurrency(dayNumbers, DAY_CONCURRENCY, async (dayNum) => {
+  const generatedDays = await mapWithConcurrency(dayNumbers, DAY_CONCURRENCY, async (dayNum, index) => {
+    if (index > 0) {
+      await waitMs(INTER_DAY_DELAY_MS);
+    }
     const userContent = `Trip: ${params.days} days from ${params.origin} to ${params.destination}.
 ${budgetNote}
 Travel Type: ${params.travel_type}.
@@ -259,7 +264,7 @@ async function generateSingleDay(
         lastError.name === "AbortError" ||
         /Invalid response for day|Empty response from Groq|fetch failed|timeout|ECONNRESET|ETIMEDOUT/i.test(lastError.message);
       if (!isRetriable || attempt === MAX_ATTEMPTS) break;
-      await waitMs(attempt * 1500);
+      await waitMs(attempt * 2000);
     }
   }
 
@@ -313,7 +318,7 @@ async function doGroqRequest(key: string, userContent: string): Promise<Response
           { role: "user", content: userContent },
         ],
         temperature: 0.5,
-        max_tokens: 2048,
+        max_tokens: MAX_TOKENS,
       }),
     });
   } finally {
@@ -323,7 +328,7 @@ async function doGroqRequest(key: string, userContent: string): Promise<Response
 
 function parseRetryDelayMs(errorText: string, attempt: number): number {
   const waitMatch = errorText.match(/try again in ([\d.]+)s/i);
-  const waitSec = waitMatch ? Math.ceil(parseFloat(waitMatch[1])) + 1 : Math.min(8, attempt * 2);
+  const waitSec = waitMatch ? Math.ceil(parseFloat(waitMatch[1])) + attempt * 2 : Math.min(20, attempt * 5);
   return waitSec * 1000;
 }
 
@@ -334,7 +339,7 @@ function waitMs(ms: number): Promise<void> {
 async function mapWithConcurrency<T, R>(
   items: T[],
   concurrency: number,
-  mapper: (item: T) => Promise<R>
+  mapper: (item: T, index: number) => Promise<R>
 ): Promise<R[]> {
   const results = new Array<R>(items.length);
   let index = 0;
@@ -344,7 +349,7 @@ async function mapWithConcurrency<T, R>(
       const current = index;
       index += 1;
       if (current >= items.length) return;
-      results[current] = await mapper(items[current]);
+      results[current] = await mapper(items[current], current);
     }
   });
 
