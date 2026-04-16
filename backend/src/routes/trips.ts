@@ -186,24 +186,34 @@ router.post("/generate", async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    for (const d of planDays) {
-      let imageUrls: string[] = [];
-      try {
-        imageUrls = await getDayImages(d.mainPlace || destination, destination, 2);
-      } catch (imgErr) {
-        console.warn("Day images fetch failed (continuing without images):", imgErr);
-      }
-      const content = {
-        summary: d.summary,
-        activities: d.activities,
-        imageUrl: imageUrls[0] ?? undefined,
-        imageUrls: imageUrls.length ? imageUrls : undefined,
-      };
-      await query(
-        "insert into itineraries (trip_id, day_number, content) values ($1, $2, $3)",
-        [tripId, d.day, JSON.stringify(content)]
-      );
-    }
+    const itineraryRows = await Promise.all(
+      planDays.map(async (d) => {
+        let imageUrls: string[] = [];
+        try {
+          imageUrls = await getDayImages(d.mainPlace || destination, destination, 2);
+        } catch (imgErr) {
+          console.warn("Day images fetch failed (continuing without images):", imgErr);
+        }
+        return {
+          day: d.day,
+          content: {
+            summary: d.summary,
+            activities: d.activities,
+            imageUrl: imageUrls[0] ?? undefined,
+            imageUrls: imageUrls.length ? imageUrls : undefined,
+          },
+        };
+      })
+    );
+
+    await Promise.all(
+      itineraryRows.map((row) =>
+        query(
+          "insert into itineraries (trip_id, day_number, content) values ($1, $2, $3)",
+          [tripId, row.day, JSON.stringify(row.content)]
+        )
+      )
+    );
 
     await query("update trips set status = 'ready' where id = $1", [tripId]);
 

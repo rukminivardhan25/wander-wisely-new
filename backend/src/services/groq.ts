@@ -36,6 +36,9 @@ export type ItineraryPlan = { days: DayPlan[] };
 
 const GROQ_API = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL = "llama-3.1-8b-instant";
+const REQUEST_TIMEOUT_MS = 45000;
+const MAX_ATTEMPTS = 3;
+const DAY_CONCURRENCY = 2;
 
 const SINGLE_DAY_SYSTEM = `You are an expert-level Travel Planner and Budget-Aware Route Designer.
 
@@ -194,11 +197,8 @@ export async function generateItinerary(params: {
   const interestsStr = params.interests.join(", ") || "sightseeing";
   const transportStr = params.transport_preference || "any";
 
-  const days: DayPlan[] = [];
-
-  const waitMs = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-  for (let dayNum = 1; dayNum <= params.days; dayNum++) {
+  const dayNumbers = Array.from({ length: params.days }, (_, i) => i + 1);
+  const generatedDays = await mapWithConcurrency(dayNumbers, DAY_CONCURRENCY, async (dayNum) => {
     const userContent = `Trip: ${params.days} days from ${params.origin} to ${params.destination}.
 ${budgetNote}
 Travel Type: ${params.travel_type}.
@@ -215,71 +215,141 @@ PLANNING FOR DAY ${dayNum}:
 
 Plan ONLY day ${dayNum} of ${params.days}. Return ONLY the JSON object with "day": ${dayNum}, "summary", "mainPlace", "activities" (4-8 items). Each activity: time (24h start–end), title, description, duration, costEstimate (Free or range only), activityType. No other text.`;
 
-    const doRequest = () =>
-      fetch(GROQ_API, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${key}`,
-        },
-        body: JSON.stringify({
-          model: MODEL,
-          messages: [
-            { role: "system", content: SINGLE_DAY_SYSTEM },
-            { role: "user", content: userContent },
-          ],
-          temperature: 0.5,
-          max_tokens: 2048,
-        }),
-      });
+    return generateSingleDay(dayNum, {
+      key,
+      destination: params.destination,
+      userContent,
+    });
+  });
 
-    let res = await doRequest();
-    if (res.status === 429) {
-      const errText = await res.text();
-      const waitMatch = errText.match(/try again in ([\d.]+)s/i);
-      const waitSec = waitMatch ? Math.ceil(parseFloat(waitMatch[1])) + 1 : 8;
-      await waitMs(waitSec * 1000);
-      res = await doRequest();
-    }
+  return { days: generatedDays.sort((a, b) => a.day - b.day) };
+}
 
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Groq API error: ${res.status} ${err}`);
-    }
+async function generateSingleDay(
+  dayNum: number,
+  options: { key: string; destination: string; userContent: string }
+): Promise<DayPlan> {
+  let lastError: Error | null = null;
 
-    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const text = data.choices?.[0]?.message?.content?.trim() ?? "";
-    if (!text) throw new Error(`Empty response from Groq for day ${dayNum}`);
-
-    const jsonStr = extractJson(text);
-    let dayPlan: DayPlan;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
-      const parsed = JSON.parse(jsonStr) as DayPlan & { days?: DayPlan[] };
-      if (parsed.days && Array.isArray(parsed.days) && parsed.days[0]) {
-        dayPlan = { ...parsed.days[0], day: dayNum };
-      } else {
-        dayPlan = { ...parsed, day: dayNum };
+      const res = await doGroqRequest(options.key, options.userContent);
+      if (!res.ok) {
+        const errText = await res.text();
+        if (res.status === 429 && attempt < MAX_ATTEMPTS) {
+          await waitMs(parseRetryDelayMs(errText, attempt));
+          continue;
+        }
+        if (res.status >= 500 && attempt < MAX_ATTEMPTS) {
+          await waitMs(attempt * 1500);
+          continue;
+        }
+        throw new Error(`Groq API error: ${res.status} ${errText}`);
       }
-    } catch {
-      console.error(`Groq day ${dayNum} parse failed (preview):`, text.slice(0, 300));
-      throw new Error(`Invalid response for day ${dayNum}. Please try again.`);
-    }
 
-    if (!dayPlan.activities || !Array.isArray(dayPlan.activities)) {
-      dayPlan.activities = [];
+      const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      const text = data.choices?.[0]?.message?.content?.trim() ?? "";
+      if (!text) throw new Error(`Empty response from Groq for day ${dayNum}`);
+
+      const dayPlan = normalizeDayPlan(dayNum, text, options.destination);
+      return dayPlan;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      const isRetriable =
+        lastError.name === "AbortError" ||
+        /Invalid response for day|Empty response from Groq|fetch failed|timeout|ECONNRESET|ETIMEDOUT/i.test(lastError.message);
+      if (!isRetriable || attempt === MAX_ATTEMPTS) break;
+      await waitMs(attempt * 1500);
     }
-    const validTypes: ActivityType[] = ["transport", "stay", "food", "experience", "shopping", "events", "hidden_gem", "local_service", "emergency"];
-    for (const a of dayPlan.activities) {
-      if (!a.activityType || !validTypes.includes(a.activityType as ActivityType)) {
-        (a as Activity).activityType = "experience";
-      }
-    }
-    if (!dayPlan.summary) dayPlan.summary = `Day ${dayNum} of your trip.`;
-    if (!dayPlan.mainPlace) dayPlan.mainPlace = params.destination;
-    days.push(dayPlan);
   }
 
-  return { days };
+  throw lastError ?? new Error(`Failed to generate day ${dayNum}`);
+}
+
+function normalizeDayPlan(dayNum: number, text: string, destination: string): DayPlan {
+  const jsonStr = extractJson(text);
+  let dayPlan: DayPlan;
+  try {
+    const parsed = JSON.parse(jsonStr) as DayPlan & { days?: DayPlan[] };
+    if (parsed.days && Array.isArray(parsed.days) && parsed.days[0]) {
+      dayPlan = { ...parsed.days[0], day: dayNum };
+    } else {
+      dayPlan = { ...parsed, day: dayNum };
+    }
+  } catch {
+    console.error(`Groq day ${dayNum} parse failed (preview):`, text.slice(0, 300));
+    throw new Error(`Invalid response for day ${dayNum}. Please try again.`);
+  }
+
+  if (!dayPlan.activities || !Array.isArray(dayPlan.activities)) {
+    dayPlan.activities = [];
+  }
+  const validTypes: ActivityType[] = ["transport", "stay", "food", "experience", "shopping", "events", "hidden_gem", "local_service", "emergency"];
+  for (const a of dayPlan.activities) {
+    if (!a.activityType || !validTypes.includes(a.activityType as ActivityType)) {
+      (a as Activity).activityType = "experience";
+    }
+  }
+  if (!dayPlan.summary) dayPlan.summary = `Day ${dayNum} of your trip.`;
+  if (!dayPlan.mainPlace) dayPlan.mainPlace = destination;
+  return dayPlan;
+}
+
+async function doGroqRequest(key: string, userContent: string): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(GROQ_API, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: "system", content: SINGLE_DAY_SYSTEM },
+          { role: "user", content: userContent },
+        ],
+        temperature: 0.5,
+        max_tokens: 2048,
+      }),
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function parseRetryDelayMs(errorText: string, attempt: number): number {
+  const waitMatch = errorText.match(/try again in ([\d.]+)s/i);
+  const waitSec = waitMatch ? Math.ceil(parseFloat(waitMatch[1])) + 1 : Math.min(8, attempt * 2);
+  return waitSec * 1000;
+}
+
+function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let index = 0;
+
+  const workers = Array.from({ length: Math.max(1, Math.min(concurrency, items.length)) }, async () => {
+    while (true) {
+      const current = index;
+      index += 1;
+      if (current >= items.length) return;
+      results[current] = await mapper(items[current]);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
 }
 
 /** Extract JSON from Groq response (handles markdown code blocks and surrounding text). */
