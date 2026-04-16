@@ -15,7 +15,7 @@ partnerportal=>https://wanderlypartnerportal.vercel.app
 
 ## Project description
 
-WanderWisely lets travellers search and book **buses**, **cars**, **flights**, **hotels**, **experiences**, and **events** in one place. Vendors register, add listings (e.g. fleet, hotel branches, experiences), and manage bookings and payouts. Administrators verify listings and vehicles, view dashboard stats, manage vendor support tickets, and handle user feedback and complaints. The system supports verification workflows, support tickets with admin replies, and role-based access across user, vendor, and admin interfaces.
+WanderWisely lets travellers search,plan and book **buses**, **cars**, **flights**, **hotels**, **experiences**, and **events** in one place. Vendors register, add listings (e.g. fleet, hotel branches, experiences), and manage bookings and payouts. Administrators verify listings and vehicles, view dashboard stats, manage vendor support tickets, and handle user feedback and complaints. The system supports verification workflows, support tickets with admin replies, and role-based access across user, vendor, and admin interfaces.This also enables the users to post their travel experience though community.
 
 ---
 
@@ -37,6 +37,7 @@ WanderWisely lets travellers search and book **buses**, **cars**, **flights**, *
 ## Features
 
 - **User side**
+  -plan trips
   - Search and book transport (bus, car, flight), hotels, experiences, and events
   - User auth (register/login), profile, trip history
   - Feedback and complaints with admin reply visibility
@@ -55,7 +56,7 @@ WanderWisely lets travellers search and book **buses**, **cars**, **flights**, *
   - Verification: listings, buses, cars, flights, hotel branches (approve/reject)
   - Vendors list, bookings, users, vendor support tickets (reply to vendors)
   - User feedback and complaints handling
-
+  - payment handling
 ---
 
 ## Project structure
