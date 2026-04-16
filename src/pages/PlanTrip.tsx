@@ -37,6 +37,12 @@ const loadingMessages = [
   "Balancing your budget with memorable stops...",
   "Adding thoughtful day-wise details to your plan...",
 ];
+const travelLaneTransition = (duration: number, delay = 0) => ({
+  duration,
+  delay,
+  repeat: Infinity,
+  ease: "linear" as const,
+});
 
 const BLOCK_OPTIONS: Record<ActivityType, { label: string; icon: JSX.Element; options: string[]; theme: string }> = {
   transport: { label: "Transport", icon: <Bus className="h-4 w-4" />, theme: "border-l-4 border-l-blue-500 bg-blue-50/50 dark:bg-blue-950/20", options: ["Bus options", "Train options", "Car rentals", "Local taxis", "Ride-sharing", "Price comparison", "Seat booking"] },
@@ -755,9 +761,9 @@ const PlanTrip = () => {
                     </motion.div>
 
                     <motion.div
-                      className="absolute left-0 top-[22%]"
-                      animate={{ x: ["-14%", "114%"] }}
-                      transition={{ duration: 4.4, repeat: Infinity, ease: "easeInOut" }}
+                      className="absolute left-0 top-[18%]"
+                      animate={{ x: ["-12%", "610%"] }}
+                      transition={travelLaneTransition(6.2)}
                     >
                       <div className="relative flex items-center gap-2">
                         <motion.div
@@ -777,9 +783,9 @@ const PlanTrip = () => {
                     </motion.div>
 
                     <motion.div
-                      className="absolute left-0 top-[47%]"
-                      animate={{ x: ["-18%", "112%"] }}
-                      transition={{ duration: 5.4, repeat: Infinity, ease: "easeInOut", delay: 0.35 }}
+                      className="absolute left-0 top-[36%]"
+                      animate={{ x: ["-14%", "605%"] }}
+                      transition={travelLaneTransition(7, 0.75)}
                     >
                       <div className="relative flex items-center gap-2">
                         <motion.div
@@ -811,9 +817,9 @@ const PlanTrip = () => {
                     </motion.div>
 
                     <motion.div
-                      className="absolute left-0 top-[66%]"
-                      animate={{ x: ["-20%", "110%"] }}
-                      transition={{ duration: 6.1, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
+                      className="absolute left-0 top-[54%]"
+                      animate={{ x: ["-16%", "600%"] }}
+                      transition={travelLaneTransition(7.6, 1.4)}
                     >
                       <div className="relative flex items-center gap-2">
                         <motion.div
@@ -834,12 +840,79 @@ const PlanTrip = () => {
                     </motion.div>
 
                     <motion.div
+                      className="absolute left-0 top-[70%]"
+                      animate={{ x: ["-18%", "604%"] }}
+                      transition={travelLaneTransition(8.1, 2.15)}
+                    >
+                      <div className="relative flex items-center gap-2">
+                        <motion.div
+                          className="text-[24px] drop-shadow-[0_10px_12px_rgba(236,72,153,0.2)]"
+                          animate={{ y: [0, -5, 0], rotate: [-3, 4, -3] }}
+                          transition={{ duration: 0.95, repeat: Infinity, ease: "easeInOut" }}
+                        >
+                          🐰
+                        </motion.div>
+                        <motion.div
+                          className="rounded-full bg-pink-100/95 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-pink-700 shadow-sm"
+                          animate={{ scale: [1, 1.05, 1] }}
+                          transition={{ duration: 1, repeat: Infinity, ease: "easeInOut" }}
+                        >
+                          hopping in
+                        </motion.div>
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      className="absolute left-0 top-[25%]"
+                      animate={{ x: ["-10%", "608%"] }}
+                      transition={travelLaneTransition(8.8, 2.85)}
+                    >
+                      <div className="relative flex items-center gap-2">
+                        <motion.div
+                          className="text-[23px] drop-shadow-[0_10px_12px_rgba(249,115,22,0.2)]"
+                          animate={{ y: [0, -3, 0], rotate: [-4, 4, -4] }}
+                          transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }}
+                        >
+                          📷
+                        </motion.div>
+                        <motion.div
+                          className="h-1.5 w-8 rounded-full bg-gradient-to-r from-orange-300/70 to-transparent"
+                          animate={{ opacity: [0.2, 0.75, 0.2] }}
+                          transition={{ duration: 0.9, repeat: Infinity, ease: "easeInOut" }}
+                        />
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      className="absolute left-0 top-[50%]"
+                      animate={{ x: ["-12%", "600%"] }}
+                      transition={travelLaneTransition(9.6, 3.6)}
+                    >
+                      <div className="relative flex items-center gap-2">
+                        <motion.div
+                          className="text-[23px] drop-shadow-[0_10px_12px_rgba(14,165,233,0.2)]"
+                          animate={{ y: [0, -4, 0], rotate: [-5, 5, -5] }}
+                          transition={{ duration: 1, repeat: Infinity, ease: "easeInOut" }}
+                        >
+                          🧭
+                        </motion.div>
+                        <motion.div
+                          className="rounded-full bg-sky-100/95 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-700 shadow-sm"
+                          animate={{ y: [0, -1, 0] }}
+                          transition={{ duration: 0.9, repeat: Infinity, ease: "easeInOut" }}
+                        >
+                          finding flow
+                        </motion.div>
+                      </div>
+                    </motion.div>
+
+                    <motion.div
                       aria-hidden
                       className="absolute inset-y-0 w-24 bg-gradient-to-r from-transparent via-white/65 to-transparent"
                       animate={{ x: ["-20%", "440%"] }}
                       transition={{ duration: 2.8, repeat: Infinity, ease: "linear" }}
                     />
-                    <div className="h-24" />
+                    <div className="h-28" />
                   </div>
 
                   <div className="relative space-y-2 text-center">
