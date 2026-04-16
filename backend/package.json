@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "db:init": "tsx scripts/run-schema.ts",
+    "community:migrate-images": "tsx scripts/migrate-community-post-images-to-cloudinary.ts",
     "db:seed-community": "tsx scripts/seed-community.ts",
     "db:seed-demo": "tsx scripts/seed-demo.ts"
   },

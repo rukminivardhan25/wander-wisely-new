@@ -1,0 +1,4 @@
+DATABASE_URL=postgresql://neondb_owner:npg_skljmc2buiZ1@ep-shiny-hat-aiueb9w6-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+
+# Secret for signing JWTs (use a long random string in production)
+JWT_SECRET=your-super-secret-jwt-key-change-in-production
