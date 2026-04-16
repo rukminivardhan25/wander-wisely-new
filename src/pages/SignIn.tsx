@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, Compass } from "lucide-react";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, warmApi } from "@/lib/api";
 
 const SignIn = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -19,6 +19,10 @@ const SignIn = () => {
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from ?? "/";
 
+  useEffect(() => {
+    void warmApi();
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
@@ -29,12 +33,17 @@ const SignIn = () => {
     try {
       const { data, error, status, networkError } = await apiFetch<{ user: { id: string; email: string; full_name: string | null }; token: string }>(
         "/api/auth/signin",
-        { method: "POST", body: { email: email.trim(), password } }
+        {
+          method: "POST",
+          body: { email: email.trim().toLowerCase(), password },
+          timeoutMs: 30000,
+          retries: 1,
+        }
       );
       if (networkError || error) {
         const msg = status === 401
           ? "Invalid email or password."
-          : error ?? "Something went wrong. Check the browser console (F12) for details.";
+          : error ?? "Something went wrong. The server may still be waking up, so please try again in a moment.";
         toast({ title: networkError ? "Connection failed" : "Sign in failed", description: msg, variant: "destructive" });
         return;
       }

@@ -27,9 +27,10 @@ router.post("/signup", async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
       return;
     }
-    const { email, password, full_name } = parsed.data;
+    const email = parsed.data.email.trim().toLowerCase();
+    const { password, full_name } = parsed.data;
 
-    const existing = await query<{ id: string }>("select id from users where email = $1", [email]);
+    const existing = await query<{ id: string }>("select id from users where lower(email) = lower($1)", [email]);
     if (existing.rows.length > 0) {
       res.status(409).json({ error: "Email already registered" });
       return;
@@ -65,10 +66,11 @@ router.post("/signin", async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
       return;
     }
-    const { email, password } = parsed.data;
+    const email = parsed.data.email.trim().toLowerCase();
+    const { password } = parsed.data;
 
     const result = await query<{ id: string; email: string; full_name: string | null; password_hash: string }>(
-      "select id, email, full_name, password_hash from users where email = $1",
+      "select id, email, full_name, password_hash from users where lower(email) = lower($1)",
       [email]
     );
     if (result.rows.length === 0) {
