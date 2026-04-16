@@ -1,7 +1,7 @@
 import { useState, useLayoutEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { MapPin, Calendar, Wallet, Users, Heart, Plane, Sparkles, Clock, IndianRupee, ChevronRight, ChevronLeft, Bus, Utensils, Mountain, ShoppingBag, CalendarDays, Sparkle, Wrench, AlertCircle, Trash2, Briefcase } from "lucide-react";
+import { MapPin, Calendar, Wallet, Users, Heart, Plane, Sparkles, Clock, IndianRupee, ChevronRight, ChevronLeft, Bus, Utensils, Mountain, ShoppingBag, CalendarDays, Sparkle, Wrench, AlertCircle, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -720,64 +720,147 @@ const PlanTrip = () => {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="overflow-hidden rounded-2xl border border-accent/20 bg-accent/5 px-4 py-4"
+                  className="relative overflow-hidden rounded-[2rem] border border-accent/20 bg-gradient-to-br from-orange-50 via-white to-amber-50 px-5 py-5 shadow-[0_20px_60px_rgba(251,146,60,0.16)]"
                 >
-                  <div className="relative mb-4 h-20 overflow-hidden rounded-[1.75rem] bg-gradient-to-r from-white via-accent/5 to-white">
-                    <div className="absolute inset-x-4 top-1/2 h-1 -translate-y-1/2 rounded-full bg-accent/15" />
+                  <motion.div
+                    aria-hidden
+                    className="absolute -left-16 top-0 h-40 w-40 rounded-full bg-orange-200/30 blur-3xl"
+                    animate={{ x: [0, 36, 0], y: [0, 8, 0] }}
+                    transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
+                  />
+                  <motion.div
+                    aria-hidden
+                    className="absolute -right-12 bottom-0 h-36 w-36 rounded-full bg-amber-200/30 blur-3xl"
+                    animate={{ x: [0, -28, 0], y: [0, -10, 0] }}
+                    transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+                  />
+
+                  <div className="relative mb-5 overflow-hidden rounded-[1.8rem] border border-white/80 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.98),_rgba(255,247,237,0.88)_55%,_rgba(255,237,213,0.78))] px-4 py-5 shadow-inner">
+                    <div className="absolute inset-x-5 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-gradient-to-r from-orange-100 via-orange-200 to-amber-100" />
                     <motion.div
-                      className="absolute left-0 top-1/2 -translate-y-1/2"
-                      animate={{ x: ["-10%", "115%"] }}
-                      transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+                      aria-hidden
+                      className="absolute left-0 top-5 text-white/85"
+                      animate={{ x: ["-10%", "110%"] }}
+                      transition={{ duration: 7.5, repeat: Infinity, ease: "linear" }}
                     >
-                      <div className="flex items-center gap-2 rounded-full bg-accent px-3 py-2 text-accent-foreground shadow-medium">
-                        <Plane className="h-4 w-4" />
-                        <span className="text-xs font-semibold">On the way</span>
-                      </div>
+                      <div className="text-xl">☁️</div>
                     </motion.div>
                     <motion.div
-                      className="absolute left-0 top-1/2 -translate-y-1/2"
-                      animate={{ x: ["-18%", "108%"] }}
-                      transition={{ duration: 4.2, repeat: Infinity, ease: "easeInOut", delay: 0.45 }}
+                      aria-hidden
+                      className="absolute left-0 top-10 text-white/70"
+                      animate={{ x: ["-18%", "112%"] }}
+                      transition={{ duration: 9, repeat: Infinity, ease: "linear", delay: 1.2 }}
                     >
-                      <div className="relative flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3 py-2 shadow-soft">
-                        <motion.span
-                          className="text-2xl leading-none"
-                          animate={{ y: [0, -5, 0] }}
-                          transition={{ duration: 0.9, repeat: Infinity, ease: "easeInOut" }}
+                      <div className="text-lg">☁️</div>
+                    </motion.div>
+
+                    <motion.div
+                      className="absolute left-0 top-[22%]"
+                      animate={{ x: ["-14%", "114%"] }}
+                      transition={{ duration: 4.4, repeat: Infinity, ease: "easeInOut" }}
+                    >
+                      <div className="relative flex items-center gap-2">
+                        <motion.div
+                          className="text-[28px] drop-shadow-[0_8px_12px_rgba(59,130,246,0.3)]"
+                          animate={{ y: [0, -7, 0], rotate: [-8, 0, 8, 0] }}
+                          transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }}
                         >
-                          🐰
-                        </motion.span>
-                        <div className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900">
-                          <Briefcase className="h-3 w-3" />
-                          Ready to hop
-                        </div>
-                        <motion.span
+                          ✈️
+                        </motion.div>
+                        <motion.div
                           aria-hidden
-                          className="absolute -bottom-2 left-5 text-sm opacity-60"
-                          animate={{ x: [0, 7, 14], opacity: [0.2, 0.7, 0] }}
-                          transition={{ duration: 1, repeat: Infinity, ease: "easeOut" }}
-                        >
-                          • •
-                        </motion.span>
+                          className="h-2 w-12 rounded-full bg-gradient-to-r from-sky-300/80 via-cyan-200/70 to-transparent"
+                          animate={{ opacity: [0.3, 0.8, 0.3], scaleX: [0.7, 1.1, 0.7] }}
+                          transition={{ duration: 0.9, repeat: Infinity, ease: "easeInOut" }}
+                        />
                       </div>
                     </motion.div>
+
+                    <motion.div
+                      className="absolute left-0 top-[47%]"
+                      animate={{ x: ["-18%", "112%"] }}
+                      transition={{ duration: 5.4, repeat: Infinity, ease: "easeInOut", delay: 0.35 }}
+                    >
+                      <div className="relative flex items-center gap-2">
+                        <motion.div
+                          className="text-[24px] drop-shadow-[0_10px_12px_rgba(245,158,11,0.24)]"
+                          animate={{ y: [0, -3, 0] }}
+                          transition={{ duration: 0.8, repeat: Infinity, ease: "easeInOut" }}
+                        >
+                          🧳
+                        </motion.div>
+                        <motion.div
+                          aria-hidden
+                          className="absolute left-[6px] top-[23px] h-1.5 w-1.5 rounded-full bg-slate-500"
+                          animate={{ rotate: [0, 360] }}
+                          transition={{ duration: 0.7, repeat: Infinity, ease: "linear" }}
+                        />
+                        <motion.div
+                          aria-hidden
+                          className="absolute left-[15px] top-[23px] h-1.5 w-1.5 rounded-full bg-slate-500"
+                          animate={{ rotate: [0, 360] }}
+                          transition={{ duration: 0.7, repeat: Infinity, ease: "linear" }}
+                        />
+                        <motion.div
+                          aria-hidden
+                          className="h-1.5 w-10 rounded-full bg-gradient-to-r from-amber-300/75 to-transparent"
+                          animate={{ opacity: [0.25, 0.7, 0.25] }}
+                          transition={{ duration: 0.8, repeat: Infinity, ease: "easeInOut" }}
+                        />
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      className="absolute left-0 top-[66%]"
+                      animate={{ x: ["-20%", "110%"] }}
+                      transition={{ duration: 6.1, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
+                    >
+                      <div className="relative flex items-center gap-2">
+                        <motion.div
+                          className="text-[25px] drop-shadow-[0_10px_12px_rgba(34,197,94,0.22)]"
+                          animate={{ rotate: [-4, 4, -4], y: [0, -2, 0] }}
+                          transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+                        >
+                          🗺️
+                        </motion.div>
+                        <motion.div
+                          className="rounded-full bg-emerald-100/90 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-700 shadow-sm"
+                          animate={{ y: [0, -2, 0] }}
+                          transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }}
+                        >
+                          route set
+                        </motion.div>
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      aria-hidden
+                      className="absolute inset-y-0 w-24 bg-gradient-to-r from-transparent via-white/65 to-transparent"
+                      animate={{ x: ["-20%", "440%"] }}
+                      transition={{ duration: 2.8, repeat: Infinity, ease: "linear" }}
+                    />
+                    <div className="h-24" />
                   </div>
 
-                  <div className="space-y-1 text-center">
-                    <p className="text-sm font-semibold text-foreground">
-                      This may take a few minutes. We&apos;re building your personalized itinerary.
+                  <div className="relative space-y-2 text-center">
+                    <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-orange-500 shadow-sm">
+                      <span className="h-2 w-2 rounded-full bg-orange-400" />
+                      Live Trip Build
+                    </div>
+                    <p className="text-lg font-semibold text-slate-900">
+                      This may take a few minutes. We&apos;re building a richer, more personalized itinerary for you.
                     </p>
                     <motion.p
                       key={loadingMessageIndex}
-                      initial={{ opacity: 0, y: 6 }}
+                      initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -6 }}
-                      className="text-sm text-muted-foreground"
+                      exit={{ opacity: 0, y: -8 }}
+                      className="text-base text-slate-600"
                     >
                       {loadingMessages[loadingMessageIndex]}
                     </motion.p>
-                    <p className="text-xs text-muted-foreground/90">
-                      Please keep this page open while we put everything together.
+                    <p className="text-sm text-slate-500">
+                      Please keep this page open while we line up routes, scenic stops, food picks, and day-wise details.
                     </p>
                   </div>
                 </motion.div>
