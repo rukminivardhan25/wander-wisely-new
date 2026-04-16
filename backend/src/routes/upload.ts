@@ -22,6 +22,7 @@ const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
 const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY;
 const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET;
 const CLOUDINARY_ENABLED = Boolean(CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET);
+const IS_LOCAL_ENV = !process.env.RENDER_EXTERNAL_URL && !process.env.PUBLIC_URL && process.env.NODE_ENV !== "production";
 
 function sha1(input: string): string {
   return createHash("sha1").update(input).digest("hex");
@@ -96,6 +97,13 @@ router.post("/", upload.single("image"), async (req: Request, res: Response) => 
     if (CLOUDINARY_ENABLED) {
       const url = await uploadToCloudinary(req.file);
       res.json({ url });
+      return;
+    }
+
+    if (!IS_LOCAL_ENV) {
+      res.status(503).json({
+        error: "Image uploads need permanent storage, but Cloudinary is not configured on this server.",
+      });
       return;
     }
 

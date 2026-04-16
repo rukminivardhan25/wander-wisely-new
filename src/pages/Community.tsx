@@ -24,10 +24,18 @@ const IMAGE_MAP: Record<string, string> = {
   "dest-jungle": destJungle,
   "dest-temple": destTemple,
 };
+const COMMUNITY_IMAGE_FALLBACK = destTemple;
 
 function getPostImage(imageUrl: string): string {
   if (imageUrl.startsWith("/uploads/")) return getApiUrl(imageUrl);
   return IMAGE_MAP[imageUrl] ?? imageUrl;
+}
+
+function handlePostImageError(e: React.SyntheticEvent<HTMLImageElement>) {
+  const img = e.currentTarget;
+  if (img.dataset.fallbackApplied === "true") return;
+  img.dataset.fallbackApplied = "true";
+  img.src = COMMUNITY_IMAGE_FALLBACK;
 }
 
 function formatTime(iso: string): string {
@@ -465,6 +473,7 @@ const Community = () => {
                   alt={post.caption || ""}
                   className="w-full aspect-[4/3] object-cover cursor-pointer"
                   loading="lazy"
+                  onError={handlePostImageError}
                   onClick={() => setDetailPostId(post.id)}
                 />
 
@@ -639,6 +648,7 @@ const Community = () => {
                 src={getPostImage(detailPost.image_url)}
                 alt={detailPost.caption || ""}
                 className="w-full aspect-[4/3] object-cover rounded-lg"
+                onError={handlePostImageError}
               />
               <div className="flex items-center gap-4">
                 <button

@@ -150,8 +150,17 @@ async function run(): Promise<void> {
         try {
           await fs.access(filePath);
         } catch {
-          missingLocal++;
-          console.log(`[missing] ${post.id} -> ${raw}`);
+          const fallbackUrl = await selectOpenverseUrl(post.location || "", post.caption || "");
+          if (!fallbackUrl) {
+            missingLocal++;
+            console.log(`[missing] ${post.id} -> ${raw}`);
+            continue;
+          }
+          const { buffer, contentType } = await downloadImage(fallbackUrl);
+          const recovered = await uploadToCloudinary(buffer, contentType, `post-${post.id}-missing-local`, ".jpg");
+          await query("update posts set image_url = $1 where id = $2", [recovered, post.id]);
+          migrated++;
+          console.log(`[migrated-missing-local] ${post.id}`);
           continue;
         }
 
