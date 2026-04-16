@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, Compass, User } from "lucide-react";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, warmApi } from "@/lib/api";
 
 const SignUp = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -17,6 +17,10 @@ const SignUp = () => {
   const { toast } = useToast();
   const { signIn } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    void warmApi();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,12 +36,17 @@ const SignUp = () => {
     try {
       const { data, error, status, networkError } = await apiFetch<{ user: { id: string; email: string; full_name: string | null }; token: string }>(
         "/api/auth/signup",
-        { method: "POST", body: { email: email.trim(), password, full_name: fullName.trim() || undefined } }
+        {
+          method: "POST",
+          body: { email: email.trim().toLowerCase(), password, full_name: fullName.trim() || undefined },
+          timeoutMs: 30000,
+          retries: 1,
+        }
       );
       if (networkError || error) {
         const msg = status === 409
           ? "This email is already registered."
-          : error ?? "Something went wrong. Check the browser console (F12) for details.";
+          : error ?? "Something went wrong. The server may still be waking up, so please try again in a moment.";
         toast({ title: networkError ? "Connection failed" : "Sign up failed", description: msg, variant: "destructive" });
         return;
       }
