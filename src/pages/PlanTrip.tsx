@@ -1,7 +1,7 @@
 import { useState, useLayoutEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { MapPin, Calendar, Wallet, Users, Heart, Plane, Sparkles, Clock, IndianRupee, ChevronRight, ChevronLeft, Bus, Utensils, Mountain, ShoppingBag, CalendarDays, Sparkle, Wrench, AlertCircle, Trash2 } from "lucide-react";
+import { MapPin, Calendar, Wallet, Users, Heart, Plane, Sparkles, Clock, IndianRupee, ChevronRight, ChevronLeft, Bus, Utensils, Mountain, ShoppingBag, CalendarDays, Sparkle, Wrench, AlertCircle, Trash2, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -31,6 +31,12 @@ const interests = [
   { label: "Beach", emoji: "🏖️" },
 ];
 const transport = ["Flight", "Train", "Bus", "Car"];
+const loadingMessages = [
+  "Mapping the best route for your journey...",
+  "Picking food spots, experiences, and scenic moments...",
+  "Balancing your budget with memorable stops...",
+  "Adding thoughtful day-wise details to your plan...",
+];
 
 const BLOCK_OPTIONS: Record<ActivityType, { label: string; icon: JSX.Element; options: string[]; theme: string }> = {
   transport: { label: "Transport", icon: <Bus className="h-4 w-4" />, theme: "border-l-4 border-l-blue-500 bg-blue-50/50 dark:bg-blue-950/20", options: ["Bus options", "Train options", "Car rentals", "Local taxis", "Ride-sharing", "Price comparison", "Seat booking"] },
@@ -130,6 +136,7 @@ const PlanTrip = () => {
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [transportPref, setTransportPref] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
   const [result, setResult] = useState<{ trip: { id: string; origin: string; destination: string; days: number }; itineraries: ItineraryDay[] } | null>(null);
   const [selectedDay, setSelectedDay] = useState<number>(1);
   const [makingActive, setMakingActive] = useState(false);
@@ -149,6 +156,19 @@ const PlanTrip = () => {
       navigate("/plan-trip", { replace: true, state: {} });
     }
   }, [location.state, navigate]);
+
+  useLayoutEffect(() => {
+    if (!loading) {
+      setLoadingMessageIndex(0);
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      setLoadingMessageIndex((current) => (current + 1) % loadingMessages.length);
+    }, 2400);
+
+    return () => window.clearInterval(interval);
+  }, [loading]);
 
   const toggleInterest = (interest: string) => {
     setSelectedInterests((prev) =>
@@ -694,6 +714,75 @@ const PlanTrip = () => {
                 </>
               )}
             </Button>
+            <AnimatePresence>
+              {loading && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="overflow-hidden rounded-2xl border border-accent/20 bg-accent/5 px-4 py-4"
+                >
+                  <div className="relative mb-4 h-20 overflow-hidden rounded-[1.75rem] bg-gradient-to-r from-white via-accent/5 to-white">
+                    <div className="absolute inset-x-4 top-1/2 h-1 -translate-y-1/2 rounded-full bg-accent/15" />
+                    <motion.div
+                      className="absolute left-0 top-1/2 -translate-y-1/2"
+                      animate={{ x: ["-10%", "115%"] }}
+                      transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+                    >
+                      <div className="flex items-center gap-2 rounded-full bg-accent px-3 py-2 text-accent-foreground shadow-medium">
+                        <Plane className="h-4 w-4" />
+                        <span className="text-xs font-semibold">On the way</span>
+                      </div>
+                    </motion.div>
+                    <motion.div
+                      className="absolute left-0 top-1/2 -translate-y-1/2"
+                      animate={{ x: ["-18%", "108%"] }}
+                      transition={{ duration: 4.2, repeat: Infinity, ease: "easeInOut", delay: 0.45 }}
+                    >
+                      <div className="relative flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3 py-2 shadow-soft">
+                        <motion.span
+                          className="text-2xl leading-none"
+                          animate={{ y: [0, -5, 0] }}
+                          transition={{ duration: 0.9, repeat: Infinity, ease: "easeInOut" }}
+                        >
+                          🐰
+                        </motion.span>
+                        <div className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900">
+                          <Briefcase className="h-3 w-3" />
+                          Ready to hop
+                        </div>
+                        <motion.span
+                          aria-hidden
+                          className="absolute -bottom-2 left-5 text-sm opacity-60"
+                          animate={{ x: [0, 7, 14], opacity: [0.2, 0.7, 0] }}
+                          transition={{ duration: 1, repeat: Infinity, ease: "easeOut" }}
+                        >
+                          • •
+                        </motion.span>
+                      </div>
+                    </motion.div>
+                  </div>
+
+                  <div className="space-y-1 text-center">
+                    <p className="text-sm font-semibold text-foreground">
+                      This may take a few minutes. We&apos;re building your personalized itinerary.
+                    </p>
+                    <motion.p
+                      key={loadingMessageIndex}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      className="text-sm text-muted-foreground"
+                    >
+                      {loadingMessages[loadingMessageIndex]}
+                    </motion.p>
+                    <p className="text-xs text-muted-foreground/90">
+                      Please keep this page open while we put everything together.
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
             <p className="text-xs text-muted-foreground text-center">
               Powered by Groq AI. Photos from Unsplash.
             </p>
