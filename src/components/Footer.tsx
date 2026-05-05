@@ -58,10 +58,7 @@ const Footer = () => {
             © 2026 Wanderly. All rights reserved. Made with ❤️ for travelers.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-6">
-            <a href="tel:+15551234567" className="inline-flex items-center gap-2 text-sm text-primary-foreground/60 hover:text-accent transition-colors">
-              <Phone className="w-4 h-4 text-accent shrink-0" />
-              +1 (555) 123-4567
-            </a>
+  
             <Link to="/feedback" className="text-sm text-primary-foreground/60 hover:text-accent transition-colors">
               Give feedback
             </Link>
